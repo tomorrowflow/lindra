@@ -20,14 +20,37 @@ The interdisciplinary multimodal pain-therapy team the physician belongs to. In 
 ### The work
 
 **Case**:
-One patient admission as the physician works on it in Lindra: the notes, the current draft, the clarification list and a fictional case identifier. A case is never the patient's record.
+One patient admission as the physician works on it in Lindra: a fictional case identifier, an optional short label, the treatment period, one admission assessment and any number of visits. A case is never the patient's record.
 _Avoid_: patient, chart, file, record
 
 **Case identifier**:
 The short fictional label the physician gives a case to find it again. It is never a patient name, date of birth or hospital number.
 
+**Treatment period**:
+The inclusive span from Behandlungsbeginn to Behandlungsende within which every encounter of the case must lie. It can be corrected later, but never so that an existing encounter falls outside it.
+_Avoid_: stay, admission dates, interval
+
+**Encounter**:
+One dated contact that has its own notes and its own draft: the admission assessment or a visit. Encounters are never merged, appended to each other or rewritten by a later one.
+_Avoid_: entry, record, session
+
+**Admission assessment**:
+The one encounter per case that holds the admission findings; its draft follows the clinical headings of the ward's assessment form. German: Aufnahmeassessment.
+_Avoid_: intake, anamnesis, admission letter
+
+**Visit**:
+A dated encounter after the admission assessment with its own notes and a short progress draft. A visit may be backdated within the treatment period. German: Visite.
+_Avoid_: round, progress note, follow-up
+
+**Background**:
+What a visit's draft may draw on besides its own notes: the accepted draft of the admission assessment and the accepted drafts of earlier visits only. Later visits and pending proposals are never background.
+_Avoid_: context, history, memory
+
+**Changed background**:
+The state of a visit's draft or proposal when an encounter in its background was accepted again after the draft or proposal was generated. The text stays; a pending proposal on old background cannot be accepted; nothing regenerates on its own.
+
 **Notes**:
-The physician's free-form input for a case: typed or pasted text, or a corrected transcript, in any order and without a required structure. Notes are what a draft is generated from.
+The physician's free-form input for one encounter: typed or pasted text, or a corrected transcript, in any order and without a required structure. Notes are what that encounter's draft is generated from.
 _Avoid_: input, source text, prompt, anamnesis
 
 **Dictation**:
@@ -35,18 +58,26 @@ A recording the physician explicitly starts and stops to speak their own notes a
 _Avoid_: ambient recording, scribe, consultation recording
 
 **Transcript**:
-The text produced from a dictation, shown to the physician for review and correction before it becomes part of the notes. A transcript never replaces typed text on its own.
+The text produced from a dictation, shown to the physician for review and correction before it is appended to the selected encounter's notes. A transcript never replaces typed text on its own. While a dictation runs, nothing else in Lindra can be done.
 
 **Letter**:
-The admission letter the hospital system expects. Lindra produces only its physician-authored sections; the other disciplines' sections and the final discharge synthesis are not Lindra's.
+The physician-authored text the hospital system expects for an encounter, assembled there from the sections the physician copies out of Lindra. The other disciplines' contributions and the discharge synthesis are not Lindra's.
 _Avoid_: report, epicrisis, discharge summary
 
 **Section**:
-One of the fixed parts of the letter that Lindra drafts: admission reason, pain history, relevant history and findings, previous therapy attempts, functional and psychosocial impact, the physician's inpatient justification, and, when supplied, therapy goals.
+One fixed part of an encounter's draft, also one review step. Admission assessment: Sozialanamnese; Frühere Anamnese und Vormedikation; Therapeutische Anamnese; Schmerzanamnese; Internistische, vegetative, psychiatrische und Suchtmittelanamnese; Untersuchungsbefunde; Behandlungsplan und vereinbarte Ziele. Visit: Verlauf seit letzter Visite; Aktuelle Befunde; Ärztliche Einschätzung; Vereinbartes Vorgehen und Ziele.
 
 **Draft**:
-The wording Lindra proposes for the letter sections from the current notes. A draft is a proposal the physician accepts or discards; it never silently replaces the physician's edits.
+The current wording of an encounter's sections, generated from its notes and then edited by the physician. New wording arrives only as a proposal; a draft never silently replaces the physician's edits.
 _Avoid_: output, result, generated letter
+
+**Review**:
+Going through an encounter's sections one step at a time, each step showing the current draft and the proposal side by side. Steps are reachable in any order; next and back are a convenience. German: Durchsicht.
+_Avoid_: wizard, form, questionnaire
+
+**Handover**:
+The last review step: copying each section of the current draft as plain text into the hospital system, one section at a time. Never the pending proposal. German: Übergabe.
+_Avoid_: export, send, publish
 
 **Generation**:
 The explicit action by which the physician asks for a new draft from the current notes. Nothing is generated without it.
@@ -78,8 +109,8 @@ The pointer from a generated paragraph of the draft to the passage of the notes 
 _Avoid_: citation, source, confidence
 
 **Section badge**:
-A small label on a section heading that says one of three things: the pending proposal changes this section, the section was manually edited, or the clarification list has an open item for it. Never a clinical verification.
-_Avoid_: status, checkmark
+A small icon on a section heading or sidebar entry that says one thing: the pending proposal changes this section, the section was manually edited, it was not updated on the last acceptance, the clarification list has an open item for it, or it was copied. Never a clinical verification. The explanation opens on tap; the badge itself carries no sentence.
+_Avoid_: status, checkmark, banner
 
 ### Clinical content
 

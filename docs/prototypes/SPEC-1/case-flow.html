@@ -1,0 +1,612 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Lindra, Runde 3: alle Bildschirme des Fall- und Visitenflusses</title>
+<!--
+  Question: Does the complete release-one flow hold together on screen: no case selected, case list and
+  creation with treatment period, period correction with visit conflicts, admission assessment (free notes,
+  form-aligned review steps, proposal comparison, acceptance, handover), dated visits (new or backdated within
+  the period, notes, short review, acceptance, handover), case and encounter switching with a portrait drawer,
+  dictation from every step as a blocking overlay, and the manual-edit, outdated-notes, changed-background,
+  clarification, source, failure and unsaved states?
+  Plan: One flow (grill 4 decisions: round-2 wizard A, round-1 C sidebar, round-1 B overlay). The ?variant=
+  switcher selects a SCREEN of the flow (start, newcase, overview, period, a-notes, a-review, a-accept,
+  a-handover, newvisit, v-notes, v-review, v-background, dict-rec, dict-review, errors, drawer) so the tab lists
+  every screen; every screen is live, the operator can click on from any of them.
+  State words are icons with a short label; the long explanation opens on tap (card comment of 2026-11-08).
+  Assumptions: landscape stands in for the desktop browser; the fictional cases L-0001 to L-0003 and the
+  date 2026-11-08 are fixed. Nothing here is real.
+-->
+<style>
+:root {
+  --font: -apple-system, system-ui, "SF Pro Text", "Helvetica Neue", Inter, Roboto, sans-serif;
+  --tint: #0b6e6e; --red: #c0392b; --green: #2e8b57; --orange: #c77700;
+  --stale: #fff4d6; --proposal: #e6f4f1; --label: #111; --label-2: rgba(60,60,67,.6); --label-3: rgba(60,60,67,.3);
+  --sep: rgba(60,60,67,.29); --bg: #fbf9f4; --bg-grouped: #f2f0ea; --cell: #fff; --fill: rgba(120,120,128,.12); --bar: rgba(251,249,244,.96);
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; height: 100%; }
+body { background: #d6d9de; font: 15px/1.4 var(--font); color: var(--label); overflow: hidden; }
+#stage { position: fixed; inset: 0 0 56px 0; }
+#device { position: absolute; left: 50%; top: 50%; overflow: hidden; background: var(--bg); border-radius: var(--radius); box-shadow: 0 0 0 10px #1c1c1e, 0 18px 50px rgba(0,0,0,.35); }
+body.bleed #stage { inset: 0; } body.bleed #device { left: 0; top: 0; border-radius: 0; box-shadow: none; } body.bleed #pill { display: none; }
+#screen { position: absolute; inset: 0; overflow: hidden; }
+#pill { position: fixed; left: 50%; bottom: 10px; transform: translateX(-50%); display: flex; gap: 4px; align-items: center; padding: 4px; border-radius: 999px; background: #222; color: #fff; font: 13px/1 ui-monospace, Menlo, monospace; z-index: 10; white-space: nowrap; }
+#pill button { font: inherit; color: inherit; background: #3a3a3c; border: 0; border-radius: 999px; padding: 7px 11px; cursor: pointer; }
+#pill button[aria-pressed="true"] { background: #0a84ff; } #pill .label { padding: 0 8px; }
+
+.status { height: 24px; flex: none; }
+.nav { height: 48px; flex: none; display: flex; align-items: center; gap: 10px; padding: 0 14px; border-bottom: .5px solid var(--sep); background: var(--bar); }
+.nav .title { font-weight: 600; font-size: 17px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nav .meta { color: var(--label-2); font-size: 13px; white-space: nowrap; }
+.nav .spacer { flex: 1; }
+.page { position: absolute; inset: 0; display: flex; flex-direction: column; background: var(--bg); }
+.btn { font: inherit; border: 0; border-radius: 10px; padding: 10px 14px; background: var(--tint); color: #fff; font-weight: 600; cursor: pointer; min-height: 44px; white-space: nowrap; }
+.btn.plain { background: none; color: var(--tint); padding: 6px 8px; font-weight: 500; }
+.btn.danger { background: none; color: var(--red); font-weight: 500; }
+.btn.quiet { background: var(--fill); color: var(--label); font-weight: 500; }
+.btn.rec { background: var(--red); } .btn.big { font-size: 17px; padding: 13px 20px; }
+.btn[disabled] { opacity: .4; cursor: default; }
+.ico { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; font-size: 13px; font-weight: 700; flex: none; }
+.ico.new { background: var(--proposal); color: #0b4f4f; } .ico.edit { background: var(--fill); color: var(--label-2); } .ico.keep { background: var(--stale); color: #6b4e00; }
+.ico.open { background: #fdecea; color: var(--red); } .ico.done { background: #e8f5ee; color: var(--green); } .ico.bg { background: #efe6ff; color: #5b2ca0; } .ico.old { background: var(--stale); color: #6b4e00; }
+.tag { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--label-2); cursor: pointer; }
+.body { flex: 1; display: grid; grid-template-columns: 272px 1fr; min-height: 0; position: relative; }
+.side { background: var(--bg-grouped); border-right: .5px solid var(--sep); overflow-y: auto; padding: 8px 0 20px; }
+.side .hdr { font-size: 12px; text-transform: uppercase; color: var(--label-2); padding: 12px 16px 4px; letter-spacing: .3px; display: flex; align-items: center; }
+.side .hdr .btn { margin-left: auto; min-height: 30px; padding: 4px 10px; font-size: 13px; }
+.side .item { padding: 9px 16px; cursor: pointer; display: flex; align-items: center; gap: 8px; font-size: 14px; min-height: 44px; }
+.side .item.on { background: #fff; font-weight: 600; box-shadow: inset 3px 0 0 var(--tint); }
+.side .item.dim { color: var(--label-2); } .side .item.sub { padding-left: 32px; min-height: 40px; }
+.side .item .right { margin-left: auto; display: inline-flex; gap: 4px; }
+.side .num { width: 22px; height: 22px; border-radius: 50%; background: var(--fill); font-size: 12px; display: inline-flex; align-items: center; justify-content: center; flex: none; }
+.side .item.on .num { background: var(--tint); color: #fff; }
+.side .sm { font-size: 12px; color: var(--label-2); }
+.main { display: flex; flex-direction: column; min-height: 0; position: relative; }
+.portrait .body { grid-template-columns: 1fr; grid-template-rows: 1fr; }
+.portrait .side { display: none; }
+.drawer { position: absolute; inset: 0; z-index: 5; background: rgba(0,0,0,.3); }
+.drawer .side { display: block; position: absolute; left: 0; top: 0; bottom: 0; width: 320px; box-shadow: 8px 0 30px rgba(0,0,0,.25); }
+.steptitle { padding: 14px 22px 4px; font-size: 22px; font-weight: 700; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.steptitle .n { font-size: 13px; color: var(--label-2); font-weight: 500; }
+.stepbody { flex: 1; overflow-y: auto; min-height: 0; padding: 0 22px 20px; }
+.stepfoot { flex: none; display: flex; align-items: center; gap: 10px; padding: 10px 22px; border-top: .5px solid var(--sep); background: var(--bar); flex-wrap: wrap; }
+.stepfoot .grow { flex: 1; }
+.line { display: flex; align-items: center; gap: 10px; padding: 8px 12px; font-size: 14px; border-radius: 10px; margin: 8px 0; }
+.line.stale { background: var(--stale); color: #6b4e00; } .line.proposal { background: var(--proposal); color: #0b4f4f; } .line.fail { background: #fdecea; color: var(--red); } .line.bg { background: #efe6ff; color: #5b2ca0; }
+.line .more { margin-left: auto; font-size: 13px; cursor: pointer; text-decoration: underline; white-space: nowrap; }
+.line .detail { flex-basis: 100%; font-size: 13px; opacity: .9; }
+.notes { width: 100%; min-height: 300px; height: 100%; resize: none; border: .5px solid var(--sep); border-radius: 10px; outline: 0; padding: 14px; font: 16px/1.55 var(--font); background: var(--cell); color: var(--label); }
+.cmp { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 8px; }
+.cmp.stack { grid-template-columns: 1fr; }
+.pane { background: var(--cell); border: .5px solid var(--sep); border-radius: 12px; padding: 12px 16px; font-size: 16px; line-height: 1.55; }
+.pane.new { background: var(--proposal); border-color: #bfe0d8; }
+.pane h5 { margin: 0 0 8px; font-size: 12px; text-transform: uppercase; color: var(--label-2); letter-spacing: .3px; display: flex; gap: 8px; align-items: center; }
+.pane h5 .right { margin-left: auto; display: inline-flex; gap: 6px; align-items: center; }
+.para { margin: 6px 0; } .para.new { background: rgba(11,110,110,.12); border-radius: 6px; padding: 2px 6px; margin-left: -6px; }
+.ref { display: inline-block; margin: 2px 0 0; font-size: 12px; color: var(--tint); background: var(--fill); border-radius: 6px; padding: 3px 8px; cursor: pointer; }
+.ref.none { color: var(--label-2); } .ref.hist { color: #5b2ca0; }
+.ref-quote { font-size: 13px; color: var(--label-2); border-left: 3px solid var(--tint); padding: 4px 10px; margin: 6px 0; background: var(--bg-grouped); }
+.clar { background: #fff; border: 1px dashed var(--orange); border-radius: 10px; padding: 8px 12px; margin-top: 10px; font-size: 14px; }
+.clar b { color: var(--orange); }
+.hint { font-size: 13px; color: var(--label-2); }
+.changed { position: absolute; left: 50%; bottom: 74px; transform: translateX(-50%); background: #222; color: #fff; font-size: 13px; padding: 8px 14px; border-radius: 999px; z-index: 4; max-width: 80%; text-align: center; }
+.edittext { width: 100%; min-height: 140px; border: 1.5px solid var(--tint); border-radius: 10px; padding: 10px; font: 16px/1.55 var(--font); resize: vertical; background: #fff; }
+.unsaved { font-size: 12px; color: var(--red); }
+.overlay { position: absolute; inset: 0; background: rgba(20,30,30,.55); display: flex; align-items: center; justify-content: center; z-index: 6; }
+.overlay .card { width: min(640px, 92%); background: var(--cell); border-radius: 16px; padding: 22px; box-shadow: 0 20px 60px rgba(0,0,0,.35); max-height: 92%; overflow: auto; }
+.overlay h3 { margin: 0 0 8px; font-size: 20px; display: flex; align-items: center; gap: 10px; }
+.overlay textarea { width: 100%; min-height: 150px; border: 1.5px solid var(--tint); border-radius: 10px; padding: 12px; font: 16px/1.55 var(--font); resize: vertical; }
+.overlay .row { display: flex; gap: 10px; align-items: center; margin-top: 14px; flex-wrap: wrap; }
+.wave { height: 44px; border-radius: 10px; background: repeating-linear-gradient(90deg, var(--red) 0 3px, transparent 3px 9px); opacity: .5; margin: 10px 0; }
+.dot { width: 12px; height: 12px; border-radius: 50%; flex: none; }
+.dot.recording { background: var(--red); box-shadow: 0 0 0 5px rgba(192,57,43,.2); } .dot.transcribing { background: var(--orange); } .dot.reviewing { background: var(--tint); }
+.form { display: grid; grid-template-columns: 180px 1fr; gap: 12px 16px; align-items: center; margin-top: 10px; }
+.form label { font-size: 14px; color: var(--label-2); }
+.form input { font: inherit; font-size: 16px; padding: 10px 12px; border: .5px solid var(--sep); border-radius: 10px; min-height: 44px; background: #fff; width: 100%; }
+.form .err { grid-column: 2; color: var(--red); font-size: 13px; }
+.form .ok { grid-column: 2; color: var(--label-2); font-size: 13px; }
+.hand { background: var(--cell); border: .5px solid var(--sep); border-radius: 12px; padding: 12px 16px; margin: 8px 0; display: grid; grid-template-columns: 1fr auto; gap: 6px 14px; align-items: start; }
+.hand .t { font-weight: 600; display: flex; align-items: center; gap: 8px; } .hand .txt { grid-column: 1; font-size: 14px; color: var(--label-2); max-height: 64px; overflow: hidden; }
+.empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: var(--label-2); padding: 40px; text-align: center; }
+.empty .big-ico { font-size: 44px; }
+.meta { display: grid; grid-template-columns: 180px 1fr; gap: 8px 16px; font-size: 15px; margin: 8px 0 16px; }
+.meta .k { color: var(--label-2); }
+.enc { background: var(--cell); border: .5px solid var(--sep); border-radius: 12px; padding: 12px 16px; margin: 8px 0; display: flex; align-items: center; gap: 12px; cursor: pointer; }
+.enc .t { font-weight: 600; } .enc .right { margin-left: auto; display: inline-flex; gap: 6px; align-items: center; }
+.pains { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.pains .pain { border: .5px solid var(--sep); border-radius: 10px; padding: 8px 10px; background: rgba(255,255,255,.6); }
+.pains .pain h6 { margin: 0 0 4px; font-size: 13px; color: var(--label-2); }
+</style>
+</head>
+<body>
+<div id="stage"><div id="device"><div id="screen"></div></div></div>
+<div id="pill">
+  <button data-step="-1" aria-label="Previous screen">◀</button><span class="label"></span><button data-step="1" aria-label="Next screen">▶</button>
+  <button data-device="iphone">iPhone</button><button data-device="ipad">iPad</button>
+  <button data-orient>⟳</button>
+</div>
+
+<script>
+// =============================================================================================
+// CaseModel v3: cases with a treatment period, one admission assessment and dated visits.
+// Pure: no DOM. The ADR 0008 proposal rules apply per encounter; a visit also carries a background
+// revision (the accepted assessment and earlier accepted visits) that can go stale.
+// =============================================================================================
+const CaseModel = (() => {
+  const NOW = "2026-11-08T11:20";
+  const A_SECTIONS = [
+    ["sozial", "Sozialanamnese", "Lebens- und Arbeitssituation, Hilfsmittel"],
+    ["frueher", "Frühere Anamnese und Vormedikation", ""],
+    ["therapie", "Therapeutische Anamnese", "aktuelle und frühere Medikation; nicht-medikamentöse Behandlungen"],
+    ["schmerz", "Schmerzanamnese", "Hauptschmerz und weitere Schmerzprobleme, jeweils getrennt"],
+    ["intern", "Internistische, vegetative, psychiatrische und Suchtmittelanamnese", ""],
+    ["befund", "Untersuchungsbefunde", "körperlich/internistisch, weitere Diagnostik, psychopathologisch, orthopädisch, neurologisch"],
+    ["plan", "Behandlungsplan und vereinbarte Ziele", "nur wie von der Ärztin angegeben"],
+  ];
+  const V_SECTIONS = [
+    ["verlauf", "Verlauf seit letzter Visite", ""],
+    ["befunde", "Aktuelle Befunde", ""],
+    ["einschaetzung", "Ärztliche Einschätzung", "nur wie von der Ärztin angegeben"],
+    ["vorgehen", "Vereinbartes Vorgehen und Ziele", "nur wie von der Ärztin angegeben"],
+  ];
+  const P = (text, ref, hist) => ({ text, ref: ref || null, hist: !!hist });
+
+  const A_NOTES = [
+    "Sozial: lebt mit Partnerin, 2 Kinder, Bürokaufmann, AU seit 4 Monaten. Keine Hilfsmittel.",
+    "Früher: Appendektomie 2009. Vormedikation: Ibuprofen 600 mg 3x tgl. über 6 Wochen, geringe Wirkung, Magenbeschwerden, abgesetzt. Physiotherapie 12 Einheiten 2025, kurzfristige Besserung.",
+    "Aktuell: Metamizol 500 mg bei Bedarf.",
+    "Hauptschmerz: ziehender Schmerz LWS mit Ausstrahlung re. Gesäß bis Oberschenkel dorsal, seit 3 Jahren, NRS 6/10 in Ruhe, 8/10 bei Belastung, schlimmer bei langem Sitzen, besser in Bewegung. Rückzug von Freizeitaktivitäten, Schlafstörung. Ziel laut Pat.: wieder 30 min gehen.",
+    "Vorbefund MRT LWS 03/2026 (extern): Protrusion L4/5 ohne Nervenwurzelkompression.",
+    "Internistisch unauffällig, Nikotin 10/Tag, kein Alkohol, keine psychiatrische Vorgeschichte.",
+    "Eigener Befund: Finger-Boden-Abstand 30 cm, Lasègue neg. bds., Kraft und Sensibilität regelrecht, psychopathologisch: gedrückt, keine Suizidalität.",
+    "Plan: stationäre multimodale Schmerztherapie wegen Chronifizierung und Versagen ambulanter Maßnahmen; Ziele: Schmerzreduktion auf NRS 4, Wiederaufnahme Alltagsaktivitäten.",
+  ].join("\n\n");
+  const A_TRANSCRIPT = "Ergänzung nach dem Gespräch: Patient gibt zusätzlich Spannungskopfschmerz etwa zweimal pro Woche an, NRS vier, keine Aura, keine Ausstrahlung.";
+  const A_V1 = {
+    sozial: [P("Der Patient lebt mit seiner Partnerin und zwei Kindern, arbeitet als Bürokaufmann und ist seit vier Monaten arbeitsunfähig. Hilfsmittel werden nicht genutzt.", "Sozial: lebt mit Partnerin, 2 Kinder, Bürokaufmann, AU seit 4 Monaten. Keine Hilfsmittel.")],
+    frueher: [P("Appendektomie 2009.", "Appendektomie 2009.")],
+    therapie: [P("Frühere Medikation: Ibuprofen 600 mg dreimal täglich über sechs Wochen mit geringer Wirkung; wegen Magenbeschwerden abgesetzt.", "Ibuprofen 600 mg 3x tgl. über 6 Wochen, geringe Wirkung, Magenbeschwerden, abgesetzt."), P("Aktuelle Medikation: Metamizol 500 mg bei Bedarf.", "Aktuell: Metamizol 500 mg bei Bedarf."), P("Nicht-medikamentös: Physiotherapie, 12 Einheiten 2025, mit kurzfristiger Besserung.", "Physiotherapie 12 Einheiten 2025, kurzfristige Besserung.")],
+    schmerz: [P("Hauptschmerz: ziehender Schmerz der LWS mit Ausstrahlung in das rechte Gesäß bis dorsal in den Oberschenkel, seit drei Jahren. Intensität NRS 6/10 in Ruhe und 8/10 unter Belastung; verstärkt durch langes Sitzen, gebessert durch Bewegung. Funktionell: Rückzug von Freizeitaktivitäten, Schlafstörung. Ziel des Patienten: wieder 30 Minuten gehen.", "Hauptschmerz: ziehender Schmerz LWS mit Ausstrahlung re. Gesäß bis Oberschenkel dorsal, seit 3 Jahren, NRS 6/10 in Ruhe, 8/10 bei Belastung, schlimmer bei langem Sitzen, besser in Bewegung.")],
+    intern: [P("Internistisch unauffällig. Nikotin 10 Zigaretten pro Tag, kein Alkohol. Keine psychiatrische Vorgeschichte.", "Internistisch unauffällig, Nikotin 10/Tag, kein Alkohol, keine psychiatrische Vorgeschichte.")],
+    befund: [P("Vorbefund (extern): MRT der LWS vom 03/2026 mit Protrusion L4/5 ohne Nervenwurzelkompression.", "Vorbefund MRT LWS 03/2026 (extern): Protrusion L4/5 ohne Nervenwurzelkompression."), P("Eigener Befund: Finger-Boden-Abstand 30 cm, Lasègue beidseits negativ, Kraft und Sensibilität regelrecht. Psychopathologisch gedrückte Stimmung, keine Suizidalität.", "Eigener Befund: Finger-Boden-Abstand 30 cm, Lasègue neg. bds., Kraft und Sensibilität regelrecht, psychopathologisch: gedrückt, keine Suizidalität.")],
+    plan: [P("Stationäre multimodale Schmerztherapie wegen Chronifizierung und Versagen ambulanter Maßnahmen (Einschätzung der Ärztin). Vereinbarte Ziele: Schmerzreduktion auf NRS 4, Wiederaufnahme von Alltagsaktivitäten.", "Plan: stationäre multimodale Schmerztherapie wegen Chronifizierung und Versagen ambulanter Maßnahmen; Ziele: Schmerzreduktion auf NRS 4, Wiederaufnahme Alltagsaktivitäten.")],
+  };
+  const A_CLAR1 = [{ section: "therapie", text: "Metamizol: Häufigkeit und Tageshöchstdosis nicht angegeben." }, { section: "frueher", text: "Vormedikation: nur Ibuprofen genannt; weitere frühere Medikation?" }];
+  const A_V2 = Object.assign({}, A_V1, { schmerz: A_V1.schmerz.concat([P("Zweites Schmerzproblem: Spannungskopfschmerz etwa zweimal pro Woche, Intensität NRS 4, ohne Aura und ohne Ausstrahlung.", "Spannungskopfschmerz etwa zweimal pro Woche an, NRS vier, keine Aura, keine Ausstrahlung.")]) });
+  const A_CLAR2 = A_CLAR1.concat([{ section: "schmerz", text: "Spannungskopfschmerz: Dauer der Beschwerden und Zeitraum der Angabe fehlen." }]);
+
+  const V1_NOTES = "Visite Tag 2. Pat. berichtet Schmerz unverändert NRS 6. Erste Physiotherapie gut vertragen. Schlaf weiterhin schlecht. Metamizol 2x genommen. Vorgehen: Physio weiter, Schlafhygiene besprochen.";
+  const V1_DRAFT = {
+    verlauf: [P("Schmerzintensität unverändert bei NRS 6. Erste physiotherapeutische Einheit gut vertragen. Schlaf weiterhin schlecht.", "Pat. berichtet Schmerz unverändert NRS 6. Erste Physiotherapie gut vertragen. Schlaf weiterhin schlecht."), P("Zum Vergleich bei Aufnahme: NRS 6/10 in Ruhe, 8/10 unter Belastung.", "Aufnahmeassessment 02.11.: NRS 6/10 in Ruhe, 8/10 bei Belastung", true)],
+    befunde: [P("Bedarfsmedikation Metamizol zweimal eingenommen.", "Metamizol 2x genommen.")],
+    einschaetzung: [],
+    vorgehen: [P("Physiotherapie fortführen; Schlafhygiene besprochen.", "Vorgehen: Physio weiter, Schlafhygiene besprochen.")],
+  };
+  const V1_CLAR = [{ section: "einschaetzung", text: "Ärztliche Einschätzung: keine Angabe in den Notizen." }];
+  const V2_NOTES = "Visite Tag 4. Schmerz NRS 5, Ausstrahlung seltener. Kopfschmerz seit Aufnahme einmal, NRS 3. Pat. fühlt sich aktiver. Einschätzung: Verlauf erwartungsgemäß. Vorgehen: Belastung steigern, Gruppenprogramm ab morgen.";
+  const V2_DRAFT = {
+    verlauf: [P("Schmerzintensität auf NRS 5 gesunken, Ausstrahlung seltener. Ein Kopfschmerzereignis seit Aufnahme, NRS 3. Der Patient fühlt sich aktiver.", "Schmerz NRS 5, Ausstrahlung seltener. Kopfschmerz seit Aufnahme einmal, NRS 3. Pat. fühlt sich aktiver."), P("Zuletzt (Visite 03.11.): NRS 6, Schlaf schlecht.", "Visite 03.11.: Schmerz unverändert NRS 6, Schlaf weiterhin schlecht", true)],
+    befunde: [],
+    einschaetzung: [P("Verlauf erwartungsgemäß (Einschätzung der Ärztin).", "Einschätzung: Verlauf erwartungsgemäß.")],
+    vorgehen: [P("Belastung steigern; Teilnahme am Gruppenprogramm ab dem Folgetag.", "Vorgehen: Belastung steigern, Gruppenprogramm ab morgen.")],
+  };
+  const V2_CLAR = [{ section: "befunde", text: "Aktuelle Befunde: keine Untersuchung dokumentiert." }];
+
+  function enc(id, kind, at, notes, draft, clar, bg) {
+    return { id, kind, at, notes, notesRev: 1, draft: draft || null, draftNotesRev: draft ? 1 : 0, draftBgRev: bg || 0, clarifications: clar || [], proposal: null, edited: {}, notUpdated: {}, copied: {}, acceptCount: draft ? 1 : 0 };
+  }
+  function initial() {
+    return {
+      now: NOW,
+      cases: [
+        { id: "L-0001", label: "Lumbalgie, fiktiv", assessmentAt: "2026-11-02T10:30", period: { start: "2026-11-02", end: "2026-11-20" },
+          assessment: enc("a1", "assessment", "2026-11-02T10:30", A_NOTES, A_V1, A_CLAR1),
+          visits: [enc("v1", "visit", "2026-11-03T09:10", V1_NOTES, V1_DRAFT, V1_CLAR, 1), enc("v2", "visit", "2026-11-05T09:15", V2_NOTES, null, [])] },
+        { id: "L-0002", label: "Schulter, fiktiv", assessmentAt: "2026-11-06T14:00", period: { start: "2026-11-06", end: "2026-11-27" }, assessment: enc("a2", "assessment", "2026-11-06T14:00", "", null, []), visits: [] },
+        { id: "L-0003", label: "Kopfschmerz, fiktiv", assessmentAt: "2026-10-20T09:00", period: { start: "2026-10-20", end: "2026-11-07" }, assessment: enc("a3", "assessment", "2026-10-20T09:00", "", null, []), visits: [] },
+      ],
+      dictation: { status: "idle", transcript: "", target: null },
+      unsaved: false, failure: null, changed: "Bereit.",
+    };
+  }
+  const sections = (e) => (e.kind === "assessment" ? A_SECTIONS : V_SECTIONS);
+  const findCase = (s, cid) => s.cases.find((c) => c.id === cid);
+  const encounters = (c) => [c.assessment].concat(c.visits.slice().sort((a, b) => (a.at < b.at ? -1 : 1)));
+  const findEnc = (s, eid) => { for (const c of s.cases) for (const e of encounters(c)) if (e.id === eid) return { c, e }; return null; };
+  // Background of a visit: the assessment and every earlier visit; its revision is the sum of their acceptances.
+  const bgRev = (c, e) => (e.kind === "assessment" ? 0 : encounters(c).filter((x) => x.id !== e.id && x.at < e.at).reduce((n, x) => n + x.acceptCount, 0));
+  const stale = (e) => !!e.draft && e.draftNotesRev !== e.notesRev;
+  const bgChanged = (c, e) => !!e.draft && e.kind === "visit" && e.draftBgRev !== bgRev(c, e);
+  const outdated = (c, e) => !!e.proposal && (e.proposal.notesRev !== e.notesRev || (e.kind === "visit" && e.proposal.bgRev !== bgRev(c, e)));
+  const outdatedWhy = (c, e) => (!e.proposal ? "" : e.proposal.notesRev !== e.notesRev ? "Notizen seit diesem Vorschlag geändert" : "Hintergrund seit diesem Vorschlag geändert");
+  const skipped = (e) => (e.proposal ? sections(e).map((x) => x[0]).filter((k) => e.edited[k]) : []);
+  const changes = (e, k) => !!e.proposal && JSON.stringify(e.proposal.draft[k]) !== JSON.stringify(e.draft ? e.draft[k] : null);
+  const inPeriod = (c, at) => at.slice(0, 10) >= c.period.start && at.slice(0, 10) <= c.period.end;
+  const conflicts = (c, period) => encounters(c).filter((e) => e.at.slice(0, 10) < period.start || e.at.slice(0, 10) > period.end);
+  const defaultVisitAt = (s, c) => (inPeriod(c, s.now) ? s.now : null);
+
+  function can(s, type, c, e) {
+    const d = s.dictation.status;
+    switch (type) {
+      case "generate": return !!e && e.notes.trim().length > 0 && d === "idle" && !e.proposal;
+      case "accept": return !!e && !!e.proposal && !outdated(c, e);
+      case "discard": return !!e && !!e.proposal;
+      case "startDictation": return d === "idle" && !!e;
+      default: return true;
+    }
+  }
+  const upd = (s, eid, f) => Object.assign({}, s, { cases: s.cases.map((c) => { const es = encounters(c); if (!es.some((x) => x.id === eid)) return c; const m = (x) => (x.id === eid ? f(x, c) : x); return Object.assign({}, c, { assessment: m(c.assessment), visits: c.visits.map(m) }); }) });
+
+  function reduce(s, a) {
+    const n = Object.assign({}, s, { failure: null });
+    const found = a.enc ? findEnc(s, a.enc) : null, c = found && found.c, e = found && found.e;
+    switch (a.type) {
+      case "createCase": {
+        if (!a.id || !a.start || !a.end || a.start > a.end || !a.at || a.at.slice(0, 10) < a.start || a.at.slice(0, 10) > a.end) { n.changed = "Fall nicht angelegt: Angaben unvollständig oder Assessment außerhalb des Behandlungszeitraums."; return n; }
+        const id = a.id;
+        n.cases = s.cases.concat([{ id, label: a.label || "", assessmentAt: a.at, period: { start: a.start, end: a.end }, assessment: enc("a-" + id, "assessment", a.at, "", null, []), visits: [] }]);
+        n.changed = "Fall " + id + " angelegt."; return n;
+      }
+      case "updatePeriod": {
+        const cs = findCase(s, a.caseId); const conf = conflicts(cs, { start: a.start, end: a.end });
+        if (a.start > a.end) { n.changed = "Behandlungsende liegt vor Behandlungsbeginn."; return n; }
+        if (conf.length) { n.changed = "Zeitraum nicht geändert: " + conf.length + " Kontakt(e) lägen außerhalb. Nichts wurde gelöscht oder verschoben."; return n; }
+        n.cases = s.cases.map((x) => (x.id === a.caseId ? Object.assign({}, x, { period: { start: a.start, end: a.end } }) : x)); n.changed = "Behandlungszeitraum geändert."; return n;
+      }
+      case "createVisit": {
+        const cs = findCase(s, a.caseId);
+        if (!a.at || !inPeriod(cs, a.at)) { n.changed = "Visite nicht angelegt: Datum außerhalb des Behandlungszeitraums."; return n; }
+        const v = enc("v-" + Date.now(), "visit", a.at, "", null, []);
+        n.cases = s.cases.map((x) => (x.id === a.caseId ? Object.assign({}, x, { visits: x.visits.concat([v]) }) : x)); n.changed = "Visite angelegt." + (a.at < s.now ? " Rückdatiert; Hintergrund sind nur frühere Kontakte." : ""); n.newEnc = v.id; return n;
+      }
+      case "editNotes": { if (!e || s.dictation.status !== "idle") return s; const r = upd(n, e.id, (x) => Object.assign({}, x, { notes: a.notes, notesRev: x.notesRev + 1 })); r.unsaved = false; r.changed = "Notizen gespeichert." + (e.draft ? " Entwurf möglicherweise veraltet." : "") + (e.proposal ? " Offener Vorschlag veraltet." : ""); return r; }
+      case "networkLost": n.unsaved = true; n.changed = "Keine Verbindung: letzte Änderung noch nicht gespeichert."; return n;
+      case "generate": {
+        if (!can(s, "generate", c, e)) return s;
+        if (a.fail) { n.failure = "Das Textmodell hat nicht geantwortet. Notizen und bisheriger Entwurf sind unverändert."; n.changed = "Erzeugen fehlgeschlagen; nichts verloren."; return n; }
+        let draft, clar;
+        if (e.kind === "assessment") { const v2 = e.notes.indexOf("Spannungskopfschmerz") >= 0; draft = v2 ? A_V2 : A_V1; clar = v2 ? A_CLAR2 : A_CLAR1; }
+        else { draft = e.id === "v2" || e.notes.indexOf("NRS 5") >= 0 ? V2_DRAFT : V1_DRAFT; clar = e.id === "v2" || e.notes.indexOf("NRS 5") >= 0 ? V2_CLAR : V1_CLAR; }
+        const r = upd(n, e.id, (x, cc) => Object.assign({}, x, { proposal: { draft, clarifications: clar, notesRev: x.notesRev, bgRev: bgRev(cc, x) } }));
+        r.changed = e.draft ? "Neuer Entwurf liegt als Vorschlag vor." : "Erster Entwurf liegt als Vorschlag vor."; return r;
+      }
+      case "accept": {
+        if (!can(s, "accept", c, e)) return s;
+        const keep = skipped(e);
+        const r = upd(n, e.id, (x, cc) => { const d = Object.assign({}, x.proposal.draft); const nu = {}; keep.forEach((k) => { d[k] = x.draft[k]; nu[k] = true; }); return Object.assign({}, x, { draft: d, notUpdated: nu, clarifications: x.proposal.clarifications, draftNotesRev: x.proposal.notesRev, draftBgRev: x.proposal.bgRev, proposal: null, copied: {}, acceptCount: x.acceptCount + 1 }); });
+        r.changed = keep.length ? "Übernommen. Manuell bearbeitet, nicht aktualisiert: " + keep.map((k) => sections(e).find((x) => x[0] === k)[1]).join(", ") + "." : "Übernommen. Klärungsliste des Vorschlags gilt."; return r;
+      }
+      case "discard": { if (!can(s, "discard", c, e)) return s; const r = upd(n, e.id, (x) => Object.assign({}, x, { proposal: null })); r.changed = "Vorschlag verworfen."; return r; }
+      case "editDraft": { if (!e) return s; const r = upd(n, e.id, (x) => { const d = Object.assign({}, x.draft); d[a.section] = [P(a.text, null)]; const ed = Object.assign({}, x.edited); ed[a.section] = true; const nu = Object.assign({}, x.notUpdated); delete nu[a.section]; return Object.assign({}, x, { draft: d, edited: ed, notUpdated: nu }); }); r.changed = "Abschnitt von Hand bearbeitet; Herkunft entfällt."; return r; }
+      case "copy": { if (!e) return s; const r = upd(n, e.id, (x) => { const cp = Object.assign({}, x.copied); cp[a.section] = true; return Object.assign({}, x, { copied: cp }); }); r.changed = "Abschnitt als reiner Text kopiert (aktueller Entwurf, nicht der Vorschlag)."; return r; }
+      case "startDictation": if (!can(s, "startDictation", c, e)) return s; n.dictation = { status: "recording", transcript: "", target: e.id }; n.changed = "Aufnahme läuft."; return n;
+      case "stopDictation": if (s.dictation.status !== "recording") return s; n.dictation = Object.assign({}, s.dictation, { status: "transcribing" }); n.changed = "Transkription läuft lokal."; return n;
+      case "transcriptReady": if (s.dictation.status !== "transcribing") return s; n.dictation = Object.assign({}, s.dictation, { status: "reviewing", transcript: a.transcript || A_TRANSCRIPT }); n.changed = "Transkript zur Durchsicht. Audio gelöscht."; return n;
+      case "editTranscript": if (s.dictation.status !== "reviewing") return s; n.dictation = Object.assign({}, s.dictation, { transcript: a.transcript }); return n;
+      case "acceptTranscript": {
+        if (s.dictation.status !== "reviewing") return s; const t = s.dictation.target, tr = s.dictation.transcript.trim();
+        const r = upd(n, t, (x) => Object.assign({}, x, { notes: (x.notes.trim() + "\n\n" + tr).trim(), notesRev: x.notesRev + 1 })); r.dictation = { status: "idle", transcript: "", target: null };
+        r.changed = "Transkript an die Notizen dieses Kontakts angehängt; nichts überschrieben. Ein offener Vorschlag ist jetzt veraltet."; return r;
+      }
+      case "discardTranscript": if (s.dictation.status !== "reviewing") return s; n.dictation = { status: "idle", transcript: "", target: null }; n.changed = "Transkript verworfen."; return n;
+      default: return s;
+    }
+  }
+  return { A_SECTIONS, V_SECTIONS, initial, reduce, can, sections, findCase, findEnc, encounters, bgRev, stale, bgChanged, outdated, outdatedWhy, skipped, changes, inPeriod, conflicts, defaultVisitAt, A_TRANSCRIPT };
+})();
+
+// =============================================================================================
+// Page state.
+// =============================================================================================
+const M = CaseModel;
+let app = M.initial();
+const ui = { caseId: null, encId: null, step: "notizen", modal: null, drawer: false, openRef: null, openMore: null, editing: null, form: {} };
+function dispatch(a) {
+  app = M.reduce(app, a);
+  if (a.type === "createCase") { ui.caseId = a.id; ui.encId = null; ui.modal = null; }
+  if (a.type === "createVisit" && app.newEnc) { ui.encId = app.newEnc; ui.step = "notizen"; ui.modal = null; delete app.newEnc; }
+  if (a.type === "updatePeriod" && !app.changed.startsWith("Zeitraum nicht") && !app.changed.startsWith("Behandlungsende")) ui.modal = null;
+  render();
+  if (a.type === "stopDictation") setTimeout(() => dispatch({ type: "transcriptReady" }), 1500);
+}
+const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const fmtD = (d) => d.slice(8, 10) + "." + d.slice(5, 7) + "." + d.slice(0, 4);
+const fmtDT = (d) => fmtD(d) + ", " + d.slice(11, 16);
+const cur = () => { const c = ui.caseId ? M.findCase(app, ui.caseId) : null; const f = ui.encId ? M.findEnc(app, ui.encId) : null; return { c, e: f ? f.e : null }; };
+const titleOf = (e, k) => M.sections(e).find((x) => x[0] === k)[1];
+const encLabel = (e) => (e.kind === "assessment" ? "Aufnahmeassessment" : "Visite " + fmtD(e.at));
+
+// Icons instead of long state texts; the explanation opens on tap.
+const ICONS = {
+  new: ["●", "Vorschlag ändert diesen Abschnitt"], edit: ["✎", "Von Hand bearbeitet"], keep: ["✎!", "Manuell bearbeitet, beim Übernehmen nicht aktualisiert"],
+  open: ["?", "Klärung offen"], done: ["✓", "Kopiert"], bg: ["⟲", "Hintergrund (Assessment oder frühere Visite) seit Erstellung geändert"], old: ["⚠", "Veraltet"],
+};
+const ico = (kind, label) => `<span class="ico ${kind}" title="${esc(label || ICONS[kind][1])}">${ICONS[kind][0]}</span>`;
+function sectionIcons(e, k) {
+  let h = "";
+  if (M.changes(e, k)) h += ico("new");
+  if (e.notUpdated[k]) h += ico("keep"); else if (e.edited[k]) h += ico("edit");
+  if ((e.proposal ? e.proposal.clarifications : e.clarifications).some((c) => c.section === k)) h += ico("open");
+  if (e.copied[k]) h += ico("done");
+  return h;
+}
+function encIcons(c, e) {
+  let h = "";
+  if (e.proposal) h += ico(M.outdated(c, e) ? "old" : "new", M.outdated(c, e) ? "Vorschlag veraltet: " + M.outdatedWhy(c, e) : "Vorschlag liegt vor");
+  else if (M.stale(e)) h += ico("old", "Notizen seit dem Entwurf geändert");
+  if (M.bgChanged(c, e)) h += ico("bg");
+  if (!e.draft && !e.notes) h += `<span class="sm">leer</span>`;
+  return h;
+}
+// One-line state with an icon; "Mehr" opens the explanation.
+function line(kind, iconKind, short, detail, id) {
+  const open = ui.openMore === id;
+  return `<div class="line ${kind}">${ico(iconKind, short)}<span>${esc(short)}</span>${detail ? `<span class="more" data-more="${id}">${open ? "Weniger" : "Mehr"}</span>` : ""}${open ? `<div class="detail">${esc(detail)}</div>` : ""}</div>`;
+}
+function paragraphs(list, opts) {
+  opts = opts || {};
+  if (!list || !list.length) return `<p class="para hint">Keine Angaben in den Notizen${opts.clar ? ": siehe Klärung" : ""}.</p>`;
+  return list.map((p, i) => {
+    const id = (opts.prefix || "") + i, open = ui.openRef === id;
+    const ref = p.ref ? `<span class="ref ${p.hist ? "hist" : ""}" data-ref="${id}">${p.hist ? "↳ aus früherem Kontakt" : "↳ aus Notizen"}</span>${open ? `<div class="ref-quote">„${esc(p.ref)}“</div>` : ""}` : `<span class="ref none">↳ von Hand, keine Herkunft</span>`;
+    return `<p class="para ${opts.isNew && opts.isNew(p) ? "new" : ""}">${esc(p.text)}<br>${ref}</p>`;
+  }).join("");
+}
+function clarFor(e, key) {
+  const items = (e.proposal ? e.proposal.clarifications : e.clarifications).filter((c) => !key || c.section === key);
+  if (!items.length) return "";
+  return `<div class="clar"><b>?</b> ${items.map((c) => (key ? "" : `<b>${esc(titleOf(e, c.section))}:</b> `) + esc(c.text)).join("<br>")}</div>`;
+}
+function wireCommon(root) {
+  root.querySelectorAll("[data-act]").forEach((b) => b.addEventListener("click", () => dispatch({ type: b.dataset.act, enc: b.dataset.enc || ui.encId, section: b.dataset.section, fail: b.dataset.fail === "1", caseId: b.dataset.case || ui.caseId })));
+  root.querySelectorAll("[data-ref]").forEach((r) => r.addEventListener("click", () => { ui.openRef = ui.openRef === r.dataset.ref ? null : r.dataset.ref; render(); }));
+  root.querySelectorAll("[data-more]").forEach((r) => r.addEventListener("click", () => { ui.openMore = ui.openMore === r.dataset.more ? null : r.dataset.more; render(); }));
+  root.querySelectorAll("textarea[data-notes]").forEach((t) => t.addEventListener("change", () => dispatch({ type: "editNotes", enc: ui.encId, notes: t.value })));
+  root.querySelectorAll("textarea[data-transcript]").forEach((t) => t.addEventListener("change", () => dispatch({ type: "editTranscript", transcript: t.value })));
+  root.querySelectorAll("[data-editdraft]").forEach((t) => t.addEventListener("change", () => dispatch({ type: "editDraft", enc: ui.encId, section: t.dataset.editdraft, text: t.value })));
+  root.querySelectorAll("[data-go]").forEach((b) => b.addEventListener("click", () => { ui.step = b.dataset.go; ui.editing = null; ui.drawer = false; render(); }));
+  root.querySelectorAll("[data-case]").forEach((b) => { if (b.dataset.act) return; b.addEventListener("click", () => { ui.caseId = b.dataset.case; ui.encId = null; ui.step = "notizen"; ui.drawer = false; render(); }); });
+  root.querySelectorAll("[data-enc]").forEach((b) => { if (b.dataset.act) return; b.addEventListener("click", () => { ui.encId = b.dataset.enc; ui.step = b.dataset.step || "notizen"; ui.drawer = false; render(); }); });
+  root.querySelectorAll("[data-modal]").forEach((b) => b.addEventListener("click", () => { ui.modal = b.dataset.modal || null; ui.form = {}; if (ui.modal === "newvisit") { const { c } = cur(); ui.form.at = M.defaultVisitAt(app, c) || ""; } if (ui.modal === "period") { const { c } = cur(); ui.form.start = c.period.start; ui.form.end = c.period.end; } render(); }));
+  root.querySelectorAll("[data-close]").forEach((b) => b.addEventListener("click", () => { ui.modal = null; render(); }));
+  root.querySelectorAll("[data-field]").forEach((i) => i.addEventListener("input", () => { ui.form[i.dataset.field] = i.value; }));
+  root.querySelectorAll("[data-field]").forEach((i) => i.addEventListener("change", () => { ui.form[i.dataset.field] = i.value; render(); }));
+  root.querySelectorAll("[data-submit]").forEach((b) => b.addEventListener("click", () => {
+    const f = ui.form;
+    if (b.dataset.submit === "newcase") dispatch({ type: "createCase", id: f.id, label: f.label, at: f.at, start: f.start, end: f.end });
+    if (b.dataset.submit === "period") dispatch({ type: "updatePeriod", caseId: ui.caseId, start: f.start, end: f.end });
+    if (b.dataset.submit === "newvisit") dispatch({ type: "createVisit", caseId: ui.caseId, at: f.at });
+  }));
+  root.querySelectorAll("[data-edit]").forEach((b) => b.addEventListener("click", () => { ui.editing = b.dataset.edit; render(); }));
+  root.querySelectorAll("[data-doneedit]").forEach((b) => b.addEventListener("click", () => { ui.editing = null; render(); }));
+  root.querySelectorAll("[data-drawer]").forEach((b) => b.addEventListener("click", () => { ui.drawer = !ui.drawer; render(); }));
+  root.querySelectorAll(".drawer").forEach((d) => d.addEventListener("click", (ev) => { if (ev.target === d) { ui.drawer = false; render(); } }));
+}
+
+// ---------------------------------------------------------------------------------------------
+// Sidebar: cases, then the selected case's encounters, then the selected encounter's steps.
+// ---------------------------------------------------------------------------------------------
+function sidebarHtml() {
+  const { c, e } = cur();
+  let h = `<div class="side"><div class="hdr">Fälle <button class="btn quiet" data-modal="newcase">+ Neu</button></div>`;
+  h += app.cases.map((x) => `<div class="item ${x.id === ui.caseId ? "on" : ""}" data-case="${x.id}"><span>${esc(x.id)}<div class="sm">${esc(x.label)} · ${fmtD(x.period.start)} bis ${fmtD(x.period.end)}</div></span></div>`).join("");
+  if (c) {
+    h += `<div class="hdr">Kontakte <button class="btn quiet" data-modal="newvisit">+ Visite</button></div>`;
+    h += M.encounters(c).map((x) => `<div class="item ${x.id === ui.encId ? "on" : ""}" data-enc="${x.id}"><span>${encLabel(x)}<div class="sm">${x.kind === "assessment" ? fmtDT(x.at) : x.at.slice(11, 16) + " Uhr"}</div></span><span class="right">${encIcons(c, x)}</span></div>`).join("");
+  }
+  if (c && e) {
+    const steps = stepsFor(c, e);
+    h += `<div class="hdr">Durchsicht</div>` + steps.map((st) => `<div class="item sub ${st.key === ui.step ? "on" : ""}" data-go="${st.key}"><span class="num">${st.num}</span><span>${esc(st.short)}</span><span class="right">${st.icons || ""}</span></div>`).join("");
+  }
+  return h + `</div>`;
+}
+function stepsFor(c, e) {
+  const secs = M.sections(e);
+  const steps = [{ key: "notizen", num: 1, label: "Notizen", short: "Notizen", icons: M.stale(e) && !e.proposal ? ico("old", "Notizen seit dem Entwurf geändert") : "" }];
+  secs.forEach((s, i) => steps.push({ key: s[0], num: i + 2, label: s[1], short: s[1].length > 34 ? s[1].slice(0, 32) + "…" : s[1], icons: sectionIcons(e, s[0]) }));
+  steps.push({ key: "abschluss", num: secs.length + 2, label: e.proposal ? "Übernehmen" : "Übergabe", short: e.proposal ? "Übernehmen" : "Übergabe", icons: e.proposal ? ico(M.outdated(c, e) ? "old" : "new", M.outdated(c, e) ? "Vorschlag veraltet" : "Vorschlag liegt vor") : (Object.keys(e.copied).length === secs.length ? ico("done", "Alles kopiert") : "") });
+  return steps;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Main area pieces.
+// ---------------------------------------------------------------------------------------------
+function navBar(portrait) {
+  const { c, e } = cur();
+  return `<div class="nav">${portrait ? `<button class="btn quiet" data-drawer style="min-height:36px;padding:6px 10px">☰ Fälle</button>` : ""}
+    <span class="title">${c ? esc(c.id) + (e ? " · " + encLabel(e) : "") : "Lindra"}</span>
+    <span class="meta">${app.unsaved ? `<span class="unsaved">⚠ Nicht gespeichert</span>` : "✓ Gespeichert"}</span><span class="spacer"></span>
+    ${e ? `<button class="btn quiet" data-act="startDictation" ${M.can(app, "startDictation", c, e) ? "" : "disabled"} title="Diktat für ${encLabel(e)}">🎙</button>` : ""}
+    <button class="btn plain" data-act="networkLost" title="Simuliert einen Verbindungsabbruch">Verbindung weg?</button>
+    <button class="btn plain" data-act="generate" data-fail="1" ${e && M.can(app, "generate", c, e) ? "" : "disabled"}>Fehlschlag</button></div>`;
+}
+function emptyMain() {
+  return `<div class="empty"><div class="big-ico">🗂</div><div style="font-size:20px;font-weight:600;color:var(--label)">Fall auswählen</div><div>Links einen Fall wählen oder einen neuen Fall anlegen. Es wird kein Patient automatisch gewählt.</div><button class="btn" data-modal="newcase">+ Neuer Fall</button></div>`;
+}
+function overviewMain(c) {
+  return `<div class="steptitle">${esc(c.id)} <span class="n">${esc(c.label)}</span></div><div class="stepbody">
+    <div class="meta"><span class="k">Fiktive Fallkennung</span><span>${esc(c.id)}</span><span class="k">Behandlungszeitraum</span><span>${fmtD(c.period.start)} bis ${fmtD(c.period.end)} (einschließlich) <button class="btn plain" data-modal="period">Ändern</button></span><span class="k">Aufnahmeassessment</span><span>${fmtDT(c.assessmentAt)}</span></div>
+    <div class="hdr" style="font-size:12px;text-transform:uppercase;color:var(--label-2);margin:8px 0 4px">Kontakte</div>
+    ${M.encounters(c).map((x) => `<div class="enc" data-enc="${x.id}"><span class="t">${encLabel(x)}</span><span class="hint">${fmtDT(x.at)}</span><span class="right">${encIcons(c, x)}</span></div>`).join("")}
+    <button class="btn quiet" data-modal="newvisit" style="margin-top:6px">+ Neue Visite</button>
+    <p class="hint" style="margin-top:18px">Jeder Kontakt hat eigene Notizen und einen eigenen Entwurf. Eine Visite wird nie an das Assessment angehängt; frühere Kontakte werden nicht umgeschrieben.</p></div>`;
+}
+function notesStep(c, e) {
+  const steps = stepsFor(c, e);
+  return `<div class="steptitle">Notizen <span class="n">${encLabel(e)}, ${fmtDT(e.at)} · frei: tippen, einfügen oder diktieren</span></div>
+    <div class="stepbody" style="display:flex;flex-direction:column;gap:8px">${failLine()}${staleLine(c, e)}
+      <textarea class="notes" data-notes ${app.dictation.status === "idle" ? "" : "readonly"} style="flex:1" placeholder="Eigene Notizen nach der Untersuchung …">${esc(e.notes)}</textarea></div>
+    <div class="stepfoot"><button class="btn quiet big" data-act="startDictation" ${M.can(app, "startDictation", c, e) ? "" : "disabled"}>🎙 Diktat</button><span class="grow"></span>
+      <button class="btn big" data-act="generate" ${M.can(app, "generate", c, e) ? "" : "disabled"}>${e.draft ? "Neuen Entwurf erzeugen" : "Entwurf erzeugen"}</button>
+      <button class="btn quiet" data-go="${steps[1].key}">${esc(steps[1].short)} ›</button></div>`;
+}
+const failLine = () => (app.failure ? line("fail", "old", "Erzeugen fehlgeschlagen", app.failure, "fail") : "");
+function staleLine(c, e) {
+  let h = "";
+  if (M.stale(e) && !e.proposal) h += line("stale", "old", "Notizen seit dem Entwurf geändert", "Der Entwurf ist möglicherweise veraltet. Welche Abschnitte betroffen sind, zeigt erst ein neuer Vorschlag. Nichts wird automatisch neu erzeugt.", "stale");
+  if (M.bgChanged(c, e) && !e.proposal) h += line("bg", "bg", "Hintergrund seit Erstellung geändert", "Das Aufnahmeassessment oder eine frühere Visite wurde nach diesem Entwurf geändert. Der Text bleibt; eine Neuerzeugung nutzt den aktuellen Hintergrund.", "bg");
+  return h;
+}
+function proposalLine(c, e) {
+  if (!e.proposal) return "";
+  const old = M.outdated(c, e), skip = M.skipped(e);
+  if (old) return line("stale", "old", "Vorschlag veraltet: " + M.outdatedWhy(c, e), "Kann nicht übernommen werden. Verwerfen und bei Bedarf neu erzeugen; der bisherige Entwurf bleibt.", "prop");
+  return line("proposal", "new", "Vorschlag liegt vor" + (skip.length ? " · " + skip.length + " Abschnitt(e) bleiben manuell" : ""), "Übernehmen gilt für den ganzen Entwurf" + (skip.length ? ", außer: " + skip.map((k) => titleOf(e, k)).join(", ") + ". Diese bleiben und werden als nicht aktualisiert markiert." : "; die Klärungsliste wird übernommen."), "prop");
+}
+function compare(c, e, k, stack) {
+  const curL = e.draft ? e.draft[k] : null, prop = e.proposal ? e.proposal.draft[k] : null, editing = ui.editing === k;
+  const curPane = editing
+    ? `<div class="pane"><h5>Bisheriger Entwurf <span class="right"><button class="btn plain" data-doneedit="${k}">Fertig</button></span></h5><textarea class="edittext" data-editdraft="${k}">${esc((curL || []).map((p) => p.text).join("\n"))}</textarea></div>`
+    : `<div class="pane"><h5>Bisheriger Entwurf <span class="right">${e.notUpdated[k] ? ico("keep") : e.edited[k] ? ico("edit") : ""}${e.draft ? `<button class="btn plain" data-edit="${k}">Bearbeiten</button>` : ""}</span></h5>${e.draft ? paragraphs(curL, { prefix: "C" + k, clar: true }) : `<p class="hint">Noch kein Entwurf.</p>`}</div>`;
+  if (!e.proposal) return `<div class="cmp stack">${curPane}</div>`;
+  const propPane = `<div class="pane new"><h5>Vorschlag <span class="right">${e.edited[k] ? ico("keep", "Wird übersprungen: manuell bearbeitet") : M.changes(e, k) ? ico("new", "Geändert") : `<span class="hint">unverändert</span>`}</span></h5>${paragraphs(prop, { prefix: "P" + k, isNew: (p) => !(curL && curL.some((d) => d.text === p.text)), clar: true })}</div>`;
+  return `<div class="cmp ${stack ? "stack" : ""}">${curPane}${propPane}</div>`;
+}
+function sectionStep(c, e, k, portrait) {
+  const steps = stepsFor(c, e), i = steps.findIndex((s) => s.key === k), sec = M.sections(e).find((s) => s[0] === k), prev = steps[i - 1], next = steps[i + 1];
+  const painHint = k === "schmerz" ? `<div class="pains" style="margin:8px 0"><div class="pain"><h6>Hauptschmerz (von der Ärztin benannt)</h6>Lokalisation, Ausstrahlung, Beginn/Verlauf, Intensität, Qualität, Modifikatoren, Bewältigung, Einschränkungen, Ziele</div><div class="pain"><h6>Weitere Schmerzprobleme</h6>getrennt, ohne Rangfolge; keine feste Anzahl</div></div>` : "";
+  return `<div class="steptitle">${esc(sec[1])} ${sectionIcons(e, k)} <span class="n">Schritt ${i + 1} von ${steps.length}${sec[2] ? " · " + esc(sec[2]) : ""}</span></div>
+    <div class="stepbody">${failLine()}${staleLine(c, e)}${proposalLine(c, e)}${painHint}${compare(c, e, k, portrait)}${clarFor(e, k)}</div>
+    <div class="stepfoot"><button class="btn quiet" data-go="${prev.key}">‹ ${esc(prev.short)}</button><span class="grow"></span>
+      ${e.proposal ? `<button class="btn danger" data-act="discard">Vorschlag verwerfen</button>` : ""}
+      ${e.draft ? (e.copied[k] ? ico("done") : `<button class="btn quiet" data-act="copy" data-section="${k}">Kopieren</button>`) : ""}
+      <button class="btn" data-go="${next.key}">${esc(next.short)} ›</button></div>`;
+}
+function finalStep(c, e) {
+  const steps = stepsFor(c, e), back = steps[steps.length - 2], secs = M.sections(e);
+  if (e.proposal) {
+    const skip = M.skipped(e), old = M.outdated(c, e);
+    return `<div class="steptitle">Vorschlag übernehmen <span class="n">eine Entscheidung für den ganzen Entwurf</span></div><div class="stepbody">${proposalLine(c, e)}
+      <div class="hand"><div class="t">${ico("new")} Ersetzt</div><div></div><div class="txt">${esc(secs.map((s) => s[0]).filter((k) => !e.edited[k] && M.changes(e, k)).map((k) => titleOf(e, k)).join(", ") || "keine Änderungen")}</div></div>
+      <div class="hand"><div class="t">${ico("keep")} Bleibt manuell</div><div></div><div class="txt">${esc(skip.map((k) => titleOf(e, k)).join(", ") || "keine")}</div></div>${clarFor(e)}</div>
+      <div class="stepfoot"><button class="btn quiet" data-go="${back.key}">‹ Zurück</button><span class="grow"></span><button class="btn danger" data-act="discard">Verwerfen</button><button class="btn big" data-act="accept" ${old ? "disabled" : ""}>${old ? "⚠ Veraltet" : "Übernehmen"}</button></div>`;
+  }
+  return `<div class="steptitle">Übergabe <span class="n">${encLabel(e)}: Abschnitte als reinen Text in das Krankenhaussystem kopieren</span></div><div class="stepbody">${staleLine(c, e)}
+    ${secs.map((s) => `<div class="hand"><div class="t">${esc(s[1])} ${sectionIcons(e, s[0])}</div>${e.copied[s[0]] ? ico("done") : `<button class="btn quiet" data-act="copy" data-section="${s[0]}" ${e.draft ? "" : "disabled"}>Kopieren</button>`}<div class="txt">${esc(((e.draft && e.draft[s[0]]) || []).map((p) => p.text).join(" ") || "Keine Angaben in den Notizen.")}</div></div>`).join("")}${clarFor(e)}</div>
+    <div class="stepfoot"><button class="btn quiet" data-go="${back.key}">‹ Zurück</button><span class="grow"></span><button class="btn quiet" data-go="notizen">Notizen ergänzen</button>${e.kind === "assessment" ? `<button class="btn" data-modal="newvisit">+ Neue Visite</button>` : ""}</div>`;
+}
+// Modals: new case, period correction, new visit.
+function modalHtml() {
+  const { c } = cur(), f = ui.form;
+  if (ui.modal === "newcase") {
+    const bad = f.start && f.end && f.start > f.end, outside = f.at && f.start && f.end && (f.at.slice(0, 10) < f.start || f.at.slice(0, 10) > f.end);
+    return `<div class="overlay"><div class="card"><h3>Neuer Fall</h3><div class="hint">Nur fiktive Kennungen. Keine Namen, Geburtsdaten oder Fallnummern des Krankenhauses.</div>
+      <div class="form"><label>Fiktive Fallkennung</label><input data-field="id" value="${esc(f.id || "L-0004")}"><label>Kurzbezeichnung (optional)</label><input data-field="label" value="${esc(f.label || "")}" placeholder="z. B. Knie, fiktiv">
+        <label>Behandlungsbeginn</label><input type="date" data-field="start" value="${esc(f.start || "2026-11-08")}"><label>Behandlungsende (einschließlich)</label><input type="date" data-field="end" value="${esc(f.end || "2026-11-28")}">${bad ? `<div class="err">Behandlungsende liegt vor Behandlungsbeginn.</div>` : ""}
+        <label>Aufnahmeassessment</label><input type="datetime-local" data-field="at" value="${esc(f.at || "2026-11-08T11:00")}" min="${esc(f.start || "")}T00:00" max="${esc(f.end || "")}T23:59">${outside ? `<div class="err">Das Assessment muss im Behandlungszeitraum liegen.</div>` : `<div class="ok">Datum nur innerhalb des Behandlungszeitraums wählbar.</div>`}</div>
+      <div class="row"><button class="btn" data-submit="newcase">Fall anlegen</button><button class="btn quiet" data-close>Abbrechen</button></div></div></div>`;
+  }
+  if (ui.modal === "period" && c) {
+    const p = { start: f.start || c.period.start, end: f.end || c.period.end }, conf = M.conflicts(c, p);
+    return `<div class="overlay"><div class="card"><h3>Behandlungszeitraum ändern</h3><div class="hint">${esc(c.id)} · bisher ${fmtD(c.period.start)} bis ${fmtD(c.period.end)}</div>
+      <div class="form"><label>Behandlungsbeginn</label><input type="date" data-field="start" value="${esc(p.start)}"><label>Behandlungsende (einschließlich)</label><input type="date" data-field="end" value="${esc(p.end)}">
+        ${p.start > p.end ? `<div class="err">Behandlungsende liegt vor Behandlungsbeginn.</div>` : conf.length ? `<div class="err">⚠ Nicht möglich: ${conf.length} Kontakt(e) lägen außerhalb des neuen Zeitraums: ${conf.map((x) => encLabel(x) + " (" + fmtD(x.at) + ")").join(", ")}. Kontakte werden nie gelöscht oder verschoben; erst Kontakt ändern, dann Zeitraum.</div>` : `<div class="ok">Alle ${M.encounters(c).length} Kontakte liegen im neuen Zeitraum.</div>`}</div>
+      <div class="row"><button class="btn" data-submit="period" ${p.start > p.end || conf.length ? "disabled" : ""}>Zeitraum speichern</button><button class="btn quiet" data-close>Abbrechen</button></div></div></div>`;
+  }
+  if (ui.modal === "newvisit" && c) {
+    const def = M.defaultVisitAt(app, c), at = f.at !== undefined ? f.at : def || "", ok = at && M.inPeriod(c, at), back = ok && at < app.now;
+    return `<div class="overlay"><div class="card"><h3>Neue Visite</h3><div class="hint">${esc(c.id)} · Behandlungszeitraum ${fmtD(c.period.start)} bis ${fmtD(c.period.end)}</div>
+      <div class="form"><label>Datum und Uhrzeit</label><input type="datetime-local" data-field="at" value="${esc(at)}" min="${c.period.start}T00:00" max="${c.period.end}T23:59">
+        ${!def ? `<div class="err">Heute (${fmtD(app.now)}) liegt außerhalb des Behandlungszeitraums; es wird kein Datum vorbelegt. Bitte ein Datum im Zeitraum wählen.</div>` : ""}
+        ${at && !ok ? `<div class="err">Datum liegt außerhalb des Behandlungszeitraums.</div>` : back ? `<div class="ok">Rückdatierte Visite: als Hintergrund gelten nur das Assessment und frühere Visiten, nicht spätere.</div>` : ok ? `<div class="ok">Vorbelegt mit jetzt; Uhrzeit frei änderbar.</div>` : ""}</div>
+      <div class="row"><button class="btn" data-submit="newvisit" ${ok ? "" : "disabled"}>Visite anlegen</button><button class="btn quiet" data-close>Abbrechen</button></div></div></div>`;
+  }
+  return "";
+}
+function dictationOverlay() {
+  const d = app.dictation; if (d.status === "idle") return "";
+  const t = d.target ? M.findEnc(app, d.target) : null;
+  const LBL = { recording: "Aufnahme läuft · nur die eigene Stimme, kein Patientengespräch", transcribing: "Transkription läuft auf eigener Hardware · Audio wird danach gelöscht", reviewing: "Transkript prüfen und korrigieren · erst „Übernehmen“ hängt es an die Notizen an" };
+  return `<div class="overlay"><div class="card"><h3><span class="dot ${d.status}"></span>Diktat <span class="hint" style="font-weight:400">für ${t ? encLabel(t.e) + " (" + t.c.id + ")" : ""}</span></h3><div class="hint" style="margin-bottom:12px">${LBL[d.status]}</div>
+    ${d.status === "recording" ? `<div class="wave"></div><div class="row"><button class="btn rec big" data-act="stopDictation">■ Diktat beenden</button></div>` : ""}
+    ${d.status === "transcribing" ? `<div class="hint">… bitte warten</div>` : ""}
+    ${d.status === "reviewing" ? `<textarea data-transcript>${esc(d.transcript)}</textarea><div class="row"><button class="btn big" data-act="acceptTranscript">In Notizen übernehmen</button><button class="btn danger" data-act="discardTranscript">Verwerfen</button>${t && t.e.proposal ? `<span class="hint" style="margin-left:auto">⚠ Ein offener Vorschlag wird dadurch veraltet.</span>` : ""}</div>` : ""}
+  </div></div>`;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Screens. The variant switcher selects a screen; each sets up ui/app and renders the one live flow.
+// ---------------------------------------------------------------------------------------------
+function setup(scene) {
+  app = M.initial(); Object.assign(ui, { caseId: null, encId: null, step: "notizen", modal: null, drawer: false, openRef: null, openMore: null, editing: null, form: {} });
+  const c1 = () => { ui.caseId = "L-0001"; };
+  const withProposal = () => {
+    app = M.reduce(app, { type: "editNotes", enc: "a1", notes: app.cases[0].assessment.notes + "\n\n" + M.A_TRANSCRIPT }); app = M.reduce(app, { type: "editDraft", enc: "a1", section: "plan", text: "Stationäre multimodale Schmerztherapie indiziert (Chronifizierung, ambulante Maßnahmen ausgeschöpft). Ziele: NRS 4, Alltagsaktivitäten." }); app = M.reduce(app, { type: "generate", enc: "a1" }); };
+  switch (scene) {
+    case "start": break;
+    case "newcase": ui.modal = "newcase"; break;
+    case "overview": c1(); break;
+    case "period": c1(); ui.modal = "period"; ui.form = { start: "2026-11-02", end: "2026-11-04" }; break;
+    case "a-notes": c1(); ui.encId = "a1"; ui.step = "notizen"; break;
+    case "a-review": c1(); withProposal(); ui.encId = "a1"; ui.step = "schmerz"; break;
+    case "a-accept": c1(); withProposal(); ui.encId = "a1"; ui.step = "abschluss"; break;
+    case "a-handover": c1(); ui.encId = "a1"; ui.step = "abschluss"; app = M.reduce(app, { type: "copy", enc: "a1", section: "sozial" }); break;
+    case "newvisit": c1(); ui.modal = "newvisit"; ui.form = { at: M.defaultVisitAt(app, app.cases[0]) }; break;
+    case "v-notes": c1(); ui.encId = "v2"; ui.step = "notizen"; break;
+    case "v-review": c1(); app = M.reduce(app, { type: "generate", enc: "v2" }); ui.encId = "v2"; ui.step = "verlauf"; break;
+    case "v-background": c1(); app = M.reduce(app, { type: "generate", enc: "v1" }); app = M.reduce(app, { type: "editNotes", enc: "a1", notes: app.cases[0].assessment.notes + "\n\nKorrektur: Lasègue rechts positiv bei 60°." }); app = M.reduce(app, { type: "generate", enc: "a1" }); app = M.reduce(app, { type: "accept", enc: "a1" }); app.changed = "Visite 03.11. geöffnet: Hintergrund wurde nach dem Entwurf geändert."; ui.encId = "v1"; ui.step = "verlauf"; break;
+    case "dict-rec": c1(); withProposal(); ui.encId = "a1"; ui.step = "schmerz"; app = M.reduce(app, { type: "discard", enc: "a1" }); app = M.reduce(app, { type: "startDictation", enc: "a1" }); break;
+    case "dict-review": c1(); withProposal(); ui.encId = "a1"; ui.step = "schmerz"; app.dictation = { status: "reviewing", transcript: "Nachtrag: Patient berichtet zusätzlich morgendliche Steifigkeit von etwa zwanzig Minuten.", target: "a1" }; break;
+    case "errors": c1(); ui.encId = "a1"; ui.step = "sozial"; app = M.reduce(app, { type: "editNotes", enc: "a1", notes: app.cases[0].assessment.notes + "\n\nNachtrag." }); app = M.reduce(app, { type: "generate", enc: "a1", fail: true }); app = M.reduce(app, { type: "networkLost" }); break;
+    case "drawer": c1(); ui.encId = "a1"; ui.step = "schmerz"; ui.drawer = true; break;
+  }
+}
+const SCREENS = {
+  start: "Start: kein Fall gewählt", newcase: "Neuer Fall mit Behandlungszeitraum", overview: "Fallübersicht: Assessment und Visiten", period: "Zeitraum ändern: Konflikt mit Visiten",
+  "a-notes": "Assessment: Notizen", "a-review": "Assessment: Durchsicht Schmerzanamnese mit Vorschlag", "a-accept": "Assessment: Übernehmen", "a-handover": "Assessment: Übergabe",
+  newvisit: "Neue Visite im Zeitraum", "v-notes": "Visite: Notizen", "v-review": "Visite: Durchsicht mit Hintergrundbezug", "v-background": "Visite: Hintergrund seit Erstellung geändert",
+  "dict-rec": "Diktat aus der Durchsicht: Aufnahme", "dict-review": "Diktat: Transkript prüfen", errors: "Fehlschlag und nicht gespeichert", drawer: "Portrait: Fall- und Kontaktwechsel (Drawer)",
+};
+const VARIANTS = {};
+Object.keys(SCREENS).forEach((k) => { VARIANTS[k] = { name: SCREENS[k], render: renderFlow, wire: wireCommon }; });
+function renderFlow(st) {
+  const portrait = st.orient === "portrait", { c, e } = cur();
+  let main;
+  if (!c) main = emptyMain();
+  else if (!e) main = overviewMain(c);
+  else if (ui.step === "notizen") main = notesStep(c, e);
+  else if (ui.step === "abschluss") main = finalStep(c, e);
+  else main = sectionStep(c, e, ui.step, portrait);
+  const drawer = portrait && ui.drawer ? `<div class="drawer">${sidebarHtml()}</div>` : "";
+  return `<div class="page"><div class="status"></div>${navBar(portrait)}<div class="body">${portrait ? "" : sidebarHtml()}<div class="main">${main}<div class="changed">${esc(app.changed)}</div></div>${drawer}</div>${modalHtml()}${dictationOverlay()}</div>`;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Shell (ios-shell.html; TARGETS = iPad; a "variant" is a screen, set up once when selected).
+// ---------------------------------------------------------------------------------------------
+const DEVICES = { iphone: { size: [402, 874], radius: 55 }, ipad: { size: [834, 1194], radius: 18 } };
+const TARGETS = ["ipad"];
+const q = new URLSearchParams(location.search);
+const state = { variant: VARIANTS[q.get("variant")] ? q.get("variant") : "start", device: TARGETS.includes(q.get("device")) ? q.get("device") : TARGETS[0], orient: q.get("orient") === "landscape" ? "landscape" : "portrait" };
+const bleed = q.has("bleed") || matchMedia("(pointer: coarse)").matches;
+const device = document.getElementById("device"); const screen = document.getElementById("screen");
+document.body.classList.toggle("bleed", bleed);
+if (TARGETS.length < 2) document.querySelectorAll("[data-device]").forEach((b) => b.remove());
+if (!TARGETS.includes("ipad")) document.querySelector("[data-orient]").remove();
+function layout() {
+  const d = DEVICES[state.device]; const [w, h] = state.orient === "landscape" ? [d.size[1], d.size[0]] : d.size;
+  if (bleed) { Object.assign(device.style, { width: "100vw", height: "100vh", transform: "none" }); return; }
+  const stage = document.getElementById("stage").getBoundingClientRect(); const scale = Math.min(1, (stage.width - 32) / w, (stage.height - 32) / h);
+  device.style.setProperty("--radius", d.radius + "px"); Object.assign(device.style, { width: w + "px", height: h + "px", transform: `translate(-50%, -50%) scale(${scale})` });
+}
+let lastScene = null;
+function render() {
+  if (lastScene !== state.variant) { lastScene = state.variant; setup(state.variant); }
+  const v = VARIANTS[state.variant];
+  screen.className = `v-${state.variant} ${state.device} ${state.orient}`;
+  screen.innerHTML = v.render(state); v.wire(screen, state);
+  document.querySelector("#pill .label").textContent = `${Object.keys(SCREENS).indexOf(state.variant) + 1}/${Object.keys(SCREENS).length} ${v.name}`;
+  layout();
+}
+function step(n) { const keys = Object.keys(VARIANTS); state.variant = keys[(keys.indexOf(state.variant) + n + keys.length) % keys.length]; render(); }
+document.getElementById("pill").addEventListener("click", (e) => { const b = e.target.closest("button"); if (!b) return; if (b.dataset.step) step(Number(b.dataset.step)); if (b.dataset.device) { state.device = b.dataset.device; render(); } if (b.hasAttribute("data-orient")) { state.orient = state.orient === "portrait" ? "landscape" : "portrait"; render(); } });
+addEventListener("keydown", (e) => { if (e.key === "ArrowLeft") step(-1); if (e.key === "ArrowRight") step(1); });
+addEventListener("resize", layout);
+render();
+if (q.has("tour")) { const order = q.get("tour").split(",").filter((v) => VARIANTS[v]); const show = (i) => { if (i >= order.length) return; state.variant = order[i]; render(); setTimeout(() => fetch(`__shot?${order[i]}`).catch(() => {}).finally(() => setTimeout(() => show(i + 1), 4000)), 800); }; show(0); }
+</script>
+</body>
+</html>
