@@ -1,0 +1,641 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Lindra Fallbildschirm: Notizen neben Entwurf, Vorschlag, Diktat</title>
+<!--
+  Question: How does the case screen lay out notes beside the draft sections, and how does it show
+  a stale draft, a pending generation proposal (accept / discard) and the dictation states
+  (idle, recording, transcribing, reviewing the transcript before it joins the notes)?
+  Plan: Three variants of the case screen, A/B/C, on iPad (landscape stands in for the desktop browser;
+  portrait is the handheld iPad). All three share one pure state module (CaseModel) so the operator can
+  click the same flow through each layout: edit notes, dictate, generate, accept or discard, copy a section.
+  Scenes for screenshots: ?scene=proposal (default: draft present, notes changed, proposal pending)
+  and ?scene=dictation (transcript ready for review). Free play works from either.
+  Assumptions: Lindra is a browser app, not a native iOS app, so the iOS shell frame is only a
+  convenient device frame. All data is the fictional case L-0001; nothing here is real.
+  Decision (grilling 3, 2026-11-08, ADR 0008): variant A, with C's section badges carried into A's
+  headings. After the decision the CaseModel reducer was corrected: accepting a proposal keeps every
+  manually edited section (labelled "manuell bearbeitet, nicht aktualisiert"), a proposal whose notes
+  revision is no longer current is outdated and cannot be accepted, and no per-section staleness is
+  guessed (one document-wide banner). The first version replaced edited sections; that is not normative.
+  Round 2 (operator feedback, 2026-11-08): the operator wants C's sidebar for orientation, B's full
+  dictation overlay, a larger previous/new comparison and a wizard-style review. See case-wizard.html;
+  the variant A decision above is under revision until that round is decided.
+-->
+<style>
+:root {
+  --font: -apple-system, system-ui, "SF Pro Text", "Helvetica Neue", Inter, Roboto, sans-serif;
+  --tint: #0b6e6e;
+  --red: #c0392b; --green: #2e8b57; --orange: #c77700; --stale: #fff4d6; --proposal: #e6f4f1;
+  --label: #111; --label-2: rgba(60,60,67,.6); --label-3: rgba(60,60,67,.3);
+  --sep: rgba(60,60,67,.29);
+  --bg: #fff; --bg-grouped: #f2f2f7; --cell: #fff; --fill: rgba(120,120,128,.12);
+  --bar: rgba(249,249,249,.94);
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; height: 100%; }
+body { background: #d6d9de; font: 15px/1.4 var(--font); color: var(--label); overflow: hidden; }
+#stage { position: fixed; inset: 0 0 56px 0; }
+#device { position: absolute; left: 50%; top: 50%; overflow: hidden; background: var(--bg);
+  border-radius: var(--radius); box-shadow: 0 0 0 10px #1c1c1e, 0 18px 50px rgba(0,0,0,.35); }
+body.bleed #stage { inset: 0; }
+body.bleed #device { left: 0; top: 0; border-radius: 0; box-shadow: none; }
+body.bleed #pill { display: none; }
+#screen { position: absolute; inset: 0; overflow: hidden; }
+#pill { position: fixed; left: 50%; bottom: 10px; transform: translateX(-50%); display: flex; gap: 4px;
+  align-items: center; padding: 4px; border-radius: 999px; background: #222; color: #fff;
+  font: 13px/1 ui-monospace, Menlo, monospace; z-index: 10; white-space: nowrap; }
+#pill button { font: inherit; color: inherit; background: #3a3a3c; border: 0; border-radius: 999px; padding: 7px 11px; cursor: pointer; }
+#pill button[aria-pressed="true"] { background: #0a84ff; }
+#pill .label { padding: 0 8px; }
+
+.status { height: 24px; flex: none; }
+.nav { position: relative; height: 48px; flex: none; display: flex; align-items: center; gap: 12px; padding: 0 16px; border-bottom: .5px solid var(--sep); background: var(--bar); }
+.nav .title { font-weight: 600; font-size: 17px; }
+.nav .meta { color: var(--label-2); font-size: 13px; }
+.nav .spacer { flex: 1; }
+.page { position: absolute; inset: 0; display: flex; flex-direction: column; background: var(--bg-grouped); }
+.btn { font: inherit; border: 0; border-radius: 10px; padding: 9px 14px; background: var(--tint); color: #fff; font-weight: 600; cursor: pointer; }
+.btn.plain { background: none; color: var(--tint); padding: 6px 8px; font-weight: 500; }
+.btn.danger { background: none; color: var(--red); font-weight: 500; }
+.btn.quiet { background: var(--fill); color: var(--label); font-weight: 500; }
+.btn[disabled] { opacity: .4; cursor: default; }
+.btn.rec { background: var(--red); }
+.sheet-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,.25); opacity: 0; transition: opacity .3s; z-index: 5; }
+.sheet { position: absolute; left: 50%; bottom: 50%; width: 560px; max-height: 640px; background: var(--bg); border-radius: 12px;
+  transform: translate(-50%, 60%) scale(.96); opacity: 0; transition: transform .3s, opacity .3s; z-index: 6; overflow: auto; }
+.sheet.open { transform: translate(-50%, 50%); opacity: 1; }
+.sheet-backdrop.open { opacity: 1; }
+.push-in { animation: push-in .35s cubic-bezier(.2,.9,.3,1); }
+.pop-out { animation: pop-out .3s cubic-bezier(.2,.9,.3,1) forwards; }
+@keyframes push-in { from { transform: translateX(100%); } }
+@keyframes pop-out { to { transform: translateX(100%); } }
+
+/* Shared pieces across variants (each variant still owns its layout). */
+.notes { width: 100%; height: 100%; resize: none; border: 0; outline: 0; padding: 16px; font: 15px/1.5 var(--font); background: var(--cell); color: var(--label); }
+.banner { display: flex; align-items: center; gap: 10px; padding: 10px 14px; font-size: 14px; }
+.banner.stale { background: var(--stale); color: #6b4e00; }
+.banner.proposal { background: var(--proposal); color: #0b4f4f; }
+.banner.fail { background: #fdecea; color: var(--red); }
+.banner .grow { flex: 1; }
+.dot { width: 10px; height: 10px; border-radius: 50%; background: var(--label-3); flex: none; }
+.dot.recording { background: var(--red); box-shadow: 0 0 0 4px rgba(192,57,43,.2); }
+.dot.transcribing { background: var(--orange); }
+.dot.reviewing { background: var(--tint); }
+.dot.idle { background: var(--green); }
+.ref { display: inline-block; margin: 2px 0 0; font-size: 12px; color: var(--tint); background: var(--fill); border-radius: 6px; padding: 1px 7px; cursor: pointer; }
+.ref.none { color: var(--label-2); }
+.ref-quote { font-size: 13px; color: var(--label-2); border-left: 3px solid var(--tint); padding: 4px 10px; margin: 6px 0; background: var(--bg-grouped); }
+.sec-title { font-weight: 600; font-size: 15px; display: flex; align-items: center; gap: 8px; }
+.sec-title .copy { margin-left: auto; font-size: 13px; color: var(--tint); background: none; border: 0; cursor: pointer; font-weight: 500; }
+.sec-title .copied { margin-left: auto; font-size: 13px; color: var(--green); }
+.sec-title .staleflag { font-size: 11px; color: #6b4e00; background: var(--stale); border-radius: 6px; padding: 1px 6px; }
+.para { margin: 6px 0; }
+.para.new { background: var(--proposal); border-radius: 6px; padding: 2px 6px; margin-left: -6px; }
+.clar { background: #fff; border: 1px dashed var(--orange); border-radius: 10px; padding: 10px 14px; }
+.clar h4 { margin: 0 0 6px; font-size: 13px; color: var(--orange); text-transform: uppercase; letter-spacing: .3px; }
+.clar li { margin: 2px 0; font-size: 14px; }
+.transcript { border: 1.5px solid var(--tint); border-radius: 10px; background: #fff; padding: 10px 12px; }
+.transcript textarea { width: 100%; min-height: 90px; border: 0; outline: 0; resize: none; font: 15px/1.5 var(--font); background: transparent; }
+.transcript .row { display: flex; gap: 8px; align-items: center; margin-top: 6px; }
+.hint { font-size: 12px; color: var(--label-2); }
+.changed { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); background: #222; color: #fff; font-size: 13px; padding: 8px 14px; border-radius: 999px; z-index: 4; }
+.seg { display: inline-flex; background: var(--fill); border-radius: 8px; padding: 2px; }
+.seg button { font: inherit; font-size: 14px; border: 0; background: none; padding: 5px 14px; border-radius: 6px; cursor: pointer; }
+.seg button.on { background: #fff; font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,.15); }
+.unsaved { font-size: 12px; color: var(--red); }
+
+/* Variant A: two columns, the draft as one continuous document, dictation bar below the notes. */
+.v-A .cols { flex: 1; display: grid; grid-template-columns: 1fr 1fr; min-height: 0; }
+.v-A .col { display: flex; flex-direction: column; min-height: 0; border-right: .5px solid var(--sep); background: var(--cell); }
+.v-A .col:last-child { border-right: 0; }
+.v-A .colhead { padding: 10px 16px; font-size: 13px; text-transform: uppercase; color: var(--label-2); border-bottom: .5px solid var(--sep); display: flex; align-items: center; gap: 8px; }
+.v-A .colhead .grow { flex: 1; }
+.v-A .scroll { flex: 1; overflow-y: auto; min-height: 0; }
+.v-A .doc { padding: 12px 20px 40px; }
+.v-A .doc .sec { margin: 0 0 18px; }
+.v-A .dictbar { flex: none; border-top: .5px solid var(--sep); padding: 10px 16px; display: flex; align-items: center; gap: 10px; background: var(--bar); }
+.v-A .dictbar .state { font-size: 14px; }
+.v-A .review { flex: none; padding: 10px 16px; border-top: .5px solid var(--sep); background: var(--bg-grouped); }
+.v-A.portrait .cols { grid-template-columns: 1fr; }
+.v-A.portrait .col.hidden { display: none; }
+
+/* Variant B: notes narrow on the left, the draft as a stack of section cards with per-section proposal, dictation as a sheet. */
+.v-B .cols { flex: 1; display: grid; grid-template-columns: 380px 1fr; min-height: 0; }
+.v-B .noteswrap { display: flex; flex-direction: column; min-height: 0; border-right: .5px solid var(--sep); background: var(--cell); }
+.v-B .noteshead { padding: 10px 16px; display: flex; align-items: center; gap: 8px; border-bottom: .5px solid var(--sep); }
+.v-B .cards { overflow-y: auto; padding: 14px 16px 40px; display: flex; flex-direction: column; gap: 12px; }
+.v-B .card { background: var(--cell); border-radius: 12px; padding: 12px 16px; }
+.v-B .card.stale { box-shadow: inset 4px 0 0 var(--orange); }
+.v-B .card .prop { margin-top: 10px; border-top: .5px solid var(--sep); padding-top: 10px; }
+.v-B .card .prop .lbl { font-size: 12px; color: #0b4f4f; text-transform: uppercase; letter-spacing: .3px; }
+.v-B .card .prop .row { display: flex; gap: 8px; margin-top: 8px; }
+.v-B .toolbar { padding: 10px 16px; display: flex; align-items: center; gap: 10px; border-bottom: .5px solid var(--sep); background: var(--bar); }
+.v-B.portrait .cols { grid-template-columns: 1fr; grid-template-rows: 300px 1fr; }
+.v-B.portrait .noteswrap { border-right: 0; border-bottom: .5px solid var(--sep); }
+.v-B .sheet .inner { padding: 20px; }
+.v-B .sheet h3 { margin: 0 0 10px; font-size: 17px; }
+
+/* Variant C: sidebar of sections, notes in the middle with inline dictation, one focused section on the right. */
+.v-C .three { flex: 1; display: grid; grid-template-columns: 240px 1fr 1fr; min-height: 0; }
+.v-C .side { background: var(--bg-grouped); border-right: .5px solid var(--sep); overflow-y: auto; padding: 10px 0; }
+.v-C .side .hdr { font-size: 12px; text-transform: uppercase; color: var(--label-2); padding: 10px 16px 4px; }
+.v-C .side .item { padding: 9px 16px; cursor: pointer; display: flex; align-items: center; gap: 8px; font-size: 14px; }
+.v-C .side .item.on { background: #fff; font-weight: 600; box-shadow: inset 3px 0 0 var(--tint); }
+.v-C .side .item .badge { margin-left: auto; font-size: 11px; border-radius: 6px; padding: 1px 6px; }
+.v-C .side .item .badge.stale { background: var(--stale); color: #6b4e00; }
+.v-C .side .item .badge.open { background: #fdecea; color: var(--red); }
+.v-C .side .item .badge.new { background: var(--proposal); color: #0b4f4f; }
+.v-C .mid { display: flex; flex-direction: column; min-height: 0; background: var(--cell); border-right: .5px solid var(--sep); }
+.v-C .midhead { padding: 8px 16px; display: flex; align-items: center; gap: 8px; border-bottom: .5px solid var(--sep); }
+.v-C .inline-review { padding: 12px 16px; border-top: .5px solid var(--sep); background: var(--bg-grouped); }
+.v-C .focus { display: flex; flex-direction: column; min-height: 0; background: var(--cell); }
+.v-C .focushead { padding: 10px 16px; border-bottom: .5px solid var(--sep); display: flex; align-items: center; gap: 8px; }
+.v-C .focusbody { flex: 1; overflow-y: auto; padding: 16px 20px; font-size: 16px; line-height: 1.55; }
+.v-C .focusfoot { flex: none; padding: 10px 16px; border-top: .5px solid var(--sep); display: flex; gap: 8px; align-items: center; background: var(--bar); }
+.v-C .chips { display: flex; gap: 6px; overflow-x: auto; padding: 8px 12px; border-bottom: .5px solid var(--sep); background: var(--bar); }
+.v-C .chips button { flex: none; font: inherit; font-size: 13px; border: 0; background: var(--fill); border-radius: 999px; padding: 5px 12px; cursor: pointer; }
+.v-C .chips button.on { background: var(--tint); color: #fff; }
+.v-C.portrait .three { grid-template-columns: 1fr 1fr; }
+.v-C.portrait .side { display: none; }
+.v-C .cmp { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; padding: 16px 20px; }
+.v-C .cmp h5 { margin: 0 0 6px; font-size: 12px; text-transform: uppercase; color: var(--label-2); }
+.v-C .cmp .new { background: var(--proposal); border-radius: 8px; padding: 8px; }
+</style>
+</head>
+<body>
+<div id="stage"><div id="device"><div id="screen"></div></div></div>
+<div id="pill">
+  <button data-step="-1" aria-label="Previous variant">◀</button><span class="label"></span><button data-step="1" aria-label="Next variant">▶</button>
+  <button data-device="iphone">iPhone</button><button data-device="ipad">iPad</button>
+  <button data-orient>⟳</button>
+</div>
+
+<script>
+// ---------------------------------------------------------------------------------------------
+// CaseModel: the pure state module. No DOM. Could be lifted into the real code as the case reducer.
+// ---------------------------------------------------------------------------------------------
+const CaseModel = (() => {
+  const SECTIONS = [
+    ["aufnahmegrund", "Aufnahmegrund"],
+    ["schmerzanamnese", "Schmerzanamnese"],
+    ["vorgeschichte", "Relevante Vorgeschichte und Befunde"],
+    ["therapieversuche", "Bisherige Therapieversuche"],
+    ["auswirkungen", "Funktionelle und psychosoziale Auswirkungen"],
+    ["begruendung", "Begründung der stationären Behandlung"],
+    ["ziele", "Therapieziele"],
+  ];
+
+  const NOTES_V1 = [
+    "Aufnahme wegen chronischer Lumbalgie seit 3 Jahren. Pat. berichtet ziehenden Schmerz LWS mit Ausstrahlung re. Gesäß bis Oberschenkel dorsal, NRS 6/10 in Ruhe, 8/10 bei Belastung. Hauptschmerz.",
+    "Vorbefund MRT LWS 03/2026 (extern): Protrusion L4/5 ohne Nervenwurzelkompression.",
+    "Eigener Befund: Finger-Boden-Abstand 30 cm, Lasègue neg. bds.",
+    "Bisherige Therapie: Ibuprofen 600 mg 3x tgl. über 6 Wochen, geringe Wirkung, Magenbeschwerden, abgesetzt. Physiotherapie 12 Einheiten 2025, kurzfristige Besserung.",
+    "Aktuell: Metamizol 500 mg bei Bedarf.",
+    "Arbeitsunfähig seit 4 Monaten, Rückzug von Freizeitaktivitäten, Schlafstörung.",
+    "Stationäre Behandlung begründet durch Chronifizierung, Versagen ambulanter Maßnahmen und ausgeprägte psychosoziale Beeinträchtigung.",
+  ].join("\n\n");
+
+  const TRANSCRIPT = "Ergänzung nach dem Gespräch: Patient gibt zusätzlich Spannungskopfschmerz etwa zweimal pro Woche an, NRS vier, keine Aura, keine Ausstrahlung.";
+
+  // Paragraph: { text, ref } where ref is the notes passage it came from, or null when unknown.
+  const DRAFT_V1 = {
+    aufnahmegrund: [{ text: "Die stationäre Aufnahme erfolgt wegen chronischer Lumbalgie seit drei Jahren.", ref: "Aufnahme wegen chronischer Lumbalgie seit 3 Jahren." }],
+    schmerzanamnese: [
+      { text: "Hauptschmerz: ziehender Schmerz der LWS mit Ausstrahlung in das rechte Gesäß bis dorsal in den Oberschenkel. Intensität NRS 6/10 in Ruhe und 8/10 unter Belastung.", ref: "ziehenden Schmerz LWS mit Ausstrahlung re. Gesäß bis Oberschenkel dorsal, NRS 6/10 in Ruhe, 8/10 bei Belastung. Hauptschmerz." },
+    ],
+    vorgeschichte: [
+      { text: "Vorbefund (extern): MRT der LWS vom 03/2026 mit Protrusion L4/5 ohne Nervenwurzelkompression.", ref: "Vorbefund MRT LWS 03/2026 (extern): Protrusion L4/5 ohne Nervenwurzelkompression." },
+      { text: "Eigener Befund: Finger-Boden-Abstand 30 cm, Lasègue beidseits negativ.", ref: "Eigener Befund: Finger-Boden-Abstand 30 cm, Lasègue neg. bds." },
+    ],
+    therapieversuche: [
+      { text: "Ibuprofen 600 mg dreimal täglich über sechs Wochen mit geringer Wirkung; wegen Magenbeschwerden abgesetzt.", ref: "Ibuprofen 600 mg 3x tgl. über 6 Wochen, geringe Wirkung, Magenbeschwerden, abgesetzt." },
+      { text: "Physiotherapie, 12 Einheiten im Jahr 2025, mit kurzfristiger Besserung.", ref: "Physiotherapie 12 Einheiten 2025, kurzfristige Besserung." },
+      { text: "Aktuell Metamizol 500 mg bei Bedarf.", ref: "Aktuell: Metamizol 500 mg bei Bedarf." },
+    ],
+    auswirkungen: [{ text: "Arbeitsunfähigkeit seit vier Monaten, Rückzug von Freizeitaktivitäten und Schlafstörung.", ref: "Arbeitsunfähig seit 4 Monaten, Rückzug von Freizeitaktivitäten, Schlafstörung." }],
+    begruendung: [{ text: "Die stationäre multimodale Schmerztherapie ist nach Einschätzung der Ärztin indiziert wegen Chronifizierung, Versagen der ambulanten Maßnahmen und ausgeprägter psychosozialer Beeinträchtigung.", ref: "Stationäre Behandlung begründet durch Chronifizierung, Versagen ambulanter Maßnahmen und ausgeprägte psychosoziale Beeinträchtigung." }],
+    ziele: [],
+  };
+  const CLAR_V1 = [
+    { section: "ziele", text: "Therapieziele: keine Angabe in den Notizen." },
+    { section: "therapieversuche", text: "Metamizol: Häufigkeit und Tageshöchstdosis nicht angegeben." },
+  ];
+
+  const DRAFT_V2 = Object.assign({}, DRAFT_V1, {
+    schmerzanamnese: DRAFT_V1.schmerzanamnese.concat([
+      { text: "Zweites Schmerzproblem: Spannungskopfschmerz etwa zweimal pro Woche, Intensität NRS 4, ohne Aura und ohne Ausstrahlung.", ref: "Spannungskopfschmerz etwa zweimal pro Woche an, NRS vier, keine Aura, keine Ausstrahlung." },
+    ]),
+  });
+  const CLAR_V2 = CLAR_V1.concat([{ section: "schmerzanamnese", text: "Spannungskopfschmerz: Dauer der Beschwerden und Zeitraum der Angabe fehlen." }]);
+
+  function initial(scene) {
+    const base = {
+      caseId: "Fall L-0001 (fiktiv)",
+      notes: NOTES_V1,
+      savedAt: "14:02",
+      unsaved: false,
+      draft: null,            // sections map or null
+      clarifications: [],
+      draftNotes: null,       // notes snapshot the draft was generated from
+      proposal: null,         // { draft, clarifications, notes } or null
+      edited: {},             // section -> true when the physician edited the draft text by hand
+      notUpdated: {},         // section -> true when the last acceptance skipped it because it was edited
+      dictation: { status: "idle", transcript: "" },
+      failure: null,
+      copied: null,
+      changed: "Fall geöffnet.",
+    };
+    if (scene === "fresh") return base;
+    base.draft = DRAFT_V1; base.clarifications = CLAR_V1; base.draftNotes = NOTES_V1;
+    if (scene === "dictation") {
+      base.dictation = { status: "reviewing", transcript: TRANSCRIPT };
+      base.changed = "Transkript liegt zur Durchsicht bereit.";
+      return base;
+    }
+    // default scene "proposal": the physician accepted a transcript, so the notes changed and the draft is stale; a new proposal is pending.
+    base.notes = NOTES_V1 + "\n\n" + TRANSCRIPT;
+    base.proposal = { draft: DRAFT_V2, clarifications: CLAR_V2, notes: base.notes };
+    base.edited = { begruendung: true };
+    base.changed = "Neuer Entwurf liegt als Vorschlag vor.";
+    return base;
+  }
+
+  const stale = (s) => !!s.draft && s.draftNotes !== s.notes;
+  // A proposal is bound to the notes revision it was generated from; once the notes move on it is outdated.
+  const outdated = (s) => !!s.proposal && s.proposal.notes !== s.notes;
+  // Sections an acceptance would skip because the physician edited them by hand.
+  const skipped = (s) => (s.proposal ? SECTIONS.map((x) => x[0]).filter((k) => s.edited[k]) : []);
+
+  // Which actions are legal now. The page greys out what is not.
+  function can(s, type) {
+    const d = s.dictation.status;
+    switch (type) {
+      case "generate": return s.notes.trim().length > 0 && d !== "recording" && d !== "transcribing" && !s.proposal;
+      case "accept": return !!s.proposal && !outdated(s);
+      case "discard": return !!s.proposal;
+      case "startDictation": return d === "idle";
+      case "stopDictation": return d === "recording";
+      case "acceptTranscript": case "discardTranscript": case "editTranscript": return d === "reviewing";
+      case "editNotes": return d !== "recording";
+      default: return true;
+    }
+  }
+
+  function reduce(s, a) {
+    const n = Object.assign({}, s, { copied: null, failure: null });
+    switch (a.type) {
+      case "editNotes":
+        if (!can(s, "editNotes")) return s;
+        n.notes = a.notes; n.unsaved = false; n.savedAt = "jetzt";
+        n.changed = stale(n) ? "Notizen gespeichert. Entwurf ist jetzt möglicherweise veraltet." : "Notizen gespeichert.";
+        return n;
+      case "networkLost":
+        n.unsaved = true; n.changed = "Keine Verbindung: letzte Änderung noch nicht gespeichert."; return n;
+      case "generate":
+        if (!can(s, "generate")) return s;
+        if (a.fail) { n.failure = "Das Textmodell hat nicht geantwortet. Notizen und bisheriger Entwurf sind unverändert."; n.changed = "Erzeugen fehlgeschlagen; nichts verloren."; return n; }
+        var v2 = s.notes.indexOf("Spannungskopfschmerz") >= 0;
+        n.proposal = { draft: v2 ? DRAFT_V2 : DRAFT_V1, clarifications: v2 ? CLAR_V2 : CLAR_V1, notes: s.notes };
+        n.changed = s.draft ? "Neuer Entwurf liegt als Vorschlag vor; dein bisheriger Entwurf bleibt bis zur Übernahme." : "Erster Entwurf liegt als Vorschlag vor.";
+        return n;
+      case "accept": {
+        if (!can(s, "accept")) return s;
+        const keep = skipped(s);
+        n.draft = Object.assign({}, s.proposal.draft);
+        n.notUpdated = {};
+        keep.forEach((k) => { n.draft[k] = s.draft[k]; n.notUpdated[k] = true; });
+        n.clarifications = s.proposal.clarifications; n.draftNotes = s.proposal.notes; n.proposal = null;
+        n.changed = keep.length
+          ? "Vorschlag übernommen. Von Hand bearbeitete Abschnitte bleiben unverändert und sind als „nicht aktualisiert“ markiert: " + keep.map(title).join(", ") + "."
+          : "Vorschlag übernommen. Klärungsliste des Vorschlags gilt jetzt für den Fall.";
+        return n;
+      }
+      case "discard":
+        if (!can(s, "discard")) return s;
+        n.proposal = null; n.changed = "Vorschlag verworfen. Bisheriger Entwurf bleibt."; return n;
+      case "editDraft":
+        n.draft = Object.assign({}, s.draft); n.draft[a.section] = [{ text: a.text, ref: null }];
+        n.edited = Object.assign({}, s.edited); n.edited[a.section] = true;
+        n.notUpdated = Object.assign({}, s.notUpdated); delete n.notUpdated[a.section];
+        n.changed = "Abschnitt von Hand bearbeitet; Herkunftsangabe entfällt. Klärungspunkte bleiben offen, bis du sie löst."; return n;
+      case "startDictation":
+        if (!can(s, "startDictation")) return s;
+        n.dictation = { status: "recording", transcript: "" }; n.changed = "Aufnahme läuft. Nur deine eigene Stimme."; return n;
+      case "stopDictation":
+        if (!can(s, "stopDictation")) return s;
+        n.dictation = { status: "transcribing", transcript: "" }; n.changed = "Aufnahme beendet, Transkription läuft lokal."; return n;
+      case "transcriptReady":
+        if (s.dictation.status !== "transcribing") return s;
+        n.dictation = { status: "reviewing", transcript: a.transcript || TRANSCRIPT }; n.changed = "Transkript liegt zur Durchsicht bereit. Audio ist gelöscht."; return n;
+      case "editTranscript":
+        if (!can(s, "editTranscript")) return s;
+        n.dictation = { status: "reviewing", transcript: a.transcript }; n.changed = "Transkript korrigiert."; return n;
+      case "acceptTranscript":
+        if (!can(s, "acceptTranscript")) return s;
+        n.notes = s.notes.trim() + "\n\n" + s.dictation.transcript.trim(); n.dictation = { status: "idle", transcript: "" }; n.savedAt = "jetzt";
+        n.changed = stale(n) ? "Transkript an die Notizen angehängt; nichts überschrieben. Entwurf jetzt möglicherweise veraltet." : "Transkript an die Notizen angehängt; nichts überschrieben."; return n;
+      case "discardTranscript":
+        if (!can(s, "discardTranscript")) return s;
+        n.dictation = { status: "idle", transcript: "" }; n.changed = "Transkript verworfen. Notizen unverändert."; return n;
+      case "copy":
+        n.copied = a.section; n.changed = "Abschnitt als reiner Text kopiert."; return n;
+      default: return s;
+    }
+  }
+
+  return { SECTIONS, initial, reduce, can, stale, outdated, skipped, TRANSCRIPT };
+})();
+
+// ---------------------------------------------------------------------------------------------
+// Page state and helpers (DOM side).
+// ---------------------------------------------------------------------------------------------
+const q0 = new URLSearchParams(location.search);
+let app = CaseModel.initial(q0.get("scene") || "proposal");
+const ui = { tab: "notizen", section: "schmerzanamnese", openRef: null, editing: null };
+function dispatch(a) { app = CaseModel.reduce(app, a); render(); if (a.type === "stopDictation") setTimeout(() => dispatch({ type: "transcriptReady" }), 1500); }
+const esc = (t) => t.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const title = (key) => CaseModel.SECTIONS.find((s) => s[0] === key)[1];
+const DICT_LABEL = { idle: "Bereit", recording: "Aufnahme läuft", transcribing: "Transkription läuft (lokal)", reviewing: "Transkript zur Durchsicht" };
+
+function paragraphs(list, opts) {
+  opts = opts || {};
+  if (!list || !list.length) return `<p class="para hint">Keine Angaben in den Notizen. Siehe Klärungsliste.</p>`;
+  return list.map((p, i) => {
+    const id = (opts.prefix || "") + i;
+    const open = ui.openRef === id;
+    const ref = p.ref
+      ? `<span class="ref" data-ref="${id}">↳ aus Notizen</span>${open ? `<div class="ref-quote">„${esc(p.ref)}“</div>` : ""}`
+      : `<span class="ref none">↳ Herkunft: von Hand bearbeitet</span>`;
+    return `<p class="para ${opts.isNew && opts.isNew(p) ? "new" : ""}">${esc(p.text)}<br>${ref}</p>`;
+  }).join("");
+}
+function clarList(items) {
+  if (!items.length) return "";
+  return `<div class="clar"><h4>Klärungsliste</h4><ul style="margin:0;padding-left:18px">${items.map((c) => `<li><b>${esc(title(c.section))}:</b> ${esc(c.text)}</li>`).join("")}</ul></div>`;
+}
+// Per-section staleness is never guessed (grilling 3). A section badge says only one of three things:
+// the pending proposal changes it, it was manually edited (and possibly skipped on the last acceptance), or a clarification item is open for it.
+function proposalChanges(s, key) {
+  return !!s.proposal && JSON.stringify(s.proposal.draft[key]) !== JSON.stringify(s.draft ? s.draft[key] : null);
+}
+function badges(s, key) {
+  const items = s.proposal ? s.proposal.clarifications : s.clarifications;
+  return (proposalChanges(s, key) ? `<span class="staleflag" style="background:var(--proposal);color:#0b4f4f">Vorschlag ändert</span>` : "")
+    + (s.notUpdated[key] ? `<span class="staleflag">manuell bearbeitet, nicht aktualisiert</span>` : s.edited[key] ? `<span class="staleflag" style="background:var(--fill);color:var(--label-2)">manuell bearbeitet</span>` : "")
+    + (items.some((c) => c.section === key) ? `<span class="staleflag" style="background:#fdecea;color:var(--red)">Klärung offen</span>` : "");
+}
+function sectionStale(s, key) { return proposalChanges(s, key); }
+function wireCommon(root) {
+  root.querySelectorAll("[data-act]").forEach((b) => b.addEventListener("click", () => dispatch({ type: b.dataset.act, section: b.dataset.section, fail: b.dataset.fail === "1" })));
+  root.querySelectorAll("[data-ref]").forEach((r) => r.addEventListener("click", () => { ui.openRef = ui.openRef === r.dataset.ref ? null : r.dataset.ref; render(); }));
+  root.querySelectorAll("textarea[data-notes]").forEach((t) => t.addEventListener("change", () => dispatch({ type: "editNotes", notes: t.value })));
+  root.querySelectorAll("textarea[data-transcript]").forEach((t) => t.addEventListener("change", () => dispatch({ type: "editTranscript", transcript: t.value })));
+  root.querySelectorAll("[data-editdraft]").forEach((t) => t.addEventListener("change", () => dispatch({ type: "editDraft", section: t.dataset.editdraft, text: t.value })));
+}
+function navBar(s, extra) {
+  return `<div class="nav"><span class="title">${esc(s.caseId)}</span>
+    <span class="meta">${s.unsaved ? `<span class="unsaved">Nicht gespeichert: keine Verbindung</span>` : `Gespeichert ${esc(s.savedAt)}`}</span>
+    <span class="spacer"></span>${extra || ""}
+    <button class="btn plain" data-act="networkLost" title="Simuliert einen Verbindungsabbruch">Verbindung weg?</button>
+    <button class="btn plain" data-act="generate" data-fail="1" ${CaseModel.can(s, "generate") ? "" : "disabled"}>Fehlschlag simulieren</button>
+    <button class="btn" data-act="generate" ${CaseModel.can(s, "generate") ? "" : "disabled"}>Entwurf erzeugen</button></div>`;
+}
+function changedToast(s) { return `<div class="changed">${esc(s.changed)}</div>`; }
+function failBanner(s) { return s.failure ? `<div class="banner fail">${esc(s.failure)}</div>` : ""; }
+function dictationControls(s, cls) {
+  const d = s.dictation.status;
+  return `<span class="dot ${d}"></span><span class="${cls || "state"}">${DICT_LABEL[d]}</span>
+    ${d === "idle" ? `<button class="btn quiet" data-act="startDictation">Diktat starten</button>` : ""}
+    ${d === "recording" ? `<button class="btn rec" data-act="stopDictation">Diktat beenden</button>` : ""}
+    ${d === "transcribing" ? `<span class="hint">… bitte warten</span>` : ""}`;
+}
+function transcriptReview(s) {
+  if (s.dictation.status !== "reviewing") return "";
+  return `<div class="transcript"><div class="hint">Transkript prüfen und korrigieren. Es wird erst durch „Übernehmen“ an die Notizen angehängt und überschreibt nichts.</div>
+    <textarea data-transcript>${esc(s.dictation.transcript)}</textarea>
+    <div class="row"><button class="btn" data-act="acceptTranscript">In Notizen übernehmen</button><button class="btn danger" data-act="discardTranscript">Verwerfen</button></div></div>`;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Variants.
+// ---------------------------------------------------------------------------------------------
+const VARIANTS = {
+  A: {
+    name: "Zwei Spalten, Entwurf als Dokument",
+    render(st) {
+      const s = app, portrait = st.orient === "portrait";
+      const st_ = CaseModel.stale(s);
+      const seg = portrait ? `<span class="seg"><button data-tab="notizen" class="${ui.tab === "notizen" ? "on" : ""}">Notizen</button><button data-tab="entwurf" class="${ui.tab === "entwurf" ? "on" : ""}">Entwurf${s.proposal ? " •" : ""}</button></span>` : "";
+      const old = CaseModel.outdated(s), skip = CaseModel.skipped(s);
+      const draftDoc = s.draft ? CaseModel.SECTIONS.map((sec) => {
+        const k = sec[0], editing = ui.editing === k;
+        return `<div class="sec"><div class="sec-title">${esc(sec[1])}${badges(s, k)}
+          ${editing ? `<button class="copy" data-doneedit="${k}">Fertig</button>` : `<button class="copy" data-edit="${k}">Bearbeiten</button>`}
+          ${s.copied === k ? `<span class="copied" style="margin-left:8px">Kopiert ✓</span>` : `<button class="copy" style="margin-left:8px" data-act="copy" data-section="${k}">Abschnitt kopieren</button>`}</div>
+          ${editing ? `<textarea data-editdraft="${k}" style="width:100%;min-height:90px;border:1.5px solid var(--tint);border-radius:8px;padding:8px;font:inherit;resize:vertical">${esc((s.draft[k] || []).map((p) => p.text).join("\n"))}</textarea><div class="hint">Freier Text. Herkunftsangaben entfallen für umgeschriebene Absätze.</div>` : paragraphs(s.draft[k], { prefix: "A" + k })}</div>`;
+      }).join("") : `<p class="hint" style="padding:20px">Noch kein Entwurf. „Entwurf erzeugen“ schreibt einen Vorschlag aus den Notizen.</p>`;
+      const proposalDoc = s.proposal ? `<div class="banner ${old ? "stale" : "proposal"}"><div><b>${old ? "Vorschlag: Notizen seit diesem Vorschlag geändert" : "Vorschlag aus den aktuellen Notizen"}</b>
+            <div class="hint">${old ? "Kann nicht übernommen werden. Verwerfen und neu erzeugen." : skip.length ? "Übernehmen ersetzt alle Abschnitte außer den von Hand bearbeiteten: " + esc(skip.map(title).join(", ")) + ". Diese bleiben und werden als „nicht aktualisiert“ markiert." : "Übernehmen ersetzt den ganzen Entwurf; Klärungsliste wird übernommen."}</div></div><span class="grow"></span>
+          <button class="btn" data-act="accept" ${CaseModel.can(s, "accept") ? "" : "disabled"}>Übernehmen</button><button class="btn danger" data-act="discard">Verwerfen</button></div>
+          <div class="doc" style="background:${old ? "#f6f1e3" : "var(--proposal)"}">${CaseModel.SECTIONS.map((sec) => `<div class="sec"><div class="sec-title">${esc(sec[1])}${s.edited[sec[0]] ? `<span class="staleflag">wird übersprungen (manuell bearbeitet)</span>` : ""}</div>${paragraphs(s.proposal.draft[sec[0]], { prefix: "P" + sec[0], isNew: (p) => !(s.draft && s.draft[sec[0]].some((d) => d.text === p.text)) })}</div>`).join("")}${clarList(s.proposal.clarifications)}</div>
+          <div class="banner stale">Dein bisheriger Entwurf (bleibt, bis du den Vorschlag übernimmst)</div>` : "";
+      return `<div class="page"><div class="status"></div>${navBar(s, seg)}${failBanner(s)}
+        <div class="cols">
+          <div class="col ${portrait && ui.tab !== "notizen" ? "hidden" : ""}"><div class="colhead">Notizen<span class="grow"></span><span class="hint">frei, in beliebiger Reihenfolge</span></div>
+            <div class="scroll"><textarea class="notes" data-notes ${CaseModel.can(s, "editNotes") ? "" : "readonly"}>${esc(s.notes)}</textarea></div>
+            ${s.dictation.status === "reviewing" ? `<div class="review">${transcriptReview(s)}</div>` : ""}
+            <div class="dictbar">${dictationControls(s)}<span class="grow"></span><span class="hint">Eigenes Diktat, kein Patientengespräch. Audio wird nach der Transkription gelöscht.</span></div></div>
+          <div class="col ${portrait && ui.tab !== "entwurf" ? "hidden" : ""}"><div class="colhead">Entwurf der ärztlichen Abschnitte<span class="grow"></span></div>
+            ${st_ ? `<div class="banner stale">Notizen seit diesem Entwurf geändert: Entwurf möglicherweise veraltet. Welche Abschnitte betroffen sind, zeigt erst ein neuer Vorschlag.</div>` : ""}
+            <div class="scroll">${proposalDoc}<div class="doc">${draftDoc}${s.draft ? clarList(s.clarifications) : ""}</div></div></div>
+        </div>${changedToast(s)}</div>`;
+    },
+    wire(root) {
+      wireCommon(root);
+      root.querySelectorAll("[data-tab]").forEach((b) => b.addEventListener("click", () => { ui.tab = b.dataset.tab; render(); }));
+      root.querySelectorAll("[data-edit]").forEach((b) => b.addEventListener("click", () => { ui.editing = b.dataset.edit; render(); }));
+      root.querySelectorAll("[data-doneedit]").forEach((b) => b.addEventListener("click", () => { ui.editing = null; render(); }));
+    },
+  },
+
+  B: {
+    name: "Abschnittskarten mit Vorschlag je Abschnitt",
+    render(st) {
+      const s = app;
+      const cards = CaseModel.SECTIONS.map((sec) => {
+        const key = sec[0], cur = s.draft ? s.draft[key] : null, prop = s.proposal ? s.proposal.draft[key] : null;
+        const differs = prop && JSON.stringify(prop) !== JSON.stringify(cur);
+        return `<div class="card ${sectionStale(s, key) ? "stale" : ""}"><div class="sec-title">${esc(sec[1])}${sectionStale(s, key) ? `<span class="staleflag">veraltet?</span>` : ""}
+            ${s.copied === key ? `<span class="copied">Kopiert ✓</span>` : `<button class="copy" data-act="copy" data-section="${key}">Kopieren</button>`}</div>
+          ${s.draft ? `<textarea data-editdraft="${key}" style="width:100%;border:0;outline:0;resize:none;font:inherit;min-height:${cur && cur.length ? 60 : 24}px">${cur && cur.length ? esc(cur.map((p) => p.text).join("\n")) : ""}</textarea>${cur && cur.length ? cur.map((p, i) => p.ref ? `<span class="ref" data-ref="B${key}${i}">↳ Absatz ${i + 1} aus Notizen</span>${ui.openRef === "B" + key + i ? `<div class="ref-quote">„${esc(p.ref)}“</div>` : ""} ` : `<span class="ref none">↳ Absatz ${i + 1}: von Hand</span> `).join("") : `<span class="hint">Keine Angaben in den Notizen.</span>`}` : `<span class="hint">Noch kein Entwurf.</span>`}
+          ${differs ? `<div class="prop"><div class="lbl">Vorschlag für diesen Abschnitt</div>${paragraphs(prop, { prefix: "PB" + key, isNew: (p) => !(cur && cur.some((d) => d.text === p.text)) })}
+            <div class="row"><span class="hint">Übernehmen oder verwerfen gilt für den ganzen Vorschlag; je Abschnitt entscheidet du durch Nachbearbeiten.</span></div></div>` : ""}</div>`;
+      }).join("");
+      const clar = s.proposal ? clarList(s.proposal.clarifications) : (s.draft ? clarList(s.clarifications) : "");
+      return `<div class="page"><div class="status"></div>${navBar(s)}${failBanner(s)}
+        <div class="cols">
+          <div class="noteswrap"><div class="noteshead"><b>Notizen</b><span class="spacer" style="flex:1"></span>${dictationControls(s, "hint")}</div>
+            <textarea class="notes" data-notes ${CaseModel.can(s, "editNotes") ? "" : "readonly"}>${esc(s.notes)}</textarea></div>
+          <div style="display:flex;flex-direction:column;min-height:0">
+            <div class="toolbar"><b>Entwurf</b>${CaseModel.stale(s) ? `<span class="staleflag">Notizen geändert: Entwurf möglicherweise veraltet</span>` : ""}<span style="flex:1"></span>
+              ${s.proposal ? `<span style="color:#0b4f4f;font-size:14px">${CaseModel.outdated(s) ? "Notizen seit diesem Vorschlag geändert" : "Vorschlag liegt vor"}</span><button class="btn" data-act="accept" ${CaseModel.can(s, "accept") ? "" : "disabled"}>Vorschlag übernehmen</button><button class="btn danger" data-act="discard">Verwerfen</button>` : ""}</div>
+            <div class="cards">${clar}${cards}</div></div>
+        </div>${changedToast(s)}</div>`;
+    },
+    wire(root) {
+      wireCommon(root);
+      // Dictation lives in a sheet in this variant: opening the sheet is what "Diktat starten" does; the sheet shows the states.
+      if (app.dictation.status !== "idle") {
+        const d = app.dictation.status;
+        const { panel } = sheet(root, `<div class="inner"><h3>Diktat</h3><div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">${dictationControls(app)}</div>
+          ${d === "recording" ? `<p class="hint">Sprich deine eigenen Notizen nach der Untersuchung. Kein Patientengespräch wird aufgenommen.</p>` : ""}
+          ${d === "transcribing" ? `<p class="hint">Die Spracherkennung läuft auf eigener Hardware. Das Audio wird danach gelöscht.</p>` : ""}
+          ${transcriptReview(app)}</div>`);
+        wireCommon(panel);
+        const backdrop = root.querySelector(".sheet-backdrop");
+        backdrop.onclick = null; // the sheet closes through the actions, not by tapping outside
+        panel.classList.add("open"); backdrop.classList.add("open"); // open at once so screenshots catch it
+      }
+    },
+  },
+
+  C: {
+    name: "Abschnittsliste, Notizen, ein Abschnitt im Fokus",
+    render(st) {
+      const s = app, portrait = st.orient === "portrait";
+      const key = ui.section, cur = s.draft ? s.draft[key] : null, prop = s.proposal ? s.proposal.draft[key] : null;
+      const items = CaseModel.SECTIONS.map((sec) => {
+        const k = sec[0];
+        const badge = s.proposal && JSON.stringify(s.proposal.draft[k]) !== JSON.stringify(s.draft ? s.draft[k] : null) ? `<span class="badge new">neu</span>`
+          : sectionStale(s, k) ? `<span class="badge stale">veraltet?</span>`
+          : (s.clarifications.some((c) => c.section === k) ? `<span class="badge open">offen</span>` : "");
+        return `<div class="item ${k === key ? "on" : ""}" data-sec="${k}">${esc(sec[1])}${badge}</div>`;
+      }).join("");
+      const chips = CaseModel.SECTIONS.map((sec) => `<button data-sec="${sec[0]}" class="${sec[0] === key ? "on" : ""}">${esc(sec[1])}</button>`).join("");
+      const focus = s.proposal
+        ? `<div class="cmp"><div><h5>Bisheriger Entwurf</h5>${paragraphs(cur, { prefix: "C" + key })}</div><div class="new"><h5>Vorschlag</h5>${paragraphs(prop, { prefix: "CP" + key, isNew: (p) => !(cur && cur.some((d) => d.text === p.text)) })}</div></div>
+           ${clarList(s.proposal.clarifications.filter((c) => c.section === key))}`
+        : s.draft ? `${paragraphs(cur, { prefix: "C" + key })}${clarList(s.clarifications.filter((c) => c.section === key))}`
+        : `<p class="hint">Noch kein Entwurf.</p>`;
+      return `<div class="page"><div class="status"></div>${navBar(s)}${failBanner(s)}
+        ${portrait ? `<div class="chips">${chips}</div>` : ""}
+        <div class="three">
+          <div class="side"><div class="hdr">Fälle</div><div class="item on">${esc(s.caseId)}</div><div class="item hint">Fall L-0002 (fiktiv)</div><div class="item hint">Fall L-0003 (fiktiv)</div>
+            <div class="hdr">Abschnitte</div>${items}</div>
+          <div class="mid"><div class="midhead"><b>Notizen</b><span style="flex:1"></span>${dictationControls(s, "hint")}</div>
+            <textarea class="notes" data-notes ${CaseModel.can(s, "editNotes") ? "" : "readonly"}>${esc(s.notes)}</textarea>
+            ${s.dictation.status === "reviewing" ? `<div class="inline-review">${transcriptReview(s)}</div>` : ""}</div>
+          <div class="focus"><div class="focushead"><b>${esc(title(key))}</b>${sectionStale(s, key) && !s.proposal ? `<span class="staleflag">veraltet?</span>` : ""}<span style="flex:1"></span>
+              ${s.copied === key ? `<span class="copied">Kopiert ✓</span>` : `<button class="btn plain" data-act="copy" data-section="${key}">Abschnitt kopieren</button>`}</div>
+            <div class="focusbody">${focus}</div>
+            <div class="focusfoot">${s.proposal ? `<span class="hint">${CaseModel.outdated(s) ? "Notizen seit diesem Vorschlag geändert." : "Der Vorschlag gilt für alle Abschnitte."}</span><span style="flex:1"></span><button class="btn" data-act="accept" ${CaseModel.can(s, "accept") ? "" : "disabled"}>Vorschlag übernehmen</button><button class="btn danger" data-act="discard">Verwerfen</button>` : `<span class="hint">${CaseModel.stale(s) ? "Notizen seit dem Entwurf geändert." : "Entwurf passt zu den Notizen."}</span>`}</div></div>
+        </div>${changedToast(s)}</div>`;
+    },
+    wire(root) { wireCommon(root); root.querySelectorAll("[data-sec]").forEach((b) => b.addEventListener("click", () => { ui.section = b.dataset.sec; render(); })); },
+  },
+};
+
+// ---------------------------------------------------------------------------------------------
+// Shell (unchanged from ios-shell.html except TARGETS).
+// ---------------------------------------------------------------------------------------------
+const DEVICES = {
+  iphone: { size: [402, 874], radius: 55 },
+  ipad: { size: [834, 1194], radius: 18 },
+};
+const TARGETS = ["ipad"];
+
+const q = new URLSearchParams(location.search);
+const state = {
+  variant: VARIANTS[q.get("variant")] ? q.get("variant") : "A",
+  device: TARGETS.includes(q.get("device")) ? q.get("device") : TARGETS[0],
+  orient: q.get("orient") === "landscape" ? "landscape" : "portrait",
+};
+const bleed = q.has("bleed") || matchMedia("(pointer: coarse)").matches;
+const device = document.getElementById("device");
+const screen = document.getElementById("screen");
+document.body.classList.toggle("bleed", bleed);
+if (TARGETS.length < 2) document.querySelectorAll("[data-device]").forEach((b) => b.remove());
+if (!TARGETS.includes("ipad")) document.querySelector("[data-orient]").remove();
+
+function layout() {
+  const d = DEVICES[state.device];
+  const [w, h] = state.orient === "landscape" ? [d.size[1], d.size[0]] : d.size;
+  if (bleed) {
+    Object.assign(device.style, { width: "100vw", height: "100vh", transform: "none" });
+    return;
+  }
+  const stage = document.getElementById("stage").getBoundingClientRect();
+  const scale = Math.min(1, (stage.width - 32) / w, (stage.height - 32) / h);
+  device.style.setProperty("--radius", d.radius + "px");
+  Object.assign(device.style, { width: w + "px", height: h + "px", transform: `translate(-50%, -50%) scale(${scale})` });
+}
+
+function render() {
+  const v = VARIANTS[state.variant];
+  screen.className = `v-${state.variant} ${state.device} ${state.orient}`;
+  screen.innerHTML = v.render(state);
+  v.wire(screen, state);
+  document.querySelector("#pill .label").textContent = `${state.variant} (${v.name})`;
+  document.querySelectorAll("[data-device]").forEach((b) => b.setAttribute("aria-pressed", b.dataset.device === state.device));
+  layout();
+}
+
+function push(container, html) {
+  const page = document.createElement("div");
+  page.className = "page push-in";
+  page.innerHTML = html;
+  container.appendChild(page);
+  return page;
+}
+function pop(page) {
+  page.classList.replace("push-in", "pop-out");
+  page.addEventListener("animationend", () => page.remove(), { once: true });
+}
+function sheet(container, html) {
+  const backdrop = document.createElement("div");
+  const panel = document.createElement("div");
+  backdrop.className = "sheet-backdrop";
+  panel.className = "sheet";
+  panel.innerHTML = html;
+  container.append(backdrop, panel);
+  requestAnimationFrame(() => requestAnimationFrame(() => { backdrop.classList.add("open"); panel.classList.add("open"); }));
+  const close = () => { backdrop.remove(); panel.remove(); };
+  backdrop.onclick = close;
+  return { panel, close };
+}
+
+function step(n) {
+  const keys = Object.keys(VARIANTS);
+  state.variant = keys[(keys.indexOf(state.variant) + n + keys.length) % keys.length];
+  render();
+}
+document.getElementById("pill").addEventListener("click", (e) => {
+  const b = e.target.closest("button");
+  if (!b) return;
+  if (b.dataset.step) step(Number(b.dataset.step));
+  if (b.dataset.device) { state.device = b.dataset.device; render(); }
+  if (b.hasAttribute("data-orient")) { state.orient = state.orient === "portrait" ? "landscape" : "portrait"; render(); }
+});
+addEventListener("keydown", (e) => {
+  if (e.key === "ArrowLeft") step(-1);
+  if (e.key === "ArrowRight") step(1);
+});
+addEventListener("resize", layout);
+render();
+
+if (q.has("tour")) {
+  const order = q.get("tour").split(",").filter((v) => VARIANTS[v]);
+  const show = (i) => {
+    if (i >= order.length) return;
+    state.variant = order[i];
+    render();
+    setTimeout(() => fetch(`__shot?${order[i]}`).catch(() => {}).finally(() => setTimeout(() => show(i + 1), 4000)), 800);
+  };
+  show(0);
+}
+</script>
+</body>
+</html>
