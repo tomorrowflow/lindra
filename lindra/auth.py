@@ -14,6 +14,7 @@ import hmac
 from starlette.requests import Request
 from starlette.responses import JSONResponse, RedirectResponse
 from starlette.types import ASGIApp, Receive, Scope, Send
+from starlette.websockets import WebSocketClose
 
 LOGIN_PATH = "/anmelden"
 LOGOUT_PATH = "/abmelden"
@@ -69,10 +70,12 @@ class AuthGuard:
         self.token = token
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if scope["type"] != "http" or self.is_allowed(scope):
+        if scope["type"] not in ("http", "websocket") or self.is_allowed(scope):
             await self.app(scope, receive, send)
             return
-        if scope["path"].startswith(API_PREFIX):
+        if scope["type"] == "websocket":
+            response: ASGIApp = WebSocketClose(code=4401, reason="Anmeldung erforderlich")
+        elif scope["path"].startswith(API_PREFIX):
             response = JSONResponse({"detail": "Anmeldung erforderlich"}, status_code=401)
         else:
             response = RedirectResponse(LOGIN_PATH, status_code=303)

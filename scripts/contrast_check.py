@@ -27,6 +27,7 @@ TOKENS = {
     "Teal, text on Sage tint": "#1B4542",
     "Sage tint, selected row": "#E3E9E2",
     "Error": "#9B2C20",
+    "Error tint, alert surface": "#FBEEEC",
     "Warning text": "#7A4F00",
     "Success text": "#2F6B4F",
 }
@@ -42,8 +43,10 @@ PAIRS = [
     ("Teal as text on a writing surface", "Teal (brand kit)", "White"),
     ("Selected sidebar row", "Teal, text on Sage tint", "Sage tint, selected row"),
     ("Body text on the darker paper step", "Ink (brand kit)", "Paper, darker step"),
+    ("Disabled button label", "Ink, secondary text", "Paper, darker step"),
     ("Error text on the page", "Error", "Paper (brand kit)"),
     ("Error text on a writing surface", "Error", "White"),
+    ("Error text in an alert", "Error", "Error tint, alert surface"),
     ("Warning text on the page", "Warning text", "Paper (brand kit)"),
     ("Success text on the page", "Success text", "Paper (brand kit)"),
     ("Sage as text on Paper (rejected, recorded)", "Sage (brand kit)", "Paper (brand kit)"),

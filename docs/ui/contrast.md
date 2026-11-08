@@ -21,6 +21,7 @@ Adjusted values, each a darker or lighter step of the same hue, recorded as ADR 
 | Sage tint `--sage-tint` | `#E3E9E2` | Sage lightened to a surface tint for a selected row |
 | Teal on the Sage tint `--teal-on-tint` | `#1B4542` | Teal darkened one step for text on the tint |
 | Error | `#9B2C20` | a toned-down red that passes on Paper and White |
+| Error tint `--error-tint` | `#FBEEEC` | the alert surface behind error text |
 | Warning text | `#7A4F00` | amber darkened until it passes as text |
 | Success text | `#2F6B4F` | green near Teal, darkened until it passes as text |
 
@@ -37,8 +38,10 @@ Adjusted values, each a darker or lighter step of the same hue, recorded as ADR 
 | Teal as text on a writing surface | Teal (brand kit) `#245B57` | White `#FFFFFF` | 7.75 to 1 | passes |
 | Selected sidebar row | Teal, text on Sage tint `#1B4542` | Sage tint, selected row `#E3E9E2` | 8.61 to 1 | passes |
 | Body text on the darker paper step | Ink (brand kit) `#243331` | Paper, darker step `#EAE6DD` | 10.59 to 1 | passes |
+| Disabled button label | Ink, secondary text `#4F5F5D` | Paper, darker step `#EAE6DD` | 5.39 to 1 | passes |
 | Error text on the page | Error `#9B2C20` | Paper (brand kit) `#F7F5F0` | 6.95 to 1 | passes |
 | Error text on a writing surface | Error `#9B2C20` | White `#FFFFFF` | 7.57 to 1 | passes |
+| Error text in an alert | Error `#9B2C20` | Error tint, alert surface `#FBEEEC` | 6.68 to 1 | passes |
 | Warning text on the page | Warning text `#7A4F00` | Paper (brand kit) `#F7F5F0` | 6.54 to 1 | passes |
 | Success text on the page | Success text `#2F6B4F` | Paper (brand kit) `#F7F5F0` | 5.78 to 1 | passes |
 | Sage as text on Paper (rejected, recorded) | Sage (brand kit) `#A8B9A7` | Paper (brand kit) `#F7F5F0` | 1.90 to 1 | rejected |

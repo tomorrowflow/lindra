@@ -24,7 +24,6 @@ from lindra.app import create_app
 from lindra.config import Settings
 
 TOKEN = "screenshot-token"
-BASE = ""
 VIEWPORTS = {
     "ipad-portrait": {"viewport": {"width": 820, "height": 1180}, "device_scale_factor": 2},
     "desktop": {"viewport": {"width": 1440, "height": 900}, "device_scale_factor": 1},
@@ -40,9 +39,8 @@ def free_port() -> int:
 
 @contextmanager
 def running_server():
-    global BASE
+    """Serve the application on a free port and yield its base URL."""
     port = free_port()
-    BASE = f"http://127.0.0.1:{port}"
     config = uvicorn.Config(create_app(Settings(token=TOKEN)), port=port, log_level="warning")
     server = uvicorn.Server(config)
     thread = threading.Thread(target=server.run, daemon=True)
@@ -50,17 +48,17 @@ def running_server():
     while not server.started:
         thread.join(0.05)
     try:
-        yield
+        yield f"http://127.0.0.1:{port}"
     finally:
         server.should_exit = True
         thread.join(5)
 
 
-def log_in(page: Page) -> None:
-    page.goto(f"{BASE}/anmelden")
+def log_in(page: Page, base_url: str) -> None:
+    page.goto(f"{base_url}/anmelden")
     page.fill("#token", TOKEN)
     page.click("button[type=submit]")
-    page.wait_for_url(f"{BASE}/")
+    page.wait_for_url(f"{base_url}/")
 
 
 def boxes(page: Page, selector: str) -> list[dict]:
@@ -71,7 +69,8 @@ def boxes(page: Page, selector: str) -> list[dict]:
     )
 
 
-def check_stability(page: Page, name: str) -> list[str]:
+def check_shell_requirements(page: Page, name: str) -> list[str]:
+    """Stable action bar, non-shifting status area, 44 px targets (ticket 01)."""
     findings = []
     before = boxes(page, ".action-bar .btn")
     page.evaluate(
@@ -109,14 +108,14 @@ def main(argv: list[str]) -> int:
     out = Path(argv[0]) if argv else Path("docs/screenshots/LFR-01")
     out.mkdir(parents=True, exist_ok=True)
     findings: list[str] = []
-    with running_server(), sync_playwright() as playwright:
+    with running_server() as base_url, sync_playwright() as playwright:
         browser = playwright.chromium.launch()
         for name, viewport in VIEWPORTS.items():
             context = browser.new_context(**viewport, locale="de-DE")
             page = context.new_page()
-            page.goto(f"{BASE}/anmelden")
+            page.goto(f"{base_url}/anmelden")
             page.screenshot(path=out / f"login-{name}.png")
-            log_in(page)
+            log_in(page, base_url)
             page.screenshot(path=out / f"shell-{name}.png")
             if name == "ipad-portrait":
                 page.click(".drawer-button")
@@ -126,7 +125,7 @@ def main(argv: list[str]) -> int:
                 page.wait_for_timeout(400)
             page.keyboard.press("Tab")
             page.screenshot(path=out / f"shell-{name}-focus.png")
-            findings.extend(check_stability(page, name))
+            findings.extend(check_shell_requirements(page, name))
             page.screenshot(path=out / f"shell-{name}-scrolled.png")
             context.close()
         browser.close()

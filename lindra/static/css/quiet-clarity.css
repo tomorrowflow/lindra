@@ -69,6 +69,7 @@
   --text-secondary: #4f5f5d;
   --sage-tint: #e3e9e2;
   --teal-on-tint: #1b4542;
+  --error-tint: #fbeeec;
   --hairline: rgb(36 51 49 / 10%);
 
   /* Shape: controls 8, boxes 12. 44 px fields and buttons for touch. */
@@ -180,7 +181,7 @@ p {
 }
 
 .alert-error {
-  background-color: #fbeeec;
+  background-color: var(--error-tint);
   color: var(--color-error);
   border: 1px solid rgb(155 44 32 / 25%);
 }

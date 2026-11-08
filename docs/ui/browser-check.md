@@ -4,7 +4,7 @@ ADR 0009 makes daisyUI 5 conditional on a check against the support policy: the 
 
 ## What was checked
 
-The distribution is daisyUI 5.7.50, assembled from the package's own per-component CSS by `scripts/fetch_assets.py` (base layer plus button, drawer, menu, navbar, fieldset, label, input, textarea, alert, status, link, modal). The CSS features it relies on were read from the assembled file:
+The distribution is daisyUI 5.7.50, assembled from the package's own per-component CSS by `scripts/fetch_assets.py` (base layer plus button, drawer, menu, fieldset, label, input, alert). The CSS features it relies on were read from the assembled file:
 
 | Feature | Where daisyUI uses it | Shipped in |
 | --- | --- | --- |
@@ -13,10 +13,10 @@ The distribution is daisyUI 5.7.50, assembled from the package's own per-compone
 | `color-mix()` | borders, hover, disabled, placeholder | Safari 16.2, Chrome 111, Firefox 113 |
 | `oklch()` colours | overlay, shadows | Safari 15.4, Chrome 111, Firefox 113 |
 | `@property` | two registered custom properties | Safari 16.4, Chrome 85, Firefox 128 |
-| `:has()` | drawer and modal scroll lock | Safari 15.4, Chrome 105, Firefox 121 |
+| `:has()` | drawer scroll lock | Safari 15.4, Chrome 105, Firefox 121 |
 | `translate` property | drawer slide | Safari 14.1, Chrome 104, Firefox 72 |
 | `100dvh` | drawer and shell height | Safari 15.4, Chrome 108, Firefox 101 |
-| `transition-behavior: allow-discrete` | drawer and modal visibility | Safari 17.4, Chrome 117, Firefox 129 |
+| `transition-behavior: allow-discrete` | drawer visibility | Safari 17.4, Chrome 117, Firefox 129 |
 | `animation-timeline: scroll()` | root scroll-gutter helper only | Chrome 115; Safari 26; Firefox behind a flag |
 
 The upstream statement is "daisyUI 5 requires a browser that supports Tailwind CSS 4: Safari 16.4, Chrome 111, Firefox 128 or newer". The version numbers above come from MDN compatibility data as known to the author and were not re-verified against a live source on this network.

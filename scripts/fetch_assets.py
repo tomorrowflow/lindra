@@ -45,15 +45,10 @@ DAISYUI_COMPONENTS = [
     "button",
     "drawer",
     "menu",
-    "navbar",
     "fieldset",
     "label",
     "input",
-    "textarea",
     "alert",
-    "status",
-    "link",
-    "modal",
 ]
 
 SOURCE_SANS_VERSION = "3.052R"

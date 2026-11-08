@@ -39,6 +39,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def health() -> dict[str, str]:
         return {"status": "ok"}
 
+    # The one authenticated API route of the scaffold: the environment check
+    # (ticket 02) and the tests use it to prove a token is accepted.
     @app.get("/api/session")
     def session_state() -> dict[str, bool]:
         return {"authenticated": True}

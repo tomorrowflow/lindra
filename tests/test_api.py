@@ -56,7 +56,7 @@ def test_wrong_token_on_login_page_is_refused_in_german(anonymous):
     assert "Der Zugangsschlüssel ist nicht gültig" in response.text
 
 
-def test_login_with_token_sets_the_session_and_opens_the_shell(anonymous):
+def test_login_with_token_opens_the_shell(anonymous):
     login = anonymous.post("/anmelden", data={"token": TOKEN}, follow_redirects=False)
     assert login.status_code == 303
     assert login.headers["location"] == "/"
