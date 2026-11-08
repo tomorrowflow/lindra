@@ -19,3 +19,10 @@
 - [ ] Portrait viewport: the drawer lists cases and encounters and switching from it works; the action bar keeps stable button sizes and positions across steps and orientations.
 - [ ] HTTP API tests cover visit creation inside, outside and before now, notes autosave and revision, and failed save with retry; a pure logic test covers the default visit date.
 - [ ] Unslop: the unslop skill and `references/signs.md` were read before work; the final diff was checked against the signs; the proof names the signs checked and any remaining finding with its reason.
+
+## Proof
+
+- Test, lint and CI green; the report names the new API and logic tests (visit creation inside, outside and backdated; autosave and revision; failed save and retry; default visit date).
+- On a throwaway stack after `reset`: the fictional case with a backdated visit shows its encounters in date order; a visit outside the period is refused; quoted or screenshotted.
+- Screenshots of the new-visit form in both default states (now inside the period, now outside), the notes step with the saved and the not-saved status, and the sidebar with encounter badges, on both viewports, committed under `docs/screenshots/`; the action bar position is identical across the notes step screenshots.
+- Unslop proof: the signs checked and any remaining finding with its reason.

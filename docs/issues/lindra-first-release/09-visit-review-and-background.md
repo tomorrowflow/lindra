@@ -23,3 +23,10 @@
 - [ ] Browser flow, second half, on both viewports: create a backdated visit inside the period and be refused outside it, generate the visit and see a historical reference, accept a change to the assessment and see the visit's background badge and the refused proposal, switch encounters through the portrait drawer, open an encounter without an accepted draft and see that nothing can be copied.
 - [ ] HTTP API and pure logic tests cover background selection by date, background revision, refusal by background, backdated visits and contradiction items; tests use the fixture model only.
 - [ ] Unslop: the unslop skill and `references/signs.md` were read before work; the final diff was checked against the signs; the proof names the signs checked and any remaining finding with its reason.
+
+## Proof
+
+- Test, lint and CI green; the report names the tests for background selection by date, background revision, refusal by background, backdated visits and contradiction items.
+- The browser flow (second half) runs green in CI on both viewports; screenshots of a visit step with a historical reference, the refused proposal with "Veraltet: Hintergrund seit diesem Vorschlag geändert", the encounter badge in the sidebar and the portrait drawer are committed under `docs/screenshots/`.
+- On a throwaway stack after `reset`: the fictional case with the accepted assessment change shows the background badge on its earlier visit; quoted or screenshotted.
+- Unslop proof: the signs checked and any remaining finding with its reason.

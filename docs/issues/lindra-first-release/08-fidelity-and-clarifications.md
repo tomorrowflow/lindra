@@ -23,3 +23,10 @@
 - [ ] The third fictional case (contradictory doses, unclear time references, missing inpatient justification) yields a draft with the corresponding gaps and clarification items; a test that passes by filling them fails.
 - [ ] HTTP API tests cover the result check, references and their loss on rewrite, clarification adoption and persistence; pure logic tests cover the check and the reference validation.
 - [ ] Unslop: the unslop skill and `references/signs.md` were read before work; the final diff was checked against the signs; the proof names the signs checked and any remaining finding with its reason.
+
+## Proof
+
+- Test, lint and CI green; the report names the tests for the result check, reference validation and loss on rewrite, clarification adoption and persistence, and the ADR 0001 negative cases (no inferred diagnosis, dose, normal finding, ranking or resolved contradiction in the fixture outputs).
+- The third fictional case, generated on a throwaway stack after `reset`, yields the expected gaps and clarification items; the report quotes the clarification list.
+- Screenshots of a tapped input reference with its quoted passage, a hand-rewritten paragraph without a reference, and the Schmerzanamnese step with two separate pain problems, on both viewports, committed under `docs/screenshots/`.
+- Unslop proof: the signs checked and any remaining finding with its reason.

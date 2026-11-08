@@ -26,3 +26,10 @@
 - [ ] Browser flow, first half, on an iPad-sized portrait viewport and a desktop viewport: open a case from "Fall auswählen", open the assessment, type notes, generate, hand-edit a section, accept with that section retained and badged, change notes while a proposal is pending and see acceptance disabled with its reason, copy a section from the handover step and see the acknowledgement; buttons keep their size and position across steps.
 - [ ] HTTP API and pure logic tests cover the acceptance merge, outdated detection by notes revision, staleness, failure preservation and copy text; tests use the fixture model only.
 - [ ] Unslop: the unslop skill and `references/signs.md` were read before work; the final diff was checked against the signs; the proof names the signs checked and any remaining finding with its reason.
+
+## Proof
+
+- Test, lint and CI green; the report names the API and logic tests for generation, the acceptance merge, outdated detection, staleness, failure preservation and copy text, all on the fixture model.
+- The browser flow (first half) runs green in CI on both viewports; its screenshots of the section step with a proposal, the final step naming replaced and retained sections, the outdated proposal with the spelled-out reason, and the handover step are committed under `docs/screenshots/`.
+- On a throwaway stack after `reset`: the first fictional case is generated, one section hand-edited, the proposal accepted, and the retained section shows "Nicht aktualisiert"; quoted or screenshotted.
+- Unslop proof: the signs checked and any remaining finding with its reason.

@@ -14,7 +14,7 @@
 
 - [ ] One compose file (with the compose override the tiers need) runs the service and its SQLite volume in rootless Docker; the throwaway stack uses a ticket-specific compose project name, the test tier uses `lindra-test` on port 8780.
 - [ ] `scripts/env.py` is executable Python with the commands `up`, `check`, `reset`, `down`, `ensure-test` and `install-timer`; each is idempotent (running it twice converges to the same state).
-- [ ] `up` creates a gitignored env file with a generated test token when it is missing and never commits secrets; `check` calls the health endpoint and the login with the token and exits non-zero on failure; `down` removes the stack and keeps nothing that a later `up` would trip over.
+- [ ] `up` creates a gitignored env file with a generated test token when it is missing and never commits secrets; `check` calls the health endpoint and an authenticated route with the token (the minimal authentication from ticket 01) and exits non-zero on failure; `down` removes the stack and keeps nothing that a later `up` would trip over.
 - [ ] `reset` seeds the fictional cast and nothing else, through a seed hook the application exposes; the cast is three invented German cases, each with a fictional case number, a fictional patient name, a treatment period, an admission assessment and at least one visit (one backdated), with notes, expected fixture drafts, expected clarification items and fixture audio with canned transcripts; one case carries an assessment change accepted after a visit draft; the third case leaves gaps. No real, pseudonymised or production-copied data; no reproduction of the ward's forms or the operator's documents.
 - [ ] Until case storage exists (ticket 05), `reset` proves the mechanism: the seed hook validates and reports the cast without storing it, and `check` confirms the hook ran; the ticket's proof shows `up`, `check`, `reset`, `down` passing on a throwaway stack on the developer's node.
 - [ ] The text model stand-in (fixture model keyed to the cast) and the speech stand-in (canned transcripts keyed to fixture audio) are selected by configuration and are the default of the throwaway and test tiers; no configuration path enables a real or hosted backend in these tiers.
@@ -22,3 +22,12 @@
 - [ ] Nodes read `LINDRA_TEST_URL` and `LINDRA_TEST_TOKEN`; the documentation names them.
 - [ ] `docs/environments.md` documents every tier: user, node, host, port, compose project, commands, data rule and stand-ins; the throwaway and test procedures; the production runbook for the operator as `frogger` (deploy a `main` commit that is green on test, run `check`); and that the production host is an open decision and that production holds no real data without the separate approval (ADR 0006, ADR 0007). `AGENTS.md` points to it.
 - [ ] Unslop: the unslop skill and `references/signs.md` were read before work for the changed documentation; the proof names the signs checked and remaining findings with reasons.
+
+## Proof
+
+- On the developer's node, in rootless Docker, the report quotes the output of `scripts/env.py up`, `check`, `reset`, `check`, `down` and a second `up` and `down` on a throwaway stack with a ticket-specific compose project; `check` exits zero after `up` and non-zero while the stack is down.
+- Running `up` twice and `reset` twice converges to the same state (idempotence), shown in the quoted output.
+- `install-timer` is proven in a dry form on the developer's node: the unit files it would write are rendered and validated with `systemd-analyze verify`, and the report says the live timer is installed by ticket 03 on the test node.
+- `env.py` is executable, passes the project's lint, and the seed hook validates the cast (three cases, periods, encounters, expected drafts and clarification items, fixture audio with canned transcripts) in the unit tests.
+- `docs/environments.md` exists with every tier's table and the production runbook; `AGENTS.md` points to it.
+- Unslop proof for the changed documentation, in the report.

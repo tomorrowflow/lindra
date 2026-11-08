@@ -20,3 +20,13 @@
 - [ ] Operator-run: production runs the deterministic stand-ins unless the operator explicitly configures the self-hosted backends; no hosted-inference adapter is configured in production.
 - [ ] Operator-run: `reset` on production seeds only the fictional cast; the runbook states that no real, pseudonymised or production-copied patient data may be loaded without the separate approval of ADR 0006.
 - [ ] The runbook is corrected in the repository wherever the operator had to deviate from it.
+
+## Proof
+
+Every item is operator-run as `frogger`; the card comment that closes this ticket quotes them.
+
+- The named host and the note in `docs/environments.md` that it is the evaluation host while ADR 0007's decision is open.
+- The deployed `main` commit and the test-tier check that was green for it.
+- The output of `scripts/env.py check` against production, exit code zero.
+- The configuration in use (stand-ins or self-hosted backends; no hosted adapter) and the `reset` output showing only the fictional cast.
+- Any runbook correction committed on this ticket's branch.

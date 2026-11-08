@@ -21,3 +21,10 @@
 - [ ] Operator-run, before merge: on the chosen inference hardware, the operator launches the evaluation configuration, runs the self-hosted model and recogniser against the fictional cast and, with their own account, the hosted comparison, and confirms the recorded numbers; the operator approves the comparison run and any spend beforehand.
 - [ ] Automated tests keep using the stand-ins; a test asserts that the hosted adapter refuses to start outside the evaluation configuration and that the evaluation configuration refuses non-fictional data.
 - [ ] Unslop: the unslop skill and `references/signs.md` were read before work for the changed documentation and any UI; the proof names the signs checked and remaining findings with reasons.
+
+## Proof
+
+- Test, lint and CI green on the stand-ins; the report names the tests that the hosted adapter refuses to start outside the evaluation configuration and that the configuration refuses non-fictional data.
+- The evaluation record (hardware, models and versions, per-case quality and latency for assessment and visits, typed and dictated) is committed under `docs/research/` or `docs/evaluation/`, with the provider terms and pricing section carrying a source per item or the word unverified.
+- Operator-run, before merge: the operator's card comment confirming the launch of the evaluation configuration on the inference hardware, the self-hosted runs, the hosted comparison with their own account, the approved spend, and that the recorded numbers match what they saw.
+- Unslop proof for the changed documentation and any UI.

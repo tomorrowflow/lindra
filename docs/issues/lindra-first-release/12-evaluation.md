@@ -19,3 +19,11 @@
 - [ ] The result compares against the target per encounter kind; a met target is stated plainly; a missed target is stated plainly with the numbers, and focused follow-up tickets are drafted under `docs/issues/` for the causes found; the target text is not changed.
 - [ ] Real patient data is not used at any point; the record states that the evaluation release remains fictional-only and that real use needs the separate approval of ADR 0006.
 - [ ] Unslop: the unslop skill and `references/signs.md` were read before writing the protocol and the record; the proof names the signs checked and remaining findings with reasons.
+
+## Proof
+
+- The protocol and the empty timing sheet are committed under `docs/evaluation/` before the run; lint for documentation passes.
+- Operator-run, at the end of the release: the operator's card comment confirming that Ella ran the protocol against `LINDRA_TEST_URL` on her iPad and desktop, with the date, the configurations used per row, and the completed sheet committed under `docs/evaluation/`.
+- The result section states met or missed per encounter kind with the numbers; for a missed target, the follow-up ticket files exist under `docs/issues/` and are named in the report.
+- The record states that no real patient data was used.
+- Unslop proof for the protocol and the record.

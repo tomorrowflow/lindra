@@ -19,3 +19,13 @@
 - [ ] Operator-run: after a new commit on `origin/main`, the test tier shows that commit within 5 minutes without anyone touching it, and `reset` on the test node seeds only the fictional cast.
 - [ ] The test tier runs the deterministic stand-ins; no real or hosted backend is configured there.
 - [ ] `docs/environments.md` records the installed host, port, compose project and the date of installation.
+
+## Proof
+
+Every item is operator-run; the card comment that closes this ticket quotes them.
+
+- Before install: the suitability check on Linux 790 (no production service, rootless Docker present, port 8780 free), with the commands used.
+- At install: the wizard output, then the output of `scripts/env.py up`, `check` and `install-timer` as node `lindra-test`, and `systemctl --user list-timers` showing `lindra-test-env.timer` active.
+- From another node: `scripts/env.py check` against `LINDRA_TEST_URL` and `LINDRA_TEST_TOKEN` from the node profile passes.
+- Within 5 minutes of a new commit on `origin/main`: the test tier reports that commit (the health endpoint or `check` output shows the deployed commit).
+- The updated `docs/environments.md` is committed on this ticket's branch.

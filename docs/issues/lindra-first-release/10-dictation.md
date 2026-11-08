@@ -4,7 +4,7 @@
 
 **What to build:** From any step of any encounter the physician starts a dictation through a persistent microphone control aligned with the action bar. A full overlay blocks everything else while recording, transcribing and reviewing the transcript; she corrects the transcript and accepts it, which appends it to the selected encounter's notes and advances the notes revision (so a pending proposal becomes outdated), or discards it. Audio is kept only for transcription. A denied microphone permission or a failed transcription is told to her in the overlay with a way out. Speech recognition runs through an adapter whose test stand-in returns canned transcripts for fixture audio.
 
-**Blocked by:** 01 (Scaffold), 02 (Environments), 05 (Cases and periods), 06 (Encounters and notes)
+**Blocked by:** 01 (Scaffold), 02 (Environments), 05 (Cases and periods), 06 (Encounters and notes), 07 (Assessment review). 07 is a prerequisite because the dictation control sits on review steps and an accepted transcript must outdate a pending proposal; both exist only after 07.
 
 **Status:** ready-for-agent
 
@@ -22,3 +22,10 @@
 - [ ] Browser flow addition on both viewports: start a dictation from a review step, see the overlay block the step, stop, review and correct the canned transcript, accept and see it in the notes.
 - [ ] Operator-run, before merge: on Ella's physical iPad in Safari over the private network (HTTPS), start a dictation from a review step, see the overlay block the rest of the app, stop, see a transcript, correct it and accept it into that encounter's notes; also deny the microphone permission once and see the overlay's message. Confirms microphone capture, secure origin and the overlay on the real device.
 - [ ] Unslop: the unslop skill and `references/signs.md` were read before work; the final diff was checked against the signs; the proof names the signs checked and any remaining finding with its reason.
+
+## Proof
+
+- Test, lint and CI green; the report names the tests for upload with the canned-transcript stand-in, append and revision, outdating of a pending proposal, the denied-permission and failed-transcription paths, and the append logic.
+- The browser flow addition runs green in CI on both viewports with fixture audio; screenshots of the overlay in the recording, transcribing and reviewing states and of the appended transcript in the notes are committed under `docs/screenshots/`.
+- Operator-run, before merge: the physical-iPad dictation check above, confirmed by the operator in a card comment naming the iPad model, the Safari version and that the origin was HTTPS.
+- Unslop proof: the signs checked and any remaining finding with its reason.
