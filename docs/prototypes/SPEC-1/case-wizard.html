@@ -1,0 +1,558 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Lindra Fallbildschirm, Runde 2: Seitenleiste, Diktat-Overlay, Durchsicht als Schritte</title>
+<!--
+  Question: With the sidebar of the first round's variant C (cases, then sections) for orientation, the
+  full-screen dictation overlay of variant B, and a large previous/new comparison, how should the
+  "wizard-style" interaction be cut: one step per section, one step per section with the notes kept
+  in view, or one step per phase (notes, review, handover)?
+  Plan: Three variants of the case flow, A/B/C, on iPad (landscape stands in for the desktop browser).
+  All share the sidebar, the dictation overlay, and the CaseModel reducer from round 1 (ADR 0008
+  semantics: one whole-draft proposal, manual edits preserved and labelled, outdated proposal refused,
+  no per-section staleness guessed). Notes input stays free text; the wizard is the review, not a
+  question-by-question form (grilling 1 ruled that out).
+  Scenes for screenshots: ?scene=proposal (default: draft present, notes changed, proposal pending,
+  wizard on the Schmerzanamnese step) and ?scene=dictation (dictation overlay in the reviewing state).
+  Assumptions: Lindra is a browser app; the iOS shell frame is only a device frame. All data is the
+  fictional case L-0001; nothing here is real.
+-->
+<style>
+:root {
+  --font: -apple-system, system-ui, "SF Pro Text", "Helvetica Neue", Inter, Roboto, sans-serif;
+  --tint: #0b6e6e;
+  --red: #c0392b; --green: #2e8b57; --orange: #c77700; --stale: #fff4d6; --proposal: #e6f4f1;
+  --label: #111; --label-2: rgba(60,60,67,.6); --label-3: rgba(60,60,67,.3);
+  --sep: rgba(60,60,67,.29);
+  --bg: #fbf9f4; --bg-grouped: #f2f0ea; --cell: #fff; --fill: rgba(120,120,128,.12);
+  --bar: rgba(251,249,244,.96);
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; height: 100%; }
+body { background: #d6d9de; font: 15px/1.4 var(--font); color: var(--label); overflow: hidden; }
+#stage { position: fixed; inset: 0 0 56px 0; }
+#device { position: absolute; left: 50%; top: 50%; overflow: hidden; background: var(--bg);
+  border-radius: var(--radius); box-shadow: 0 0 0 10px #1c1c1e, 0 18px 50px rgba(0,0,0,.35); }
+body.bleed #stage { inset: 0; }
+body.bleed #device { left: 0; top: 0; border-radius: 0; box-shadow: none; }
+body.bleed #pill { display: none; }
+#screen { position: absolute; inset: 0; overflow: hidden; }
+#pill { position: fixed; left: 50%; bottom: 10px; transform: translateX(-50%); display: flex; gap: 4px;
+  align-items: center; padding: 4px; border-radius: 999px; background: #222; color: #fff;
+  font: 13px/1 ui-monospace, Menlo, monospace; z-index: 10; white-space: nowrap; }
+#pill button { font: inherit; color: inherit; background: #3a3a3c; border: 0; border-radius: 999px; padding: 7px 11px; cursor: pointer; }
+#pill button[aria-pressed="true"] { background: #0a84ff; }
+#pill .label { padding: 0 8px; }
+
+.status { height: 24px; flex: none; }
+.nav { position: relative; height: 48px; flex: none; display: flex; align-items: center; gap: 12px; padding: 0 16px; border-bottom: .5px solid var(--sep); background: var(--bar); }
+.nav .title { font-weight: 600; font-size: 17px; }
+.nav .meta { color: var(--label-2); font-size: 13px; }
+.nav .spacer { flex: 1; }
+.page { position: absolute; inset: 0; display: flex; flex-direction: column; background: var(--bg); }
+.btn { font: inherit; border: 0; border-radius: 10px; padding: 11px 16px; background: var(--tint); color: #fff; font-weight: 600; cursor: pointer; min-height: 44px; }
+.btn.plain { background: none; color: var(--tint); padding: 6px 8px; font-weight: 500; }
+.btn.danger { background: none; color: var(--red); font-weight: 500; }
+.btn.quiet { background: var(--fill); color: var(--label); font-weight: 500; }
+.btn[disabled] { opacity: .4; cursor: default; }
+.btn.rec { background: var(--red); }
+.btn.big { font-size: 17px; padding: 14px 22px; }
+
+.body { flex: 1; display: grid; grid-template-columns: 260px 1fr; min-height: 0; }
+.side { background: var(--bg-grouped); border-right: .5px solid var(--sep); overflow-y: auto; padding: 10px 0; }
+.side .hdr { font-size: 12px; text-transform: uppercase; color: var(--label-2); padding: 10px 16px 4px; letter-spacing: .3px; }
+.side .item { padding: 10px 16px; cursor: pointer; display: flex; align-items: center; gap: 8px; font-size: 14px; min-height: 44px; }
+.side .item.on { background: #fff; font-weight: 600; box-shadow: inset 3px 0 0 var(--tint); }
+.side .item.dim { color: var(--label-2); }
+.side .badge { margin-left: auto; font-size: 11px; border-radius: 6px; padding: 2px 6px; white-space: nowrap; }
+.badge.new { background: var(--proposal); color: #0b4f4f; }
+.badge.edit { background: var(--fill); color: var(--label-2); }
+.badge.keep { background: var(--stale); color: #6b4e00; }
+.badge.open { background: #fdecea; color: var(--red); }
+.badge.done { background: #e8f5ee; color: var(--green); }
+.side .step { display: flex; align-items: center; gap: 10px; }
+.side .num { width: 22px; height: 22px; border-radius: 50%; background: var(--fill); font-size: 12px; display: inline-flex; align-items: center; justify-content: center; flex: none; }
+.side .item.on .num { background: var(--tint); color: #fff; }
+.main { display: flex; flex-direction: column; min-height: 0; position: relative; }
+.portrait .body { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+.portrait .side { display: none; }
+.chips { display: flex; gap: 6px; overflow-x: auto; padding: 8px 12px; border-bottom: .5px solid var(--sep); background: var(--bar); flex: none; }
+.chips button { flex: none; font: inherit; font-size: 13px; border: 0; background: var(--fill); border-radius: 999px; padding: 8px 12px; cursor: pointer; min-height: 36px; }
+.chips button.on { background: var(--tint); color: #fff; }
+
+.steptitle { padding: 16px 24px 6px; font-size: 22px; font-weight: 700; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.steptitle .n { font-size: 13px; color: var(--label-2); font-weight: 500; }
+.stepbody { flex: 1; overflow-y: auto; min-height: 0; padding: 0 24px 20px; }
+.stepfoot { flex: none; display: flex; align-items: center; gap: 10px; padding: 12px 24px; border-top: .5px solid var(--sep); background: var(--bar); }
+.stepfoot .grow { flex: 1; }
+.banner { display: flex; align-items: flex-start; gap: 10px; padding: 10px 14px; font-size: 14px; border-radius: 10px; margin: 8px 0; }
+.banner.stale { background: var(--stale); color: #6b4e00; }
+.banner.proposal { background: var(--proposal); color: #0b4f4f; }
+.banner.fail { background: #fdecea; color: var(--red); }
+.notes { width: 100%; min-height: 320px; height: 100%; resize: none; border: .5px solid var(--sep); border-radius: 10px; outline: 0; padding: 16px; font: 16px/1.55 var(--font); background: var(--cell); color: var(--label); }
+.cmp { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 8px; }
+.cmp .pane { background: var(--cell); border: .5px solid var(--sep); border-radius: 12px; padding: 14px 18px; font-size: 16px; line-height: 1.55; }
+.cmp .pane.new { background: var(--proposal); border-color: #bfe0d8; }
+.cmp h5 { margin: 0 0 8px; font-size: 12px; text-transform: uppercase; color: var(--label-2); letter-spacing: .3px; display: flex; gap: 8px; align-items: center; }
+.cmp.stack { grid-template-columns: 1fr; }
+.para { margin: 6px 0; }
+.para.new { background: rgba(11,110,110,.12); border-radius: 6px; padding: 2px 6px; margin-left: -6px; }
+.ref { display: inline-block; margin: 2px 0 0; font-size: 12px; color: var(--tint); background: var(--fill); border-radius: 6px; padding: 3px 8px; cursor: pointer; }
+.ref.none { color: var(--label-2); }
+.ref-quote { font-size: 13px; color: var(--label-2); border-left: 3px solid var(--tint); padding: 4px 10px; margin: 6px 0; background: var(--bg-grouped); }
+.src { background: var(--bg-grouped); border-radius: 10px; padding: 10px 14px; font-size: 14px; color: var(--label-2); margin: 8px 0; }
+.src b { color: var(--label); }
+.clar { background: #fff; border: 1px dashed var(--orange); border-radius: 10px; padding: 10px 14px; margin-top: 10px; }
+.clar h4 { margin: 0 0 6px; font-size: 13px; color: var(--orange); text-transform: uppercase; letter-spacing: .3px; }
+.clar li { margin: 2px 0; font-size: 14px; }
+.hint { font-size: 13px; color: var(--label-2); }
+.changed { position: absolute; left: 50%; bottom: 76px; transform: translateX(-50%); background: #222; color: #fff; font-size: 13px; padding: 8px 14px; border-radius: 999px; z-index: 4; max-width: 80%; text-align: center; }
+.dot { width: 12px; height: 12px; border-radius: 50%; background: var(--label-3); flex: none; }
+.dot.recording { background: var(--red); box-shadow: 0 0 0 5px rgba(192,57,43,.2); }
+.dot.transcribing { background: var(--orange); }
+.dot.reviewing { background: var(--tint); }
+.dot.idle { background: var(--green); }
+.edittext { width: 100%; min-height: 140px; border: 1.5px solid var(--tint); border-radius: 10px; padding: 10px; font: 16px/1.55 var(--font); resize: vertical; background: #fff; }
+.unsaved { font-size: 12px; color: var(--red); }
+
+/* Dictation overlay (from round 1 variant B): the app behind is blocked until the transcript is accepted or discarded. */
+.overlay { position: absolute; inset: 0; background: rgba(20,30,30,.55); display: flex; align-items: center; justify-content: center; z-index: 6; }
+.overlay .card { width: min(640px, 92%); background: var(--cell); border-radius: 16px; padding: 24px; box-shadow: 0 20px 60px rgba(0,0,0,.35); }
+.overlay h3 { margin: 0 0 6px; font-size: 20px; display: flex; align-items: center; gap: 10px; }
+.overlay .state { font-size: 15px; color: var(--label-2); margin-bottom: 14px; }
+.overlay textarea { width: 100%; min-height: 160px; border: 1.5px solid var(--tint); border-radius: 10px; padding: 12px; font: 16px/1.55 var(--font); resize: vertical; }
+.overlay .row { display: flex; gap: 10px; align-items: center; margin-top: 14px; flex-wrap: wrap; }
+.wave { height: 44px; border-radius: 10px; background: repeating-linear-gradient(90deg, var(--red) 0 3px, transparent 3px 9px); opacity: .5; margin: 10px 0; }
+
+/* Variant C: handover checklist. */
+.hand { background: var(--cell); border: .5px solid var(--sep); border-radius: 12px; padding: 14px 18px; margin: 10px 0; display: grid; grid-template-columns: 1fr auto; gap: 8px 16px; align-items: start; }
+.hand .t { font-weight: 600; }
+.hand .txt { grid-column: 1; font-size: 15px; color: var(--label-2); max-height: 72px; overflow: hidden; }
+</style>
+</head>
+<body>
+<div id="stage"><div id="device"><div id="screen"></div></div></div>
+<div id="pill">
+  <button data-step="-1" aria-label="Previous variant">◀</button><span class="label"></span><button data-step="1" aria-label="Next variant">▶</button>
+  <button data-device="iphone">iPhone</button><button data-device="ipad">iPad</button>
+  <button data-orient>⟳</button>
+</div>
+
+<script>
+// ---------------------------------------------------------------------------------------------
+// CaseModel: the pure state module from round 1, with the ADR 0008 semantics. No DOM.
+// ---------------------------------------------------------------------------------------------
+const CaseModel = (() => {
+  const SECTIONS = [
+    ["aufnahmegrund", "Aufnahmegrund"],
+    ["schmerzanamnese", "Schmerzanamnese"],
+    ["vorgeschichte", "Relevante Vorgeschichte und Befunde"],
+    ["therapieversuche", "Bisherige Therapieversuche"],
+    ["auswirkungen", "Funktionelle und psychosoziale Auswirkungen"],
+    ["begruendung", "Begründung der stationären Behandlung"],
+    ["ziele", "Therapieziele"],
+  ];
+  const NOTES_V1 = [
+    "Aufnahme wegen chronischer Lumbalgie seit 3 Jahren. Pat. berichtet ziehenden Schmerz LWS mit Ausstrahlung re. Gesäß bis Oberschenkel dorsal, NRS 6/10 in Ruhe, 8/10 bei Belastung. Hauptschmerz.",
+    "Vorbefund MRT LWS 03/2026 (extern): Protrusion L4/5 ohne Nervenwurzelkompression.",
+    "Eigener Befund: Finger-Boden-Abstand 30 cm, Lasègue neg. bds.",
+    "Bisherige Therapie: Ibuprofen 600 mg 3x tgl. über 6 Wochen, geringe Wirkung, Magenbeschwerden, abgesetzt. Physiotherapie 12 Einheiten 2025, kurzfristige Besserung.",
+    "Aktuell: Metamizol 500 mg bei Bedarf.",
+    "Arbeitsunfähig seit 4 Monaten, Rückzug von Freizeitaktivitäten, Schlafstörung.",
+    "Stationäre Behandlung begründet durch Chronifizierung, Versagen ambulanter Maßnahmen und ausgeprägte psychosoziale Beeinträchtigung.",
+  ].join("\n\n");
+  const TRANSCRIPT = "Ergänzung nach dem Gespräch: Patient gibt zusätzlich Spannungskopfschmerz etwa zweimal pro Woche an, NRS vier, keine Aura, keine Ausstrahlung.";
+  const DRAFT_V1 = {
+    aufnahmegrund: [{ text: "Die stationäre Aufnahme erfolgt wegen chronischer Lumbalgie seit drei Jahren.", ref: "Aufnahme wegen chronischer Lumbalgie seit 3 Jahren." }],
+    schmerzanamnese: [{ text: "Hauptschmerz: ziehender Schmerz der LWS mit Ausstrahlung in das rechte Gesäß bis dorsal in den Oberschenkel. Intensität NRS 6/10 in Ruhe und 8/10 unter Belastung.", ref: "ziehenden Schmerz LWS mit Ausstrahlung re. Gesäß bis Oberschenkel dorsal, NRS 6/10 in Ruhe, 8/10 bei Belastung. Hauptschmerz." }],
+    vorgeschichte: [
+      { text: "Vorbefund (extern): MRT der LWS vom 03/2026 mit Protrusion L4/5 ohne Nervenwurzelkompression.", ref: "Vorbefund MRT LWS 03/2026 (extern): Protrusion L4/5 ohne Nervenwurzelkompression." },
+      { text: "Eigener Befund: Finger-Boden-Abstand 30 cm, Lasègue beidseits negativ.", ref: "Eigener Befund: Finger-Boden-Abstand 30 cm, Lasègue neg. bds." },
+    ],
+    therapieversuche: [
+      { text: "Ibuprofen 600 mg dreimal täglich über sechs Wochen mit geringer Wirkung; wegen Magenbeschwerden abgesetzt.", ref: "Ibuprofen 600 mg 3x tgl. über 6 Wochen, geringe Wirkung, Magenbeschwerden, abgesetzt." },
+      { text: "Physiotherapie, 12 Einheiten im Jahr 2025, mit kurzfristiger Besserung.", ref: "Physiotherapie 12 Einheiten 2025, kurzfristige Besserung." },
+      { text: "Aktuell Metamizol 500 mg bei Bedarf.", ref: "Aktuell: Metamizol 500 mg bei Bedarf." },
+    ],
+    auswirkungen: [{ text: "Arbeitsunfähigkeit seit vier Monaten, Rückzug von Freizeitaktivitäten und Schlafstörung.", ref: "Arbeitsunfähig seit 4 Monaten, Rückzug von Freizeitaktivitäten, Schlafstörung." }],
+    begruendung: [{ text: "Die stationäre multimodale Schmerztherapie ist nach Einschätzung der Ärztin indiziert wegen Chronifizierung, Versagen der ambulanten Maßnahmen und ausgeprägter psychosozialer Beeinträchtigung.", ref: "Stationäre Behandlung begründet durch Chronifizierung, Versagen ambulanter Maßnahmen und ausgeprägte psychosoziale Beeinträchtigung." }],
+    ziele: [],
+  };
+  const CLAR_V1 = [
+    { section: "ziele", text: "Therapieziele: keine Angabe in den Notizen." },
+    { section: "therapieversuche", text: "Metamizol: Häufigkeit und Tageshöchstdosis nicht angegeben." },
+  ];
+  const DRAFT_V2 = Object.assign({}, DRAFT_V1, {
+    schmerzanamnese: DRAFT_V1.schmerzanamnese.concat([{ text: "Zweites Schmerzproblem: Spannungskopfschmerz etwa zweimal pro Woche, Intensität NRS 4, ohne Aura und ohne Ausstrahlung.", ref: "Spannungskopfschmerz etwa zweimal pro Woche an, NRS vier, keine Aura, keine Ausstrahlung." }]),
+  });
+  const CLAR_V2 = CLAR_V1.concat([{ section: "schmerzanamnese", text: "Spannungskopfschmerz: Dauer der Beschwerden und Zeitraum der Angabe fehlen." }]);
+
+  function initial(scene) {
+    const base = {
+      caseId: "Fall L-0001 (fiktiv)", notes: NOTES_V1, savedAt: "14:02", unsaved: false,
+      draft: null, clarifications: [], draftNotes: null, proposal: null, edited: {}, notUpdated: {},
+      copied: {}, dictation: { status: "idle", transcript: "" }, failure: null, changed: "Fall geöffnet.",
+    };
+    if (scene === "fresh") return base;
+    base.draft = DRAFT_V1; base.clarifications = CLAR_V1; base.draftNotes = NOTES_V1;
+    if (scene === "dictation") { base.dictation = { status: "reviewing", transcript: TRANSCRIPT }; base.changed = "Transkript liegt zur Durchsicht bereit."; return base; }
+    base.notes = NOTES_V1 + "\n\n" + TRANSCRIPT;
+    base.proposal = { draft: DRAFT_V2, clarifications: CLAR_V2, notes: base.notes };
+    base.edited = { begruendung: true };
+    base.changed = "Neuer Entwurf liegt als Vorschlag vor.";
+    return base;
+  }
+  const stale = (s) => !!s.draft && s.draftNotes !== s.notes;
+  const outdated = (s) => !!s.proposal && s.proposal.notes !== s.notes;
+  const skipped = (s) => (s.proposal ? SECTIONS.map((x) => x[0]).filter((k) => s.edited[k]) : []);
+  const changes = (s, k) => !!s.proposal && JSON.stringify(s.proposal.draft[k]) !== JSON.stringify(s.draft ? s.draft[k] : null);
+  function can(s, type) {
+    const d = s.dictation.status;
+    switch (type) {
+      case "generate": return s.notes.trim().length > 0 && d === "idle" && !s.proposal;
+      case "accept": return !!s.proposal && !outdated(s);
+      case "discard": return !!s.proposal;
+      case "startDictation": return d === "idle";
+      case "stopDictation": return d === "recording";
+      case "acceptTranscript": case "discardTranscript": case "editTranscript": return d === "reviewing";
+      case "editNotes": return d === "idle";
+      default: return true;
+    }
+  }
+  function reduce(s, a) {
+    const n = Object.assign({}, s, { failure: null });
+    switch (a.type) {
+      case "editNotes": if (!can(s, "editNotes")) return s; n.notes = a.notes; n.unsaved = false; n.savedAt = "jetzt"; n.changed = stale(n) ? "Notizen gespeichert. Entwurf jetzt möglicherweise veraltet." : "Notizen gespeichert."; return n;
+      case "networkLost": n.unsaved = true; n.changed = "Keine Verbindung: letzte Änderung noch nicht gespeichert."; return n;
+      case "generate": {
+        if (!can(s, "generate")) return s;
+        if (a.fail) { n.failure = "Das Textmodell hat nicht geantwortet. Notizen und bisheriger Entwurf sind unverändert."; n.changed = "Erzeugen fehlgeschlagen; nichts verloren."; return n; }
+        const v2 = s.notes.indexOf("Spannungskopfschmerz") >= 0;
+        n.proposal = { draft: v2 ? DRAFT_V2 : DRAFT_V1, clarifications: v2 ? CLAR_V2 : CLAR_V1, notes: s.notes };
+        n.changed = s.draft ? "Neuer Entwurf liegt als Vorschlag vor. Geh die Abschnitte durch." : "Erster Entwurf liegt als Vorschlag vor."; return n;
+      }
+      case "accept": {
+        if (!can(s, "accept")) return s;
+        const keep = skipped(s);
+        n.draft = Object.assign({}, s.proposal.draft); n.notUpdated = {};
+        keep.forEach((k) => { n.draft[k] = s.draft[k]; n.notUpdated[k] = true; });
+        n.clarifications = s.proposal.clarifications; n.draftNotes = s.proposal.notes; n.proposal = null; n.copied = {};
+        n.changed = keep.length ? "Vorschlag übernommen. Von Hand bearbeitet und nicht aktualisiert: " + keep.map((k) => SECTIONS.find((x) => x[0] === k)[1]).join(", ") + "." : "Vorschlag übernommen. Klärungsliste des Vorschlags gilt jetzt."; return n;
+      }
+      case "discard": if (!can(s, "discard")) return s; n.proposal = null; n.changed = "Vorschlag verworfen. Bisheriger Entwurf bleibt."; return n;
+      case "editDraft":
+        n.draft = Object.assign({}, s.draft); n.draft[a.section] = [{ text: a.text, ref: null }];
+        n.edited = Object.assign({}, s.edited); n.edited[a.section] = true;
+        n.notUpdated = Object.assign({}, s.notUpdated); delete n.notUpdated[a.section];
+        n.changed = "Abschnitt von Hand bearbeitet; Herkunftsangabe entfällt. Klärungspunkte bleiben offen."; return n;
+      case "startDictation": if (!can(s, "startDictation")) return s; n.dictation = { status: "recording", transcript: "" }; n.changed = "Aufnahme läuft. Nur deine eigene Stimme."; return n;
+      case "stopDictation": if (!can(s, "stopDictation")) return s; n.dictation = { status: "transcribing", transcript: "" }; n.changed = "Aufnahme beendet, Transkription läuft lokal."; return n;
+      case "transcriptReady": if (s.dictation.status !== "transcribing") return s; n.dictation = { status: "reviewing", transcript: TRANSCRIPT }; n.changed = "Transkript liegt zur Durchsicht bereit. Audio ist gelöscht."; return n;
+      case "editTranscript": if (!can(s, "editTranscript")) return s; n.dictation = { status: "reviewing", transcript: a.transcript }; n.changed = "Transkript korrigiert."; return n;
+      case "acceptTranscript":
+        if (!can(s, "acceptTranscript")) return s;
+        n.notes = s.notes.trim() + "\n\n" + s.dictation.transcript.trim(); n.dictation = { status: "idle", transcript: "" }; n.savedAt = "jetzt";
+        n.changed = "Transkript an die Notizen angehängt; nichts überschrieben." + (n.proposal ? " Offener Vorschlag ist jetzt veraltet." : stale(n) ? " Entwurf jetzt möglicherweise veraltet." : ""); return n;
+      case "discardTranscript": if (!can(s, "discardTranscript")) return s; n.dictation = { status: "idle", transcript: "" }; n.changed = "Transkript verworfen. Notizen unverändert."; return n;
+      case "copy": n.copied = Object.assign({}, s.copied); n.copied[a.section] = true; n.changed = "Abschnitt als reiner Text kopiert."; return n;
+      default: return s;
+    }
+  }
+  return { SECTIONS, initial, reduce, can, stale, outdated, skipped, changes, TRANSCRIPT };
+})();
+
+// ---------------------------------------------------------------------------------------------
+// Page state and shared pieces.
+// ---------------------------------------------------------------------------------------------
+const q0 = new URLSearchParams(location.search);
+let app = CaseModel.initial(q0.get("scene") || "proposal");
+// ui.step: "notizen" | section key | "abschluss" (A/B); for C: "notizen" | "durchsicht" | "uebergabe"
+const ui = { step: q0.get("scene") === "dictation" ? "notizen" : "schmerzanamnese", openRef: null, editing: null, phase: q0.get("scene") === "dictation" ? "notizen" : "durchsicht" };
+function dispatch(a) { app = CaseModel.reduce(app, a); render(); if (a.type === "stopDictation") setTimeout(() => dispatch({ type: "transcriptReady" }), 1500); }
+const esc = (t) => t.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const title = (key) => CaseModel.SECTIONS.find((s) => s[0] === key)[1];
+const KEYS = CaseModel.SECTIONS.map((s) => s[0]);
+const DICT_LABEL = { idle: "Bereit", recording: "Aufnahme läuft. Nur deine eigene Stimme, kein Patientengespräch.", transcribing: "Transkription läuft auf eigener Hardware. Audio wird danach gelöscht.", reviewing: "Transkript prüfen und korrigieren. Erst „Übernehmen“ hängt es an die Notizen an; nichts wird überschrieben." };
+
+function paragraphs(list, opts) {
+  opts = opts || {};
+  if (!list || !list.length) return `<p class="para hint">Keine Angaben in den Notizen. Siehe Klärungsliste.</p>`;
+  return list.map((p, i) => {
+    const id = (opts.prefix || "") + i, open = ui.openRef === id;
+    const ref = p.ref ? `<span class="ref" data-ref="${id}">↳ aus Notizen</span>${open ? `<div class="ref-quote">„${esc(p.ref)}“</div>` : ""}` : `<span class="ref none">↳ von Hand bearbeitet, keine Herkunftsangabe</span>`;
+    return `<p class="para ${opts.isNew && opts.isNew(p) ? "new" : ""}">${esc(p.text)}<br>${ref}</p>`;
+  }).join("");
+}
+function clarFor(s, key) {
+  const items = (s.proposal ? s.proposal.clarifications : s.clarifications).filter((c) => !key || c.section === key);
+  if (!items.length) return "";
+  return `<div class="clar"><h4>Klärungsliste${key ? "" : " (ganzer Fall)"}</h4><ul style="margin:0;padding-left:18px">${items.map((c) => `<li>${key ? "" : `<b>${esc(title(c.section))}:</b> `}${esc(c.text)}</li>`).join("")}</ul></div>`;
+}
+function sectionBadge(s, k) {
+  if (CaseModel.changes(s, k)) return `<span class="badge new">Vorschlag ändert</span>`;
+  if (s.notUpdated[k]) return `<span class="badge keep">nicht aktualisiert</span>`;
+  if (s.edited[k]) return `<span class="badge edit">manuell</span>`;
+  if ((s.proposal ? s.proposal.clarifications : s.clarifications).some((c) => c.section === k)) return `<span class="badge open">Klärung offen</span>`;
+  return "";
+}
+function wireCommon(root) {
+  root.querySelectorAll("[data-act]").forEach((b) => b.addEventListener("click", () => dispatch({ type: b.dataset.act, section: b.dataset.section, fail: b.dataset.fail === "1" })));
+  root.querySelectorAll("[data-ref]").forEach((r) => r.addEventListener("click", () => { ui.openRef = ui.openRef === r.dataset.ref ? null : r.dataset.ref; render(); }));
+  root.querySelectorAll("textarea[data-notes]").forEach((t) => t.addEventListener("change", () => dispatch({ type: "editNotes", notes: t.value })));
+  root.querySelectorAll("textarea[data-transcript]").forEach((t) => t.addEventListener("change", () => dispatch({ type: "editTranscript", transcript: t.value })));
+  root.querySelectorAll("[data-editdraft]").forEach((t) => t.addEventListener("change", () => dispatch({ type: "editDraft", section: t.dataset.editdraft, text: t.value })));
+  root.querySelectorAll("[data-go]").forEach((b) => b.addEventListener("click", () => { ui.step = b.dataset.go; ui.editing = null; render(); }));
+  root.querySelectorAll("[data-phase]").forEach((b) => b.addEventListener("click", () => { ui.phase = b.dataset.phase; ui.editing = null; render(); }));
+  root.querySelectorAll("[data-edit]").forEach((b) => b.addEventListener("click", () => { ui.editing = b.dataset.edit; render(); }));
+  root.querySelectorAll("[data-doneedit]").forEach((b) => b.addEventListener("click", () => { ui.editing = null; render(); }));
+}
+function navBar(s) {
+  return `<div class="nav"><span class="title">${esc(s.caseId)}</span>
+    <span class="meta">${s.unsaved ? `<span class="unsaved">Nicht gespeichert: keine Verbindung</span>` : `Gespeichert ${esc(s.savedAt)}`}</span>
+    <span class="spacer"></span>
+    <button class="btn plain" data-act="networkLost" title="Simuliert einen Verbindungsabbruch">Verbindung weg?</button>
+    <button class="btn plain" data-act="generate" data-fail="1" ${CaseModel.can(s, "generate") ? "" : "disabled"}>Fehlschlag simulieren</button></div>`;
+}
+const toast = (s) => `<div class="changed">${esc(s.changed)}</div>`;
+const failBanner = (s) => (s.failure ? `<div class="banner fail">${esc(s.failure)}</div>` : "");
+const staleBanner = (s) => (CaseModel.stale(s) && !s.proposal ? `<div class="banner stale">Notizen seit diesem Entwurf geändert: Entwurf möglicherweise veraltet. Welche Abschnitte betroffen sind, zeigt erst ein neuer Vorschlag.</div>` : "");
+function proposalHeader(s) {
+  if (!s.proposal) return "";
+  const old = CaseModel.outdated(s), skip = CaseModel.skipped(s);
+  return `<div class="banner ${old ? "stale" : "proposal"}"><div><b>${old ? "Vorschlag veraltet: Notizen seit diesem Vorschlag geändert" : "Vorschlag aus den aktuellen Notizen"}</b><div class="hint">${old ? "Kann nicht übernommen werden. Verwerfen und neu erzeugen." : skip.length ? "Übernehmen gilt für den ganzen Entwurf, außer den von Hand bearbeiteten Abschnitten: " + esc(skip.map(title).join(", ")) + ". Diese bleiben und werden als „nicht aktualisiert“ markiert." : "Übernehmen gilt für den ganzen Entwurf; die Klärungsliste wird übernommen."}</div></div></div>`;
+}
+// Sidebar from round 1 variant C: cases first, then the steps of the review. Portrait shows a chip row instead.
+function sidebar(s, steps, current, portrait) {
+  const items = steps.map((st) => `<div class="item ${st.key === current ? "on" : ""} ${st.dim ? "dim" : ""}" data-go="${st.key}"><span class="step"><span class="num">${st.num}</span>${esc(st.label)}</span>${st.badge || ""}</div>`).join("");
+  if (portrait) return `<div class="chips">${steps.map((st) => `<button data-go="${st.key}" class="${st.key === current ? "on" : ""}">${st.num} ${esc(st.short || st.label)}</button>`).join("")}</div>`;
+  return `<div class="side"><div class="hdr">Fälle</div><div class="item on">${esc(s.caseId)}</div><div class="item dim">Fall L-0002 (fiktiv)</div><div class="item dim">Fall L-0003 (fiktiv)</div><div class="item dim">+ Neuer Fall</div>
+    <div class="hdr">Durchsicht</div>${items}</div>`;
+}
+// Dictation overlay from round 1 variant B.
+function dictationOverlay(s) {
+  const d = s.dictation.status;
+  if (d === "idle") return "";
+  return `<div class="overlay"><div class="card"><h3><span class="dot ${d}"></span>Diktat</h3><div class="state">${DICT_LABEL[d]}</div>
+    ${d === "recording" ? `<div class="wave"></div><div class="row"><button class="btn rec big" data-act="stopDictation">Diktat beenden</button></div>` : ""}
+    ${d === "transcribing" ? `<div class="hint">… bitte warten</div>` : ""}
+    ${d === "reviewing" ? `<textarea data-transcript>${esc(s.dictation.transcript)}</textarea><div class="row"><button class="btn big" data-act="acceptTranscript">In Notizen übernehmen</button><button class="btn danger" data-act="discardTranscript">Verwerfen</button><span class="hint" style="margin-left:auto">${s.proposal ? "Ein offener Vorschlag wird dadurch veraltet." : ""}</span></div>` : ""}
+  </div></div>`;
+}
+function notesStep(s, withGenerate) {
+  return `<div class="steptitle">Notizen <span class="n">frei, in beliebiger Reihenfolge; tippen, einfügen oder diktieren</span></div>
+    <div class="stepbody" style="display:flex;flex-direction:column;gap:10px">${failBanner(s)}${staleBanner(s)}
+      <textarea class="notes" data-notes ${CaseModel.can(s, "editNotes") ? "" : "readonly"} style="flex:1">${esc(s.notes)}</textarea></div>
+    <div class="stepfoot"><button class="btn quiet big" data-act="startDictation" ${CaseModel.can(s, "startDictation") ? "" : "disabled"}>🎙 Diktat starten</button><span class="hint">Eigenes Diktat nach der Untersuchung. Audio wird nach der Transkription gelöscht.</span><span class="grow"></span>
+      ${withGenerate ? `<button class="btn big" data-act="generate" ${CaseModel.can(s, "generate") ? "" : "disabled"}>${s.draft ? "Neuen Entwurf erzeugen" : "Entwurf erzeugen"}</button>` : ""}
+      ${s.proposal ? `<button class="btn big" data-go="${KEYS[0]}">Zur Durchsicht ›</button>` : ""}</div>`;
+}
+// The large comparison for one section: previous draft and proposal side by side (or stacked).
+function compare(s, k, stack) {
+  const cur = s.draft ? s.draft[k] : null, prop = s.proposal ? s.proposal.draft[k] : null, editing = ui.editing === k;
+  const curPane = editing
+    ? `<div class="pane"><h5>Bisheriger Entwurf (bearbeiten) <button class="btn plain" data-doneedit="${k}" style="margin-left:auto">Fertig</button></h5><textarea class="edittext" data-editdraft="${k}">${esc((cur || []).map((p) => p.text).join("\n"))}</textarea><div class="hint">Freier Text. Herkunftsangaben entfallen für umgeschriebene Absätze.</div></div>`
+    : `<div class="pane"><h5>Bisheriger Entwurf ${s.notUpdated[k] ? `<span class="badge keep">manuell bearbeitet, nicht aktualisiert</span>` : s.edited[k] ? `<span class="badge edit">manuell bearbeitet</span>` : ""}${s.draft ? `<button class="btn plain" data-edit="${k}" style="margin-left:auto">Bearbeiten</button>` : ""}</h5>${s.draft ? paragraphs(cur, { prefix: "C" + k }) : `<p class="hint">Noch kein Entwurf.</p>`}</div>`;
+  if (!s.proposal) return `<div class="cmp stack">${curPane}</div>`;
+  const propPane = `<div class="pane new"><h5>Vorschlag ${s.edited[k] ? `<span class="badge keep">wird übersprungen (manuell bearbeitet)</span>` : CaseModel.changes(s, k) ? `<span class="badge new">geändert</span>` : `<span class="badge edit">unverändert</span>`}</h5>${paragraphs(prop, { prefix: "P" + k, isNew: (p) => !(cur && cur.some((d) => d.text === p.text)) })}</div>`;
+  return `<div class="cmp ${stack ? "stack" : ""}">${curPane}${propPane}</div>`;
+}
+function sourceFor(s, k) {
+  const list = (s.proposal ? s.proposal.draft[k] : s.draft ? s.draft[k] : []) || [];
+  const refs = list.map((p) => p.ref).filter(Boolean);
+  if (!refs.length) return "";
+  return `<div class="src"><b>Aus deinen Notizen:</b> ${refs.map((r) => `„${esc(r)}“`).join(" · ")}</div>`;
+}
+function stepsFor(s, withFinal) {
+  const steps = [{ key: "notizen", num: 1, label: "Notizen", short: "Notizen", badge: s.dictation.status !== "idle" ? `<span class="badge new">Diktat</span>` : "" }];
+  KEYS.forEach((k, i) => steps.push({ key: k, num: i + 2, label: title(k), short: title(k).split(" ")[0], badge: sectionBadge(s, k) }));
+  if (withFinal) steps.push({ key: "abschluss", num: KEYS.length + 2, label: s.proposal ? "Übernehmen" : "Übergabe", short: s.proposal ? "Übernehmen" : "Übergabe", badge: s.proposal ? (CaseModel.outdated(s) ? `<span class="badge keep">veraltet</span>` : "") : (Object.keys(s.copied).length === KEYS.length ? `<span class="badge done">fertig</span>` : "") });
+  return steps;
+}
+function stepFooter(s, k, steps) {
+  const i = steps.findIndex((st) => st.key === k), prev = steps[i - 1], next = steps[i + 1];
+  return `<div class="stepfoot">${prev ? `<button class="btn quiet" data-go="${prev.key}">‹ ${esc(prev.label)}</button>` : ""}<span class="grow"></span>
+    ${s.proposal ? `<button class="btn danger" data-act="discard">Vorschlag verwerfen</button>` : ""}
+    ${s.draft && k !== "abschluss" && KEYS.includes(k) ? (s.copied[k] ? `<span class="badge done" style="padding:8px 12px">Kopiert ✓</span>` : `<button class="btn quiet" data-act="copy" data-section="${k}">Abschnitt kopieren</button>`) : ""}
+    ${next ? `<button class="btn" data-go="${next.key}">${esc(next.label)} ›</button>` : ""}</div>`;
+}
+function finalStep(s, steps) {
+  if (s.proposal) {
+    const skip = CaseModel.skipped(s), old = CaseModel.outdated(s);
+    return `<div class="steptitle">Vorschlag übernehmen <span class="n">eine Entscheidung für den ganzen Entwurf</span></div><div class="stepbody">${proposalHeader(s)}
+      <div class="hand"><div class="t">Ersetzt werden</div><div></div><div class="txt">${esc(KEYS.filter((k) => !s.edited[k] && CaseModel.changes(s, k)).map(title).join(", ") || "keine Änderungen")}</div></div>
+      <div class="hand"><div class="t">Bleiben wie von Hand bearbeitet</div><div></div><div class="txt">${esc(skip.map(title).join(", ") || "keine")}</div></div>
+      ${clarFor(s)}</div>
+      <div class="stepfoot"><button class="btn quiet" data-go="${steps[steps.length - 2].key}">‹ Zurück</button><span class="grow"></span><button class="btn danger" data-act="discard">Verwerfen</button><button class="btn big" data-act="accept" ${old ? "disabled" : ""}>${old ? "Veraltet, nicht übernehmbar" : "Vorschlag übernehmen"}</button></div>`;
+  }
+  return `<div class="steptitle">Übergabe in das Krankenhaussystem <span class="n">Abschnitt für Abschnitt als reiner Text kopieren</span></div><div class="stepbody">${staleBanner(s)}
+    ${KEYS.map((k) => `<div class="hand"><div class="t">${esc(title(k))} ${sectionBadge(s, k)}</div>${s.copied[k] ? `<span class="badge done" style="padding:8px 12px">Kopiert ✓</span>` : `<button class="btn quiet" data-act="copy" data-section="${k}" ${s.draft ? "" : "disabled"}>Kopieren</button>`}<div class="txt">${esc(((s.draft && s.draft[k]) || []).map((p) => p.text).join(" ") || "Keine Angaben in den Notizen.")}</div></div>`).join("")}${clarFor(s)}</div>
+    <div class="stepfoot"><button class="btn quiet" data-go="${steps[steps.length - 2].key}">‹ Zurück</button><span class="grow"></span><button class="btn" data-go="notizen">Notizen ergänzen</button></div>`;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Variants.
+// ---------------------------------------------------------------------------------------------
+const VARIANTS = {
+  A: {
+    name: "Ein Schritt je Abschnitt, Vergleich nebeneinander",
+    render(st) {
+      const s = app, portrait = st.orient === "portrait", steps = stepsFor(s, true), k = ui.step;
+      let main;
+      if (k === "notizen") main = notesStep(s, true);
+      else if (k === "abschluss") main = finalStep(s, steps);
+      else main = `<div class="steptitle">${esc(title(k))} ${sectionBadge(s, k)} <span class="n">Schritt ${KEYS.indexOf(k) + 2} von ${steps.length}</span></div>
+        <div class="stepbody">${failBanner(s)}${staleBanner(s)}${proposalHeader(s)}${compare(s, k, portrait)}${sourceFor(s, k)}${clarFor(s, k)}</div>${stepFooter(s, k, steps)}`;
+      return `<div class="page"><div class="status"></div>${navBar(s)}<div class="body">${sidebar(s, steps, k, portrait)}<div class="main">${main}${toast(s)}</div></div>${dictationOverlay(s)}</div>`;
+    },
+    wire(root) { wireCommon(root); },
+  },
+
+  B: {
+    name: "Ein Schritt je Abschnitt, Notizen bleiben sichtbar, Vergleich untereinander",
+    render(st) {
+      const s = app, portrait = st.orient === "portrait", steps = stepsFor(s, true), k = ui.step;
+      let main;
+      if (k === "notizen") main = notesStep(s, true);
+      else if (k === "abschluss") main = finalStep(s, steps);
+      else main = `<div style="flex:1;display:grid;grid-template-columns:${portrait ? "1fr" : "minmax(260px,34%) 1fr"};min-height:0">
+          ${portrait ? "" : `<div style="border-right:.5px solid var(--sep);display:flex;flex-direction:column;min-height:0;background:var(--cell)"><div class="hdr" style="padding:14px 16px 4px;font-size:12px;text-transform:uppercase;color:var(--label-2)">Notizen (zum Nachsehen)</div><textarea class="notes" data-notes readonly style="border:0;border-radius:0;flex:1;font-size:14px">${esc(s.notes)}</textarea><div class="stepfoot" style="border-top:.5px solid var(--sep)"><button class="btn quiet" data-go="notizen">Notizen bearbeiten</button></div></div>`}
+          <div class="main"><div class="steptitle">${esc(title(k))} ${sectionBadge(s, k)} <span class="n">Schritt ${KEYS.indexOf(k) + 2} von ${steps.length}</span></div>
+            <div class="stepbody">${failBanner(s)}${staleBanner(s)}${proposalHeader(s)}${compare(s, k, true)}${clarFor(s, k)}</div>${stepFooter(s, k, steps)}</div></div>`;
+      return `<div class="page"><div class="status"></div>${navBar(s)}<div class="body">${sidebar(s, steps, k, portrait)}<div class="main">${main}${toast(s)}</div></div>${dictationOverlay(s)}</div>`;
+    },
+    wire(root) { wireCommon(root); },
+  },
+
+  C: {
+    name: "Drei Phasen: Notizen, Durchsicht aller Abschnitte, Übergabe",
+    render(st) {
+      const s = app, portrait = st.orient === "portrait", p = ui.phase;
+      const phases = [
+        { key: "notizen", num: 1, label: "Notizen", badge: s.dictation.status !== "idle" ? `<span class="badge new">Diktat</span>` : "" },
+        { key: "durchsicht", num: 2, label: "Durchsicht", badge: s.proposal ? `<span class="badge ${CaseModel.outdated(s) ? "keep" : "new"}">${CaseModel.outdated(s) ? "veraltet" : "Vorschlag"}</span>` : CaseModel.stale(s) ? `<span class="badge keep">veraltet?</span>` : "" },
+        { key: "uebergabe", num: 3, label: "Übergabe", badge: Object.keys(s.copied).length === KEYS.length ? `<span class="badge done">fertig</span>` : "" },
+      ];
+      const side = portrait
+        ? `<div class="chips">${phases.map((ph) => `<button data-phase="${ph.key}" class="${ph.key === p ? "on" : ""}">${ph.num} ${ph.label}</button>`).join("")}</div>`
+        : `<div class="side"><div class="hdr">Fälle</div><div class="item on">${esc(s.caseId)}</div><div class="item dim">Fall L-0002 (fiktiv)</div><div class="item dim">Fall L-0003 (fiktiv)</div><div class="item dim">+ Neuer Fall</div>
+            <div class="hdr">Phasen</div>${phases.map((ph) => `<div class="item ${ph.key === p ? "on" : ""}" data-phase="${ph.key}"><span class="step"><span class="num">${ph.num}</span>${ph.label}</span>${ph.badge}</div>`).join("")}
+            ${p === "durchsicht" ? `<div class="hdr">Abschnitte</div>${KEYS.map((k) => `<div class="item" data-jump="${k}" style="min-height:36px;padding:6px 16px 6px 28px;font-size:13px">${esc(title(k))}${sectionBadge(s, k)}</div>`).join("")}` : ""}</div>`;
+      let main;
+      if (p === "notizen") main = notesStep(s, true).replace(`data-go="${KEYS[0]}"`, `data-phase="durchsicht"`);
+      else if (p === "uebergabe") main = finalStep(s, [{ key: "x" }, { key: "durchsicht" }]).replace(`data-go="durchsicht"`, `data-phase="durchsicht"`).replace(`data-go="notizen"`, `data-phase="notizen"`);
+      else main = `<div class="steptitle">Durchsicht <span class="n">alle Abschnitte untereinander; ${s.proposal ? "Vorschlag neben dem bisherigen Entwurf" : "bisheriger Entwurf"}</span></div>
+          <div class="stepbody">${failBanner(s)}${staleBanner(s)}${proposalHeader(s)}
+            ${KEYS.map((k) => `<div id="sec-${k}" style="margin:18px 0 6px;font-size:18px;font-weight:700;display:flex;gap:8px;align-items:center">${esc(title(k))}${sectionBadge(s, k)}</div>${compare(s, k, portrait)}${clarFor(s, k)}`).join("")}</div>
+          <div class="stepfoot"><button class="btn quiet" data-phase="notizen">‹ Notizen</button><span class="grow"></span>${s.proposal ? `<button class="btn danger" data-act="discard">Verwerfen</button><button class="btn big" data-act="accept" ${CaseModel.can(s, "accept") ? "" : "disabled"}>${CaseModel.outdated(s) ? "Veraltet, nicht übernehmbar" : "Vorschlag übernehmen" + (CaseModel.skipped(s).length ? " (" + CaseModel.skipped(s).length + " manuell bleibt)" : "")}</button>` : `<button class="btn" data-phase="uebergabe">Übergabe ›</button>`}</div>`;
+      return `<div class="page"><div class="status"></div>${navBar(s)}<div class="body">${side}<div class="main">${main}${toast(s)}</div></div>${dictationOverlay(s)}</div>`;
+    },
+    wire(root) {
+      wireCommon(root);
+      root.querySelectorAll("[data-jump]").forEach((b) => b.addEventListener("click", () => { const el = root.querySelector("#sec-" + b.dataset.jump); if (el) el.scrollIntoView({ block: "start" }); }));
+    },
+  },
+};
+
+// ---------------------------------------------------------------------------------------------
+// Shell (unchanged from ios-shell.html except TARGETS).
+// ---------------------------------------------------------------------------------------------
+const DEVICES = {
+  iphone: { size: [402, 874], radius: 55 },
+  ipad: { size: [834, 1194], radius: 18 },
+};
+const TARGETS = ["ipad"];
+
+const q = new URLSearchParams(location.search);
+const state = {
+  variant: VARIANTS[q.get("variant")] ? q.get("variant") : "A",
+  device: TARGETS.includes(q.get("device")) ? q.get("device") : TARGETS[0],
+  orient: q.get("orient") === "landscape" ? "landscape" : "portrait",
+};
+const bleed = q.has("bleed") || matchMedia("(pointer: coarse)").matches;
+const device = document.getElementById("device");
+const screen = document.getElementById("screen");
+document.body.classList.toggle("bleed", bleed);
+if (TARGETS.length < 2) document.querySelectorAll("[data-device]").forEach((b) => b.remove());
+if (!TARGETS.includes("ipad")) document.querySelector("[data-orient]").remove();
+
+function layout() {
+  const d = DEVICES[state.device];
+  const [w, h] = state.orient === "landscape" ? [d.size[1], d.size[0]] : d.size;
+  if (bleed) {
+    Object.assign(device.style, { width: "100vw", height: "100vh", transform: "none" });
+    return;
+  }
+  const stage = document.getElementById("stage").getBoundingClientRect();
+  const scale = Math.min(1, (stage.width - 32) / w, (stage.height - 32) / h);
+  device.style.setProperty("--radius", d.radius + "px");
+  Object.assign(device.style, { width: w + "px", height: h + "px", transform: `translate(-50%, -50%) scale(${scale})` });
+}
+
+function render() {
+  const v = VARIANTS[state.variant];
+  screen.className = `v-${state.variant} ${state.device} ${state.orient}`;
+  screen.innerHTML = v.render(state);
+  v.wire(screen, state);
+  document.querySelector("#pill .label").textContent = `${state.variant} (${v.name})`;
+  document.querySelectorAll("[data-device]").forEach((b) => b.setAttribute("aria-pressed", b.dataset.device === state.device));
+  layout();
+}
+
+function push(container, html) {
+  const page = document.createElement("div");
+  page.className = "page push-in";
+  page.innerHTML = html;
+  container.appendChild(page);
+  return page;
+}
+function pop(page) {
+  page.classList.replace("push-in", "pop-out");
+  page.addEventListener("animationend", () => page.remove(), { once: true });
+}
+function sheet(container, html) {
+  const backdrop = document.createElement("div");
+  const panel = document.createElement("div");
+  backdrop.className = "sheet-backdrop";
+  panel.className = "sheet";
+  panel.innerHTML = html;
+  container.append(backdrop, panel);
+  requestAnimationFrame(() => requestAnimationFrame(() => { backdrop.classList.add("open"); panel.classList.add("open"); }));
+  const close = () => { backdrop.remove(); panel.remove(); };
+  backdrop.onclick = close;
+  return { panel, close };
+}
+
+function step(n) {
+  const keys = Object.keys(VARIANTS);
+  state.variant = keys[(keys.indexOf(state.variant) + n + keys.length) % keys.length];
+  render();
+}
+document.getElementById("pill").addEventListener("click", (e) => {
+  const b = e.target.closest("button");
+  if (!b) return;
+  if (b.dataset.step) step(Number(b.dataset.step));
+  if (b.dataset.device) { state.device = b.dataset.device; render(); }
+  if (b.hasAttribute("data-orient")) { state.orient = state.orient === "portrait" ? "landscape" : "portrait"; render(); }
+});
+addEventListener("keydown", (e) => {
+  if (e.key === "ArrowLeft") step(-1);
+  if (e.key === "ArrowRight") step(1);
+});
+addEventListener("resize", layout);
+render();
+
+if (q.has("tour")) {
+  const order = q.get("tour").split(",").filter((v) => VARIANTS[v]);
+  const show = (i) => {
+    if (i >= order.length) return;
+    state.variant = order[i];
+    render();
+    setTimeout(() => fetch(`__shot?${order[i]}`).catch(() => {}).finally(() => setTimeout(() => show(i + 1), 4000)), 800);
+  };
+  show(0);
+}
+</script>
+</body>
+</html>

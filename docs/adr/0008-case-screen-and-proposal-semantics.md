@@ -1,9 +1,11 @@
 ---
-status: accepted
+status: layout under revision since 2026-11-08 (operator feedback on the prototypes; see docs/prototypes/SPEC-1/case-wizard.html); proposal semantics accepted
 date: 2026-11-08
 ---
 
 # The case screen is two columns with one whole-draft proposal that never overwrites manual edits
+
+> Revision note (2026-11-08): after seeing the prototypes the operator asked for the sidebar of variant C (cases, then sections) for orientation, the full dictation overlay of variant B, a larger previous/new comparison and a wizard-style review instead of one dense screen. The layout paragraph below is therefore under revision; a second prototype round (`case-wizard.html`) is with the operator. The proposal semantics in this ADR are unaffected and remain accepted.
 
 Settled in grilling 3 on the prototype `docs/prototypes/SPEC-1/case-screen.html` (variant A chosen, with the section badges of variant C). The case screen shows the notes and the draft as one continuous letter side by side on wide screens, and as Notizen/Entwurf tabs on a portrait iPad. The dictation bar and the transcript review sit under the notes. The draft is freely editable by hand.
 
