@@ -51,16 +51,35 @@ _Avoid_: output, result, generated letter
 **Generation**:
 The explicit action by which the physician asks for a new draft from the current notes. Nothing is generated without it.
 
+**Proposal**:
+The result of one generation, held next to the current draft until the physician accepts or discards it as a whole. There is no per-section acceptance.
+_Avoid_: suggestion, candidate, new version
+
+**Notes revision**:
+The exact state of the notes a proposal was generated from. A proposal is bound to it; when the notes move on, the proposal becomes outdated.
+
+**Outdated proposal**:
+A proposal whose notes revision is no longer the current notes. It stays visible, cannot be accepted, and must be discarded before a new generation.
+_Avoid_: stale proposal, expired
+
 **Stale draft**:
-A draft whose notes changed after it was generated. Lindra marks it; it does not regenerate on its own.
+A draft whose notes changed after it was generated. Lindra marks the whole draft with one banner; it does not guess which sections are affected and does not regenerate on its own.
+
+**Manually edited section**:
+A section of the draft whose text the physician changed by hand. Accepting a proposal leaves it untouched and labels it as not updated; the proposal's alternative for it stays visible until the proposal is accepted or discarded.
+_Avoid_: locked section, protected section
 
 **Clarification list**:
 The list of information the physician must still supply or resolve because the notes were missing it or contradicted themselves. Lindra still drafts every section the notes support.
 _Avoid_: warnings, errors, gaps, validation
 
 **Input reference**:
-The pointer from a paragraph of the draft to the passage of the notes it was written from. It shows origin, not correctness.
+The pointer from a generated paragraph of the draft to the passage of the notes it was written from, revealed on tap. It shows origin, not correctness, and a paragraph the physician rewrote loses it.
 _Avoid_: citation, source, confidence
+
+**Section badge**:
+A small label on a section heading that says one of three things: the pending proposal changes this section, the section was manually edited, or the clarification list has an open item for it. Never a clinical verification.
+_Avoid_: status, checkmark
 
 ### Clinical content
 

@@ -15,6 +15,11 @@
   and ?scene=dictation (transcript ready for review). Free play works from either.
   Assumptions: Lindra is a browser app, not a native iOS app, so the iOS shell frame is only a
   convenient device frame. All data is the fictional case L-0001; nothing here is real.
+  Decision (grilling 3, 2026-11-08, ADR 0008): variant A, with C's section badges carried into A's
+  headings. After the decision the CaseModel reducer was corrected: accepting a proposal keeps every
+  manually edited section (labelled "manuell bearbeitet, nicht aktualisiert"), a proposal whose notes
+  revision is no longer current is outdated and cannot be accepted, and no per-section staleness is
+  guessed (one document-wide banner). The first version replaced edited sections; that is not normative.
 -->
 <style>
 :root {
@@ -234,6 +239,7 @@ const CaseModel = (() => {
       draftNotes: null,       // notes snapshot the draft was generated from
       proposal: null,         // { draft, clarifications, notes } or null
       edited: {},             // section -> true when the physician edited the draft text by hand
+      notUpdated: {},         // section -> true when the last acceptance skipped it because it was edited
       dictation: { status: "idle", transcript: "" },
       failure: null,
       copied: null,
@@ -255,13 +261,18 @@ const CaseModel = (() => {
   }
 
   const stale = (s) => !!s.draft && s.draftNotes !== s.notes;
+  // A proposal is bound to the notes revision it was generated from; once the notes move on it is outdated.
+  const outdated = (s) => !!s.proposal && s.proposal.notes !== s.notes;
+  // Sections an acceptance would skip because the physician edited them by hand.
+  const skipped = (s) => (s.proposal ? SECTIONS.map((x) => x[0]).filter((k) => s.edited[k]) : []);
 
   // Which actions are legal now. The page greys out what is not.
   function can(s, type) {
     const d = s.dictation.status;
     switch (type) {
       case "generate": return s.notes.trim().length > 0 && d !== "recording" && d !== "transcribing" && !s.proposal;
-      case "accept": case "discard": return !!s.proposal;
+      case "accept": return !!s.proposal && !outdated(s);
+      case "discard": return !!s.proposal;
       case "startDictation": return d === "idle";
       case "stopDictation": return d === "recording";
       case "acceptTranscript": case "discardTranscript": case "editTranscript": return d === "reviewing";
@@ -287,16 +298,26 @@ const CaseModel = (() => {
         n.proposal = { draft: v2 ? DRAFT_V2 : DRAFT_V1, clarifications: v2 ? CLAR_V2 : CLAR_V1, notes: s.notes };
         n.changed = s.draft ? "Neuer Entwurf liegt als Vorschlag vor; dein bisheriger Entwurf bleibt bis zur Übernahme." : "Erster Entwurf liegt als Vorschlag vor.";
         return n;
-      case "accept":
+      case "accept": {
         if (!can(s, "accept")) return s;
-        n.draft = s.proposal.draft; n.clarifications = s.proposal.clarifications; n.draftNotes = s.proposal.notes; n.proposal = null; n.edited = {};
-        n.changed = "Vorschlag übernommen. Handbearbeitungen des alten Entwurfs sind ersetzt, weil du es bestätigt hast."; return n;
+        const keep = skipped(s);
+        n.draft = Object.assign({}, s.proposal.draft);
+        n.notUpdated = {};
+        keep.forEach((k) => { n.draft[k] = s.draft[k]; n.notUpdated[k] = true; });
+        n.clarifications = s.proposal.clarifications; n.draftNotes = s.proposal.notes; n.proposal = null;
+        n.changed = keep.length
+          ? "Vorschlag übernommen. Von Hand bearbeitete Abschnitte bleiben unverändert und sind als „nicht aktualisiert“ markiert: " + keep.map(title).join(", ") + "."
+          : "Vorschlag übernommen. Klärungsliste des Vorschlags gilt jetzt für den Fall.";
+        return n;
+      }
       case "discard":
         if (!can(s, "discard")) return s;
         n.proposal = null; n.changed = "Vorschlag verworfen. Bisheriger Entwurf bleibt."; return n;
       case "editDraft":
         n.draft = Object.assign({}, s.draft); n.draft[a.section] = [{ text: a.text, ref: null }];
-        n.edited = Object.assign({}, s.edited); n.edited[a.section] = true; n.changed = "Abschnitt von Hand bearbeitet; Herkunftsangabe entfällt für diesen Absatz."; return n;
+        n.edited = Object.assign({}, s.edited); n.edited[a.section] = true;
+        n.notUpdated = Object.assign({}, s.notUpdated); delete n.notUpdated[a.section];
+        n.changed = "Abschnitt von Hand bearbeitet; Herkunftsangabe entfällt. Klärungspunkte bleiben offen, bis du sie löst."; return n;
       case "startDictation":
         if (!can(s, "startDictation")) return s;
         n.dictation = { status: "recording", transcript: "" }; n.changed = "Aufnahme läuft. Nur deine eigene Stimme."; return n;
@@ -322,7 +343,7 @@ const CaseModel = (() => {
     }
   }
 
-  return { SECTIONS, initial, reduce, can, stale, TRANSCRIPT };
+  return { SECTIONS, initial, reduce, can, stale, outdated, skipped, TRANSCRIPT };
 })();
 
 // ---------------------------------------------------------------------------------------------
@@ -330,7 +351,7 @@ const CaseModel = (() => {
 // ---------------------------------------------------------------------------------------------
 const q0 = new URLSearchParams(location.search);
 let app = CaseModel.initial(q0.get("scene") || "proposal");
-const ui = { tab: "notizen", section: "schmerzanamnese", openRef: null };
+const ui = { tab: "notizen", section: "schmerzanamnese", openRef: null, editing: null };
 function dispatch(a) { app = CaseModel.reduce(app, a); render(); if (a.type === "stopDictation") setTimeout(() => dispatch({ type: "transcriptReady" }), 1500); }
 const esc = (t) => t.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const title = (key) => CaseModel.SECTIONS.find((s) => s[0] === key)[1];
@@ -352,12 +373,18 @@ function clarList(items) {
   if (!items.length) return "";
   return `<div class="clar"><h4>Klärungsliste</h4><ul style="margin:0;padding-left:18px">${items.map((c) => `<li><b>${esc(title(c.section))}:</b> ${esc(c.text)}</li>`).join("")}</ul></div>`;
 }
-function sectionStale(s, key) {
-  if (!CaseModel.stale(s)) return false;
-  // Crude: a section is marked stale when the proposal (or a fresh generation) would change it. Without a proposal, every section is "possibly stale".
-  if (!s.proposal) return true;
-  return JSON.stringify(s.proposal.draft[key]) !== JSON.stringify(s.draft[key]);
+// Per-section staleness is never guessed (grilling 3). A section badge says only one of three things:
+// the pending proposal changes it, it was manually edited (and possibly skipped on the last acceptance), or a clarification item is open for it.
+function proposalChanges(s, key) {
+  return !!s.proposal && JSON.stringify(s.proposal.draft[key]) !== JSON.stringify(s.draft ? s.draft[key] : null);
 }
+function badges(s, key) {
+  const items = s.proposal ? s.proposal.clarifications : s.clarifications;
+  return (proposalChanges(s, key) ? `<span class="staleflag" style="background:var(--proposal);color:#0b4f4f">Vorschlag ändert</span>` : "")
+    + (s.notUpdated[key] ? `<span class="staleflag">manuell bearbeitet, nicht aktualisiert</span>` : s.edited[key] ? `<span class="staleflag" style="background:var(--fill);color:var(--label-2)">manuell bearbeitet</span>` : "")
+    + (items.some((c) => c.section === key) ? `<span class="staleflag" style="background:#fdecea;color:var(--red)">Klärung offen</span>` : "");
+}
+function sectionStale(s, key) { return proposalChanges(s, key); }
 function wireCommon(root) {
   root.querySelectorAll("[data-act]").forEach((b) => b.addEventListener("click", () => dispatch({ type: b.dataset.act, section: b.dataset.section, fail: b.dataset.fail === "1" })));
   root.querySelectorAll("[data-ref]").forEach((r) => r.addEventListener("click", () => { ui.openRef = ui.openRef === r.dataset.ref ? null : r.dataset.ref; render(); }));
@@ -399,24 +426,36 @@ const VARIANTS = {
       const s = app, portrait = st.orient === "portrait";
       const st_ = CaseModel.stale(s);
       const seg = portrait ? `<span class="seg"><button data-tab="notizen" class="${ui.tab === "notizen" ? "on" : ""}">Notizen</button><button data-tab="entwurf" class="${ui.tab === "entwurf" ? "on" : ""}">Entwurf${s.proposal ? " •" : ""}</button></span>` : "";
-      const draftDoc = s.draft ? CaseModel.SECTIONS.map((sec) => `<div class="sec"><div class="sec-title">${esc(sec[1])}${sectionStale(s, sec[0]) ? `<span class="staleflag">veraltet?</span>` : ""}
-          ${s.copied === sec[0] ? `<span class="copied">Kopiert ✓</span>` : `<button class="copy" data-act="copy" data-section="${sec[0]}">Abschnitt kopieren</button>`}</div>
-          ${paragraphs(s.draft[sec[0]], { prefix: "A" + sec[0] })}</div>`).join("") : `<p class="hint" style="padding:20px">Noch kein Entwurf. „Entwurf erzeugen“ schreibt einen Vorschlag aus den Notizen.</p>`;
-      const proposalDoc = s.proposal ? `<div class="banner proposal"><b>Vorschlag aus den aktuellen Notizen</b><span class="grow"></span>
-          <button class="btn" data-act="accept">Übernehmen</button><button class="btn danger" data-act="discard">Verwerfen</button></div>
-          <div class="doc" style="background:var(--proposal)">${CaseModel.SECTIONS.map((sec) => `<div class="sec"><div class="sec-title">${esc(sec[1])}</div>${paragraphs(s.proposal.draft[sec[0]], { prefix: "P" + sec[0], isNew: (p) => !(s.draft && s.draft[sec[0]].some((d) => d.text === p.text)) })}</div>`).join("")}${clarList(s.proposal.clarifications)}</div>
-          <div class="banner stale">Dein bisheriger Entwurf (bleibt, bis du den Vorschlag übernimmst)${Object.keys(s.edited).length ? "; enthält Handbearbeitungen" : ""}</div>` : "";
+      const old = CaseModel.outdated(s), skip = CaseModel.skipped(s);
+      const draftDoc = s.draft ? CaseModel.SECTIONS.map((sec) => {
+        const k = sec[0], editing = ui.editing === k;
+        return `<div class="sec"><div class="sec-title">${esc(sec[1])}${badges(s, k)}
+          ${editing ? `<button class="copy" data-doneedit="${k}">Fertig</button>` : `<button class="copy" data-edit="${k}">Bearbeiten</button>`}
+          ${s.copied === k ? `<span class="copied" style="margin-left:8px">Kopiert ✓</span>` : `<button class="copy" style="margin-left:8px" data-act="copy" data-section="${k}">Abschnitt kopieren</button>`}</div>
+          ${editing ? `<textarea data-editdraft="${k}" style="width:100%;min-height:90px;border:1.5px solid var(--tint);border-radius:8px;padding:8px;font:inherit;resize:vertical">${esc((s.draft[k] || []).map((p) => p.text).join("\n"))}</textarea><div class="hint">Freier Text. Herkunftsangaben entfallen für umgeschriebene Absätze.</div>` : paragraphs(s.draft[k], { prefix: "A" + k })}</div>`;
+      }).join("") : `<p class="hint" style="padding:20px">Noch kein Entwurf. „Entwurf erzeugen“ schreibt einen Vorschlag aus den Notizen.</p>`;
+      const proposalDoc = s.proposal ? `<div class="banner ${old ? "stale" : "proposal"}"><div><b>${old ? "Vorschlag: Notizen seit diesem Vorschlag geändert" : "Vorschlag aus den aktuellen Notizen"}</b>
+            <div class="hint">${old ? "Kann nicht übernommen werden. Verwerfen und neu erzeugen." : skip.length ? "Übernehmen ersetzt alle Abschnitte außer den von Hand bearbeiteten: " + esc(skip.map(title).join(", ")) + ". Diese bleiben und werden als „nicht aktualisiert“ markiert." : "Übernehmen ersetzt den ganzen Entwurf; Klärungsliste wird übernommen."}</div></div><span class="grow"></span>
+          <button class="btn" data-act="accept" ${CaseModel.can(s, "accept") ? "" : "disabled"}>Übernehmen</button><button class="btn danger" data-act="discard">Verwerfen</button></div>
+          <div class="doc" style="background:${old ? "#f6f1e3" : "var(--proposal)"}">${CaseModel.SECTIONS.map((sec) => `<div class="sec"><div class="sec-title">${esc(sec[1])}${s.edited[sec[0]] ? `<span class="staleflag">wird übersprungen (manuell bearbeitet)</span>` : ""}</div>${paragraphs(s.proposal.draft[sec[0]], { prefix: "P" + sec[0], isNew: (p) => !(s.draft && s.draft[sec[0]].some((d) => d.text === p.text)) })}</div>`).join("")}${clarList(s.proposal.clarifications)}</div>
+          <div class="banner stale">Dein bisheriger Entwurf (bleibt, bis du den Vorschlag übernimmst)</div>` : "";
       return `<div class="page"><div class="status"></div>${navBar(s, seg)}${failBanner(s)}
         <div class="cols">
           <div class="col ${portrait && ui.tab !== "notizen" ? "hidden" : ""}"><div class="colhead">Notizen<span class="grow"></span><span class="hint">frei, in beliebiger Reihenfolge</span></div>
             <div class="scroll"><textarea class="notes" data-notes ${CaseModel.can(s, "editNotes") ? "" : "readonly"}>${esc(s.notes)}</textarea></div>
             ${s.dictation.status === "reviewing" ? `<div class="review">${transcriptReview(s)}</div>` : ""}
             <div class="dictbar">${dictationControls(s)}<span class="grow"></span><span class="hint">Eigenes Diktat, kein Patientengespräch. Audio wird nach der Transkription gelöscht.</span></div></div>
-          <div class="col ${portrait && ui.tab !== "entwurf" ? "hidden" : ""}"><div class="colhead">Entwurf der ärztlichen Abschnitte<span class="grow"></span>${st_ && !s.proposal ? `<span class="staleflag">Notizen geändert: Entwurf möglicherweise veraltet</span>` : ""}</div>
+          <div class="col ${portrait && ui.tab !== "entwurf" ? "hidden" : ""}"><div class="colhead">Entwurf der ärztlichen Abschnitte<span class="grow"></span></div>
+            ${st_ ? `<div class="banner stale">Notizen seit diesem Entwurf geändert: Entwurf möglicherweise veraltet. Welche Abschnitte betroffen sind, zeigt erst ein neuer Vorschlag.</div>` : ""}
             <div class="scroll">${proposalDoc}<div class="doc">${draftDoc}${s.draft ? clarList(s.clarifications) : ""}</div></div></div>
         </div>${changedToast(s)}</div>`;
     },
-    wire(root) { wireCommon(root); root.querySelectorAll("[data-tab]").forEach((b) => b.addEventListener("click", () => { ui.tab = b.dataset.tab; render(); })); },
+    wire(root) {
+      wireCommon(root);
+      root.querySelectorAll("[data-tab]").forEach((b) => b.addEventListener("click", () => { ui.tab = b.dataset.tab; render(); }));
+      root.querySelectorAll("[data-edit]").forEach((b) => b.addEventListener("click", () => { ui.editing = b.dataset.edit; render(); }));
+      root.querySelectorAll("[data-doneedit]").forEach((b) => b.addEventListener("click", () => { ui.editing = null; render(); }));
+    },
   },
 
   B: {
@@ -438,8 +477,8 @@ const VARIANTS = {
           <div class="noteswrap"><div class="noteshead"><b>Notizen</b><span class="spacer" style="flex:1"></span>${dictationControls(s, "hint")}</div>
             <textarea class="notes" data-notes ${CaseModel.can(s, "editNotes") ? "" : "readonly"}>${esc(s.notes)}</textarea></div>
           <div style="display:flex;flex-direction:column;min-height:0">
-            <div class="toolbar"><b>Entwurf</b>${CaseModel.stale(s) && !s.proposal ? `<span class="staleflag">Notizen geändert: Entwurf möglicherweise veraltet</span>` : ""}<span style="flex:1"></span>
-              ${s.proposal ? `<span style="color:#0b4f4f;font-size:14px">Vorschlag liegt vor</span><button class="btn" data-act="accept">Vorschlag übernehmen</button><button class="btn danger" data-act="discard">Verwerfen</button>` : ""}</div>
+            <div class="toolbar"><b>Entwurf</b>${CaseModel.stale(s) ? `<span class="staleflag">Notizen geändert: Entwurf möglicherweise veraltet</span>` : ""}<span style="flex:1"></span>
+              ${s.proposal ? `<span style="color:#0b4f4f;font-size:14px">${CaseModel.outdated(s) ? "Notizen seit diesem Vorschlag geändert" : "Vorschlag liegt vor"}</span><button class="btn" data-act="accept" ${CaseModel.can(s, "accept") ? "" : "disabled"}>Vorschlag übernehmen</button><button class="btn danger" data-act="discard">Verwerfen</button>` : ""}</div>
             <div class="cards">${clar}${cards}</div></div>
         </div>${changedToast(s)}</div>`;
     },
@@ -489,7 +528,7 @@ const VARIANTS = {
           <div class="focus"><div class="focushead"><b>${esc(title(key))}</b>${sectionStale(s, key) && !s.proposal ? `<span class="staleflag">veraltet?</span>` : ""}<span style="flex:1"></span>
               ${s.copied === key ? `<span class="copied">Kopiert ✓</span>` : `<button class="btn plain" data-act="copy" data-section="${key}">Abschnitt kopieren</button>`}</div>
             <div class="focusbody">${focus}</div>
-            <div class="focusfoot">${s.proposal ? `<span class="hint">Der Vorschlag gilt für alle Abschnitte.</span><span style="flex:1"></span><button class="btn" data-act="accept">Vorschlag übernehmen</button><button class="btn danger" data-act="discard">Verwerfen</button>` : `<span class="hint">${CaseModel.stale(s) ? "Notizen seit dem Entwurf geändert." : "Entwurf passt zu den Notizen."}</span>`}</div></div>
+            <div class="focusfoot">${s.proposal ? `<span class="hint">${CaseModel.outdated(s) ? "Notizen seit diesem Vorschlag geändert." : "Der Vorschlag gilt für alle Abschnitte."}</span><span style="flex:1"></span><button class="btn" data-act="accept" ${CaseModel.can(s, "accept") ? "" : "disabled"}>Vorschlag übernehmen</button><button class="btn danger" data-act="discard">Verwerfen</button>` : `<span class="hint">${CaseModel.stale(s) ? "Notizen seit dem Entwurf geändert." : "Entwurf passt zu den Notizen."}</span>`}</div></div>
         </div>${changedToast(s)}</div>`;
     },
     wire(root) { wireCommon(root); root.querySelectorAll("[data-sec]").forEach((b) => b.addEventListener("click", () => { ui.section = b.dataset.sec; render(); })); },
