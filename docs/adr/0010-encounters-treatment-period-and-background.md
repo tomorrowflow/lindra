@@ -9,7 +9,7 @@ Settled in grill 4. This widens release one beyond the admission assessment (the
 
 ## Cases and the treatment period
 
-- Creating a case collects the fictional case identifier, the date and time of the admission assessment, an optional short label, and the treatment period as inclusive Behandlungsbeginn and Behandlungsende dates. No patient name, birth date or hospital number is ever collected (ADR 0002, ADR 0006).
+- Creating a case collects the case number (primary identifier), a required patient name (grill 5; shown as subtitle in the sidebar and in the case header), the date and time of the admission assessment, an optional short label, and the treatment period as inclusive Behandlungsbeginn and Behandlungsende dates. No birth date, address or other identifying data is collected, and no patient-management workflow exists. In the evaluation release the case number and the patient name are fictional (ADR 0006); hospital-issued case numbers are a later integration concern (ADR 0002).
 - Every encounter's date must lie in the treatment period; the visit date picker is constrained to it and the time is free within the chosen day. A new visit defaults to now when now lies in the period and to nothing otherwise; backdating within the period is allowed.
 - The period can be corrected later. A change that would leave an existing encounter outside the period is refused and the conflicting encounters are named. Encounters are never deleted or moved by a period change.
 

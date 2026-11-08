@@ -20,11 +20,24 @@ The interdisciplinary multimodal pain-therapy team the physician belongs to. In 
 ### The work
 
 **Case**:
-One patient admission as the physician works on it in Lindra: a fictional case identifier, an optional short label, the treatment period, one admission assessment and any number of visits. A case is never the patient's record.
+One patient admission as the physician works on it in Lindra: a case number, a patient name, an optional short label, the treatment period, one admission assessment and any number of visits. A case is never the patient's record.
 _Avoid_: patient, chart, file, record
 
-**Case identifier**:
-The short fictional label the physician gives a case to find it again. It is never a patient name, date of birth or hospital number.
+**Case number**:
+The primary identifier of a case, given by the physician when creating it. In the evaluation release it is fictional; hospital-issued case numbers are a later integration concern.
+_Avoid_: case identifier, case ID, Fallnummer des Krankenhauses
+
+**Patient name**:
+The required name shown as the case's subtitle in the sidebar and in the case header so the physician recognises the case. In the evaluation release it is always fictional; it creates no patient-management workflow and no other identifying data (birth date, address) is collected.
+_Avoid_: patient record, demographics
+
+**Status area**:
+The top-right region of the screen that shows connection, saving, generation and failure state without shifting the layout. Indicators there are never styled as buttons; recovery actions such as retry are separate buttons.
+_Avoid_: toast, flyout, snackbar
+
+**Action bar**:
+The bottom control region of a step whose buttons keep stable size and position across steps while the content above scrolls. The microphone control aligns with it.
+_Avoid_: footer, toolbar
 
 **Treatment period**:
 The inclusive span from Behandlungsbeginn to Behandlungsende within which every encounter of the case must lie. It can be corrected later, but never so that an existing encounter falls outside it.
@@ -109,7 +122,7 @@ The pointer from a generated paragraph of the draft to the passage of the notes 
 _Avoid_: citation, source, confidence
 
 **Section badge**:
-A small icon on a section heading or sidebar entry that says one thing: the pending proposal changes this section, the section was manually edited, it was not updated on the last acceptance, the clarification list has an open item for it, or it was copied. Never a clinical verification. The explanation opens on tap; the badge itself carries no sentence.
+A small icon on a section heading or sidebar entry that says one thing: the pending proposal changes this section, the section was manually edited, it was not updated on the last acceptance, the clarification list has an open item for it, or it was copied. Never a clinical verification. The explanation opens on tap; on the active section the consequential states "Veraltet" and "Nicht aktualisiert" carry their short word next to the icon.
 _Avoid_: status, checkmark, banner
 
 ### Clinical content

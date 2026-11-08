@@ -11,5 +11,6 @@ We chose this because the legal frame (`docs/research/2026-11-04-legal-frame-pat
 
 ## Consequences
 
+- Every case number and patient name in the cast is invented; real names appear only after the separate approval, never in the repository.
 - The fictional cast covers: a simple single pain problem with clear prior therapy and supplied justification; multiple pain problems, therapies and impacts; and a case with contradictory doses, unclear time references and a missing inpatient justification, where leaving gaps is the correct result.
 - The evaluation itself (the physician's timing and judgement) is operator-run and recorded in the repository as a result, not assumed.

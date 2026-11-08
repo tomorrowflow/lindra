@@ -11,5 +11,5 @@ We chose copy-out because the exchange research (`docs/research/2026-11-04-pain-
 
 ## Consequences
 
-- A case in Lindra is a working copy identified by a fictional case identifier, never by patient name, date of birth or hospital number.
+- A case in Lindra is a working copy identified by a case number with the patient name as its subtitle (ADR 0010, grill 5); no birth date or other demographics are held. In the evaluation release both are fictional (ADR 0006). Taking over hospital-issued case numbers is a later integration concern, not release one.
 - Letter formatting beyond plain text is the hospital system's job.
