@@ -1,0 +1,2 @@
+# Third-party files are vendored byte for byte; their whitespace is not ours to fix.
+lindra/static/vendor/** -whitespace
