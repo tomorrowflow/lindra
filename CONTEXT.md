@@ -95,6 +95,10 @@ _Avoid_: test data, sample patients, demo data
 **Evaluation release**:
 What the first release is: a release used only with the fictional cast to judge whether Lindra saves the physician time without fabricating or losing facts. Use with real patient data needs a separate approval.
 
+**Hosted inference**:
+A text model run by an outside provider, allowed only as a comparison backend in the fictional-case evaluation, never as a product backend or fallback. Hosting in the EU does not make it local.
+_Avoid_: cloud fallback, local, EU-local
+
 **Stand-in**:
 The deterministic replacement for an outside service in tests and in the test environment: the fixture model for the text model, canned transcripts for speech recognition.
 _Avoid_: mock, fake, simulator

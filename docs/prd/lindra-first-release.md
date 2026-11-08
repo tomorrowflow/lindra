@@ -12,7 +12,7 @@ The tools on the market record consultations ambiently and write generic notes. 
 
 Lindra is a German web application on her iPad and desktop. She opens a case under a fictional case identifier and puts her notes in, either by typing or pasting free text, or by dictating her own notes after the assessment and correcting the transcript. When she asks for it, Lindra proposes a draft of the letter sections next to her notes, in the hospital's section structure, written only from what she supplied. Every paragraph shows which part of the notes it came from. Whatever the notes did not say, or said twice in contradiction, lands on a clarification list instead of in the draft. She edits the draft, copies each section as plain text into the hospital system, and is done.
 
-Lindra never invents diagnoses, interpretations, causes or justifications, never ranks pain problems, never recommends treatment and never assesses doses (ADR 0001). It runs on self-hosted models with no cloud path (ADR 0003). The first release is evaluated only on three fictional cases (ADR 0006); its target is at least 30 percent less total preparation time, including review and correction, with no fabricated clinical statement and no lost relevant fact.
+Lindra never invents diagnoses, interpretations, causes or justifications, never ranks pain problems, never recommends treatment and never assesses doses (ADR 0001). It runs on self-hosted models with no cloud path in the product (ADR 0003); a hosted text model may be compared against the self-hosted one in the fictional-case evaluation only. The first release is evaluated only on three fictional cases (ADR 0006); its target is at least 30 percent less total preparation time, including review and correction, with no fabricated clinical statement and no lost relevant fact.
 
 ## User Stories
 
@@ -49,6 +49,7 @@ Generation and the draft
 23. As the physician, I want each paragraph of the draft to show the passage of my notes it came from, without a confidence score or any claim that it is correct, so that I can check origin quickly and still judge content myself.
 24. As the physician, I want to copy a single section as plain text with one action, so that pasting into the hospital system is fast and keeps the hospital's formatting.
 25. As the physician, I want the text model to run self-hosted with no cloud fallback, so that patient information never leaves our own hardware.
+25a. As the operator, I want to compare the self-hosted text model against a hosted one on the fictional cast only, in a configuration I launch explicitly, so that I learn whether local inference is good enough without any real data or default cloud path.
 
 Clinical fidelity
 
@@ -70,7 +71,7 @@ Evaluation and operation
 38. As the physician, I want to compare my preparation time with Lindra, including review and correction and including transcript correction when dictating, against my template workflow, so that the release is judged on time saved and facts kept.
 39. As the operator, I want a throwaway stack per ticket, a long-lived test environment on `origin/main` and an operator-run production, so that nothing a ticket does can touch production and nothing in test is real.
 40. As the operator, I want the test environment and every automated test to run on deterministic stand-ins for the text model and speech recognition, so that tests prove the workflow without a GPU and without a real model.
-41. As the operator, I want a separately and explicitly launched real-backend configuration that only ever sees the fictional cast, so that model quality can be evaluated without that becoming the default.
+41. As the operator, I want a separately and explicitly launched real-backend configuration, self-hosted or the hosted comparison, that only ever sees the fictional cast, so that model quality can be evaluated without that becoming the default.
 42. As the operator, I want the application reachable only on the private network with a single protected login, so that no registration or role system is needed for one author.
 
 ## Implementation Decisions
@@ -99,7 +100,7 @@ Generation contract
 
 Adapters
 
-- A text model adapter with two implementations: the fixture model (deterministic, keyed to the fictional cast, used by all tests and by the test tier) and a self-hosted model adapter speaking to a local inference server on the same host or network (ADR 0003). No cloud implementation exists; the configuration has no cloud option.
+- A text model adapter with three implementations: the fixture model (deterministic, keyed to the fictional cast, used by all tests and by the test tier), a self-hosted model adapter speaking to a local inference server on the same host or network, and a hosted-inference adapter (Ollama Cloud was named) that is usable only in the explicitly launched evaluation configuration and refuses to start anywhere else (ADR 0003). The product configuration has no cloud option and no fallback. Whether the named provider runs inference in Europe is unverified and, even if true, does not make it local.
 - A speech-to-text adapter with two implementations: canned transcripts keyed to fixture audio, and a self-hosted recogniser (candidates from research: whisper.cpp, faster-whisper) chosen after evaluation on the available hardware with German medical text. Audio is held in memory or a temporary file only for the duration of transcription.
 - The browser captures audio with explicit start and stop, shows the dictation state, uploads the audio for transcription and shows the transcript for review before the physician accepts it into the notes. Browser microphone capture requires a secure origin (HTTPS), which the private-network setup must provide.
 - Which concrete models fit the hardware and reach acceptable German quality is unverified and is settled inside an implementation ticket with a recorded result, not assumed by this spec.
@@ -114,7 +115,7 @@ Environments (ADR 0007)
 
 - Throwaway stack per ticket in rootless Docker on its node; long-lived test on Linux 790 as user and node `lindra-test`, port 8780, compose project `lindra-test`, running only `origin/main`, refreshed every 5 minutes by a user timer; production run by the operator as `frogger`.
 - One compose file and one `scripts/env.py` with `up`, `check`, `reset`, `down`, `ensure-test`, `install-timer`. `reset` seeds the fictional cast only. Nodes read `LINDRA_TEST_URL` and `LINDRA_TEST_TOKEN`.
-- The test tier always runs the stand-ins. A real-backend evaluation configuration is launched separately and explicitly.
+- The test tier always runs the stand-ins. A real-backend evaluation configuration, self-hosted or the hosted comparison, is launched separately and explicitly; the hosted provider's account and key stay with the operator, who approved the comparison but no spending.
 - The production host for real clinical use is an open decision pending the legal and organisational check; installing production does not authorise real data (ADR 0006).
 
 ## Testing Decisions
@@ -128,7 +129,7 @@ Environments (ADR 0007)
 Operator-run checks (no factory node can run them; each names when)
 
 - **Operator-run, before merge of the dictation ticket:** on Ella's physical iPad in the browser over the private network, start a dictation, see the recording state, stop, see the transcript, correct it and accept it into the notes. Confirms microphone capture, secure origin and the status display on the real device.
-- **Operator-run, before merge of the real-backend ticket:** on the chosen inference hardware, run the self-hosted model and recogniser against the fictional cast and record the measured German quality and latency in the repository; a result that cannot carry the workflow is reported as such, not hidden.
+- **Operator-run, before merge of the real-backend ticket:** on the chosen inference hardware, run the self-hosted model and recogniser against the fictional cast, and the hosted comparison with the operator's own account, and record the measured German quality and latency in the repository; a result that cannot carry the workflow is reported as such, not hidden.
 - **Operator-run, at the end of the release:** Ella prepares the three fictional cases with her template workflow and with Lindra, typed and dictated, measuring total time including review, correction and transcript correction, and judges fabricated statements, lost facts and usability. The result is recorded in the repository; a missed target creates follow-ups and is not weakened.
 - **Operator-run, at install of test:** the operator checks Linux 790 for suitability (no production service, rootless Docker, port 8780 free) before the test environment goes there.
 - **Operator-run, at install of production:** the operator deploys to the host they name following the runbook and confirms `env.py check` passes; this confirms the evaluation configuration only.
@@ -142,7 +143,7 @@ Operator-run checks (no factory node can run them; each names when)
 - Hospital system integration of any kind: FHIR, eArztbrief, KIM, HL7, GDT; PDF or Word export; sending letters.
 - PDF upload or OCR of forms, a patient portal, complete questionnaire capture, automatic scoring or psychological interpretation.
 - Ambient recording or any recording of patient conversations; operating-system or browser dictation.
-- Cloud models or cloud speech recognition in any form, including as a fallback.
+- Cloud text models in the product, including as a fallback; cloud speech recognition in any form. The only hosted inference is the fictional-case evaluation comparison (ADR 0003).
 - Native Apple app; offline synchronisation.
 - Use with real patient data; this is an evaluation release (ADR 0006).
 
@@ -150,5 +151,5 @@ Operator-run checks (no factory node can run them; each names when)
 
 - Speech input was added to the first release by the operator's last amendment in the grilling and is binding: voice and text are equal inputs in every ticket, test and acceptance check.
 - The admission form and the German pain questionnaire (DSF 12/2024 with an additional PDI sheet) that Ella supplied are a structural reference only. Do not assume the PDI is absent from the local workflow; do not reproduce the forms; do not publish them or the transcript in the repository. The admission PDF's text layer is damaged and the spoken template was mistranscribed, so neither is a template.
-- Open technical prerequisites, each resolved inside its ticket with a recorded result: model and recogniser choice and hardware suitability; iPad browser audio capture and formats; suitability of Linux 790 as the test host; the production host pending the legal check.
+- Open technical prerequisites, each resolved inside its ticket with a recorded result: model and recogniser choice and hardware suitability; where the hosted comparison provider actually runs inference and under which terms (unverified, to be researched before it is recorded as fact); iPad browser audio capture and formats; suitability of Linux 790 as the test host; the production host pending the legal check.
 - Apple-platform work does not exist in this release; should a later decision change the platform, its tickets are routed to the Mac node first.

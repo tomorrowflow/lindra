@@ -22,9 +22,10 @@ The test host is Linux 790 on the operator's choice, conditional on a suitabilit
 | Service | Stand-in in tests and in the test tier |
 | --- | --- |
 | Text model (self-hosted, ADR 0003) | fixture model: deterministic drafts keyed to the fictional cast |
+| Hosted text model, evaluation comparison only (ADR 0003) | the same fixture model; the hosted adapter never runs in tests or in the test tier |
 | Speech recognition (self-hosted, ADR 0003) | canned transcripts keyed to fixture audio |
 
-There is no other outside service. The persistent test stack always runs the stand-ins. A real-backend evaluation configuration is launched separately and explicitly, uses only the fictional cast, and is never the test tier's default. No vendor sandbox accounts exist.
+There is no other outside service. The persistent test stack always runs the stand-ins. A real-backend evaluation configuration (self-hosted, or the hosted comparison) is launched separately and explicitly, uses only the fictional cast, and is never the test tier's default. The hosted comparison needs a vendor account; the operator approved its use for the evaluation but not any spending, so the account and its key stay with the operator and are never committed.
 
 ## Data, secrets, access
 
