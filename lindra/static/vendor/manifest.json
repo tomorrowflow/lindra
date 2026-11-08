@@ -1,0 +1,20 @@
+{
+  "daisyui": {
+    "version": "5.7.50",
+    "sha256": "e8e51df2ac7b077a512242bca51433a95c9b35f6d5b76faec98ce964aba8424c",
+    "url": "https://registry.npmjs.org/daisyui/-/daisyui-5.7.50.tgz"
+  },
+  "source-sans-3": {
+    "version": "3.052R",
+    "sha256": "d7f6724027fe5ca0bab44d6121284f1fa8f66dec5f2864aa969aed347041ac95",
+    "url": "https://github.com/adobe-fonts/source-sans/releases/download/3.052R/WOFF2-source-sans-3.052R.zip"
+  },
+  "files": {
+    "daisyui/LICENSE": "8709e3ac65c84637c422dc8082b893d9997fce093751c77b2f1983bf29dbf9ea",
+    "daisyui/daisyui.css": "0123544386e94dd102125e7d877bc72683504ac331d0d6efa39df630e5665aa5",
+    "source-sans-3/LICENSE.md": "56af9b9c6715597e458284a474dc118a50a4150e9d547c70f7b4a33c3e6a9328",
+    "source-sans-3/SourceSans3-Medium.woff2": "437a67034cb2ce4cb20d7f808e748e08ac201e15077a075a69baf67d8376a0c3",
+    "source-sans-3/SourceSans3-Regular.woff2": "53492fb3a0def77354f166a55d09b63a10855e91c206c7620a81cf56e97f8ec3",
+    "source-sans-3/SourceSans3-Semibold.woff2": "47b9b661b9f395fe7f0d0e119637fba5c8dad97bde3df60066fd24229c0792f4"
+  }
+}

@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% from "icons.html" import icon %}
+{% block title %}Anmeldung – Lindra{% endblock %}
+{% block body %}
+<main class="login">
+  <form class="login-card" method="post" action="/anmelden">
+    <p class="wordmark">lindra</p>
+    <h1>Anmeldung</h1>
+    <p class="text-secondary">Geben Sie den Zugangsschlüssel ein, den Sie für diese Installation erhalten haben.</p>
+    {% if error %}
+    <div class="alert alert-error" role="alert">
+      {{ icon("circle-alert") }}
+      <span>{{ error }}</span>
+    </div>
+    {% endif %}
+    <fieldset class="fieldset">
+      <label class="fieldset-label" for="token">Zugangsschlüssel</label>
+      <input class="input w-full" id="token" name="token" type="password" autocomplete="current-password" required autofocus>
+    </fieldset>
+    <button class="btn btn-primary" type="submit">Anmelden</button>
+  </form>
+</main>
+{% endblock %}

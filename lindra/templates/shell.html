@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% from "icons.html" import icon %}
+{% block body %}
+<div class="shell drawer">
+  <input id="sidebar-toggle" class="drawer-toggle" type="checkbox" aria-label="Seitenleiste">
+
+  <div class="drawer-content shell-main">
+    <header class="topbar">
+      <label for="sidebar-toggle" class="btn btn-ghost btn-square drawer-button" aria-label="Seitenleiste öffnen">
+        {{ icon("menu") }}
+      </label>
+      <p class="wordmark">lindra</p>
+      <div class="topbar-spacer"></div>
+      {# The status area never shifts the layout and never looks like a button (ADR 0008). #}
+      <div class="status-area" role="status" aria-live="polite">
+        <span class="status-indicator status-ok">
+          {{ icon("circle-check") }}
+          <span>Verbunden</span>
+        </span>
+      </div>
+      <form method="post" action="/abmelden">
+        <button class="btn btn-ghost" type="submit">
+          {{ icon("log-out") }}
+          <span>Abmelden</span>
+        </button>
+      </form>
+    </header>
+
+    <main class="step">
+      <div class="step-body">
+        <h1 class="step-title">Kein Fall ausgewählt</h1>
+        <p class="text-secondary">Wählen Sie in der Seitenleiste einen Fall.</p>
+      </div>
+
+      {# The action bar keeps its buttons at the same size and place on every step (ADR 0008). #}
+      <footer class="action-bar">
+        <button class="btn action-button" type="button" disabled>
+          {{ icon("chevron-left") }}
+          <span>Zurück</span>
+        </button>
+        <button class="btn btn-primary action-button" type="button" disabled>
+          <span>Weiter</span>
+          {{ icon("chevron-right") }}
+        </button>
+        <div class="action-spacer"></div>
+        <button class="btn action-button" type="button" disabled>
+          {{ icon("mic") }}
+          <span>Diktat</span>
+        </button>
+      </footer>
+    </main>
+  </div>
+
+  <aside class="drawer-side">
+    <label for="sidebar-toggle" class="drawer-overlay" aria-label="Seitenleiste schließen"></label>
+    <nav class="sidebar" aria-label="Fälle">
+      <h2 class="sidebar-title">Fälle</h2>
+      <ul class="menu sidebar-menu">
+        <li class="menu-title">Fall auswählen</li>
+        <li class="sidebar-empty text-secondary">Noch keine Fälle angelegt</li>
+      </ul>
+    </nav>
+  </aside>
+</div>
+{% endblock %}
