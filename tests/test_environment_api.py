@@ -90,6 +90,18 @@ def test_seed_report_survives_a_restart_on_the_same_volume(tmp_path):
     assert restarted.get("/api/environment").json()["seed"] == seeded
 
 
+def test_a_seed_report_of_an_older_cast_counts_as_not_run(tmp_path):
+    headers = {"Authorization": f"Bearer {TOKEN}"}
+    client = TestClient(create_app(Settings(token=TOKEN, data_dir=tmp_path)), headers=headers)
+    client.post("/api/seed")
+    report = tmp_path / "seed-report.json"
+    report.write_text(report.read_text().replace('"digest": "', '"digest": "old'))
+
+    assert client.get("/api/environment").json()["seed"] == {"ran": False}
+    assert client.post("/api/seed").status_code == 200
+    assert client.get("/api/environment").json()["seed"]["ran"] is True
+
+
 def test_seed_hook_refuses_a_broken_cast(tmp_path, monkeypatch):
     import dataclasses
 

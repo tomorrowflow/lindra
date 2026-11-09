@@ -195,6 +195,23 @@ def test_check_passes_after_up_and_fails_while_the_stack_is_down(env, stack, cap
     assert run_main(env, "check", "--project", "p") == 1
 
 
+def test_check_fails_cleanly_when_the_connection_drops_after_health(
+    env, stack, monkeypatch, capsys
+):
+    run_main(env, "up", "--project", "p")
+    real = stack.http
+
+    def dropping(method, url, token=None, timeout=5.0):
+        if url.endswith("/api/session"):
+            raise ConnectionResetError("reset by peer")
+        return real(method, url, token, timeout)
+
+    monkeypatch.setattr(env, "http", dropping)
+
+    assert run_main(env, "check", "--project", "p") == 1
+    assert "FAIL connection" in capsys.readouterr().out
+
+
 def test_check_fails_when_the_token_is_refused(env, stack, capsys):
     run_main(env, "up", "--project", "p")
     path = env.STATE_DIR / "p.env"

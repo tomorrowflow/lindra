@@ -1,7 +1,10 @@
 """The fictional cast and the two stand-ins that are keyed to it (ADR 0003, 0006, 0010).
 
 The cast is seed data. These tests state what the cast must contain; the seed hook
-refuses a cast that breaks any of it.
+refuses a cast that breaks any of it. No HTTP route reaches the stand-ins yet, so
+these unit tests call them directly. This is the one exception to the HTTP-first
+rule in AGENTS.md; the ticket that wires a stand-in into a route (05 for the cast,
+08 for the text model, 10 for speech) tests it through the API.
 """
 
 import dataclasses
@@ -134,6 +137,28 @@ def test_validation_refuses_an_empty_section_without_a_clarification_item(fictio
     broken = dataclasses.replace(fictional_cast, cases=(broken_case, *fictional_cast.cases[1:]))
 
     assert any("empty section" in p for p in cast.validate_cast(broken))
+
+
+def test_validation_refuses_a_third_case_without_gaps(fictional_cast):
+    third = fictional_cast.cases[2]
+    filled = tuple(
+        dataclasses.replace(
+            e, draft={s: text or "Ein Satz." for s, text in e.draft.items()}, clarifications=()
+        )
+        for e in third.encounters
+    )
+    broken = dataclasses.replace(
+        fictional_cast,
+        cases=(*fictional_cast.cases[:2], dataclasses.replace(third, encounters=filled)),
+    )
+
+    assert any("third case leaves no gap" in p for p in cast.validate_cast(broken))
+
+
+def test_validation_refuses_two_clips_with_the_same_audio(monkeypatch, fictional_cast):
+    monkeypatch.setattr(cast, "fixture_audio", lambda key: b"RIFF same")
+
+    assert any("same bytes" in p for p in cast.validate_cast(fictional_cast))
 
 
 def test_validation_refuses_a_case_number_that_looks_real(fictional_cast):

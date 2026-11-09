@@ -80,8 +80,15 @@ def write_report(data_dir: Path, report: dict[str, Any]) -> None:
 
 
 def read_report(data_dir: Path) -> dict[str, Any]:
-    """The last report, or `{"ran": False}` when the hook has not run on this volume."""
+    """The last report, or `{"ran": False}` when the hook has not run on this volume.
+
+    A report of an older cast counts as not run, so a redeploy that changed the cast
+    makes `up` seed again and `check` fail until it does.
+    """
     try:
-        return json.loads((data_dir / REPORT_FILE).read_text(encoding="utf-8"))
+        report = json.loads((data_dir / REPORT_FILE).read_text(encoding="utf-8"))
     except FileNotFoundError:
         return {"ran": False}
+    if report.get("digest") != cast.cast_digest(cast.load_cast()):
+        return {"ran": False}
+    return report

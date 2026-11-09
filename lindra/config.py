@@ -10,8 +10,6 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
-from lindra.standins import STAND_IN
-
 ENV_FILE = Path(".env")
 TOKEN_VARIABLE = "LINDRA_TOKEN"
 TEXT_BACKEND_VARIABLE = "LINDRA_TEXT_BACKEND"
@@ -20,6 +18,8 @@ DATA_DIR_VARIABLE = "LINDRA_DATA_DIR"
 COMMIT_VARIABLE = "LINDRA_COMMIT"
 TIER_VARIABLE = "LINDRA_TIER"
 
+# The name of the deterministic stand-in backends in lindra/standins.py.
+STAND_IN = "fixture"
 # Only the stand-ins exist. The self-hosted and hosted backends arrive with
 # ticket 11 and never become selectable in the throwaway or test tier (ADR 0003).
 SUPPORTED_BACKENDS = frozenset({STAND_IN})

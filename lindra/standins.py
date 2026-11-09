@@ -14,8 +14,6 @@ from dataclasses import dataclass
 
 from lindra.cast import Cast, Clarification, fixture_audio
 
-STAND_IN = "fixture"
-
 
 class NotInTheCast(LookupError):
     """The stand-in only knows the fictional cast."""

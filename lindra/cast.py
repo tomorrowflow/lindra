@@ -142,14 +142,19 @@ def validate_cast(cast: Cast) -> list[str]:
         clip_keys += [clip.key for e in case.encounters for clip in e.audio]
     if len(set(clip_keys)) != len(clip_keys):
         problems.append("fixture audio keys repeat")
+    # The speech stand-in maps audio bytes to transcripts, so two clips must not share bytes.
+    if len({fixture_audio(key) for key in clip_keys}) != len(clip_keys):
+        problems.append("two fixture audio clips have the same bytes")
     if not any(
         e.kind == "visit" and e.date < e.entered_on for c in cast.cases for e in c.encounters
     ):
         problems.append("no visit is backdated")
     if not any(changed_background(case) for case in cast.cases):
         problems.append("no case has an assessment change accepted after a visit draft")
-    if not any(not text for c in cast.cases for e in c.encounters for text in e.draft.values()):
-        problems.append("no case leaves a gap")
+    if len(cast.cases) == 3 and not any(
+        not text for e in cast.cases[2].encounters for text in e.draft.values()
+    ):
+        problems.append("the third case leaves no gap")
     return problems
 
 
@@ -417,7 +422,7 @@ _CASE_MULTIPLE = Case(
                 "Ärztliche Einschätzung": "Der Knieschmerz ist der Hauptschmerz.",
                 "Vereinbartes Vorgehen und Ziele": "Kniegymnastik täglich.",
             },
-            background=("assessment", "visit-2"),
+            background=("assessment",),
         ),
         Encounter(
             key="visit-2",

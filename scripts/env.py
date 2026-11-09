@@ -223,20 +223,23 @@ def run_checks(url: str, token: str) -> list[tuple[str, bool, str]]:
 
     try:
         status, _ = http("GET", f"{url}/health")
+        record("health", status == 200, f"HTTP {status}")
+        authenticated_checks(url, token, record)
     except OSError as error:
-        record("health", False, f"no answer from {url}: {error}")
-        return results
-    record("health", status == 200, f"HTTP {status}")
+        record("connection", False, f"no answer from {url}: {error}")
+    return results
 
+
+def authenticated_checks(url: str, token: str, record) -> None:
     status, _ = http("GET", f"{url}/api/session", token)
     record("session", status == 200, f"HTTP {status} with the token")
     if status != 200:
-        return results
+        return
 
     status, body = http("GET", f"{url}/api/environment", token)
     if status != 200 or not isinstance(body, dict):
         record("environment", False, f"HTTP {status}")
-        return results
+        return
     stand_ins = body.get("text_backend") == STAND_IN and body.get("speech_backend") == STAND_IN
     record(
         "stand-ins",
@@ -253,7 +256,6 @@ def run_checks(url: str, token: str) -> list[tuple[str, bool, str]]:
         else "seed hook has not run; run `scripts/env.py reset`",
     )
     record("commit", True, f"{body.get('tier')} tier at {body.get('commit')}")
-    return results
 
 
 def deployed_commit() -> str | None:
@@ -521,6 +523,9 @@ def main(argv: list[str] | None = None) -> int:
         return handlers[args.command](args)
     except subprocess.CalledProcessError as error:
         print(f"{args.command}: `{' '.join(map(str, error.cmd))}` exited with {error.returncode}")
+        return 1
+    except OSError as error:
+        print(f"{args.command}: {error}")
         return 1
 
 
