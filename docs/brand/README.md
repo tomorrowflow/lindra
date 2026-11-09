@@ -22,7 +22,7 @@ Copied byte for byte from the kit into `lindra/static/img/` on 9 November 2026. 
 | `lindra-symbol-color.svg` | `symbol/lindra-symbol-color.svg` | reserved for places that fit only the symbol; not used yet |
 | `favicon.svg`, `favicon.ico`, `apple-touch-icon.png` | `web/` | browser tab and iPad home screen, linked from `lindra/templates/base.html` with the kit's `theme-color` |
 
-Rules applied from the kit: the full symbol is never shown under 24 px (the top bar shows it at 32 px); the clear space around the lockup is at least the height of one of its writing lines; the Ink wordmark sits on Paper, which `docs/ui/contrast.md` records at 12.10 to 1.
+Rules applied from the kit: the full symbol is never shown under 24 px (the top bar shows it at 32 px); the clear space around the lockup is at least the height of one of its writing lines; the Ink wordmark sits on Paper in the top bar and on White in the login card, which `docs/ui/contrast.md` records at 12.10 and 13.18 to 1.
 
 Not taken over: `site.webmanifest`, the Open Graph image and the app icons. Lindra is a private web application with no install flow and no public page in the first release; a later ticket that adds a home-screen install takes `web/site.webmanifest` and the `icon-*.png` files from the kit.
 
@@ -32,4 +32,4 @@ How the palette became the Quiet Clarity tokens, with every text-on-surface pair
 
 ## Known leftovers in the kit folder
 
-`docs/design/lindra-logo/brand-kit/` contains a few two- or three-byte files with cut-off names (`symbol/lindra-symbol-`, `symbol/lindra-symbol-whi`, `lockup/lindra-horizon`, `lockup/lindra-s`, `web/favicon-`). The operator will remove them; nothing references them.
+`docs/design/lindra-logo/brand-kit/` contains a few empty or few-byte files with cut-off names (`symbol/lindra-symbol-`, `symbol/lindra-symbol-whi`, `lockup/lindra-horizon`, `lockup/lindra-s`, `web/favicon-`). The operator will remove them; nothing references them.

@@ -30,7 +30,7 @@ CI (`.github/workflows/ci.yml`) runs install, lint, format check, vendor check, 
 
 ## UI work: foundation and unslop
 
-The UI is daisyUI 5 component CSS over native semantic HTML controls, pinned and self-hosted (`lindra/static/vendor/`, pins in `scripts/fetch_assets.py`), with the Quiet Clarity tokens in `lindra/static/css/quiet-clarity.css` (ADR 0009). No runtime CDN asset, no React or Web Awesome runtime, light theme only. The contrast results are in `docs/ui/contrast.md`, the browser check in `docs/ui/browser-check.md`. The operator's brand kit and design documents live in `docs/design/`; `docs/brand/README.md` says which of them the shell uses and what is still missing.
+The UI is daisyUI 5 component CSS over native semantic HTML controls, pinned and self-hosted (`lindra/static/vendor/`, pins in `scripts/fetch_assets.py`), with the Quiet Clarity tokens in `lindra/static/css/quiet-clarity.css` (ADR 0009). No runtime CDN asset, no React or Web Awesome runtime, light theme only. The contrast results are in `docs/ui/contrast.md`, the browser check in `docs/ui/browser-check.md`. The operator's brand kit and design documents live in `docs/design/`; `docs/brand/README.md` says which of them the shell uses and where the copies in `lindra/static/img/` come from.
 
 Every ticket that changes the UI, app copy, documentation or a report:
 
