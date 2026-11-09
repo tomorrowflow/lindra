@@ -5,7 +5,7 @@ Supplied by the operator during grilling 3 (8 November 2026) and reviewed there:
 - `design-theme-prompt-kit.md` (operator's OneDrive, `openclaw/lindra/`)
 - `lindra-design-system-library-research.md` (Fróði, via Syncthing)
 
-The SPEC-1 session could not read the files themselves (outside its allowed paths), so this note records what grilling 3 took from them and decided. The originals should be copied into `docs/research/` with their authorship when the operator makes them available; they are source reports and proposals, not adopted wholesale.
+The SPEC-1 session could not read the files themselves (outside its allowed paths), so this note records what grilling 3 took from them and decided. They are source reports and proposals, not adopted wholesale. On 9 November 2026 the operator pushed the first report to `docs/design/lindra/design-theme-prompt-kit.md`; the library research report is not in the repository yet.
 
 ## What the reports contributed
 

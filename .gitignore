@@ -12,3 +12,6 @@ build/
 
 # Downloads and scratch work
 .scratch/
+
+# macOS folder metadata
+.DS_Store

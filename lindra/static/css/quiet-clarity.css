@@ -55,20 +55,23 @@
   --color-neutral: #243331;
   --color-neutral-content: #f7f5f0;
 
-  /* Semantic colours only carry meaning and sit inside the palette. */
+  /* Semantic colours only carry meaning and sit inside the palette. Amber and
+     red follow the Quiet Clarity theme kit (docs/design/lindra/); both pass
+     the contrast check on every surface they are used on. */
   --color-info: #245b57;
   --color-info-content: #ffffff;
   --color-success: #2f6b4f;
   --color-success-content: #ffffff;
-  --color-warning: #7a4f00;
+  --color-warning: #865810;
   --color-warning-content: #ffffff;
-  --color-error: #9b2c20;
+  --color-error: #b43f46;
   --color-error-content: #ffffff;
 
-  /* Text roles beyond the primary Ink. */
+  /* Text roles beyond the primary Ink, and the tints behind semantic text. */
   --text-secondary: #4f5f5d;
   --sage-tint: #e3e9e2;
   --teal-on-tint: #1b4542;
+  --warning-tint: #fff2d9;
   --error-tint: #fbeeec;
   --hairline: rgb(36 51 49 / 10%);
 
@@ -183,7 +186,7 @@ p {
 .alert-error {
   background-color: var(--error-tint);
   color: var(--color-error);
-  border: 1px solid rgb(155 44 32 / 25%);
+  border: 1px solid rgb(180 63 70 / 25%);
 }
 
 /* ---- Shell layout (ADR 0008): sidebar, top bar, step with stable action bar ---- */
