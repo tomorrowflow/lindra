@@ -18,7 +18,7 @@ Supplied by the operator on 8 November 2026 as `lindra-logo/brand-kit/` (operato
 
 ## Update, 9 November 2026
 
-The operator pushed the kit's `README.md` and its preview sheet to `docs/design/lindra-logo/brand-kit/`, together with the round 1 to 3 logo explorations and the theme kit (`docs/design/lindra/design-theme-prompt-kit.md`). The kit's `symbol/`, `lockup/`, `web/` and `app/` folders named in that README did not arrive. `docs/brand/README.md` keeps the current list of what is present and what the shell does with it.
+The operator pushed the complete kit to `docs/design/lindra-logo/brand-kit/` (`README.md`, preview sheet, `symbol/`, `lockup/`, `web/`, `app/`), together with the round 1 to 3 logo explorations and the theme kit (`docs/design/lindra/design-theme-prompt-kit.md`). `docs/brand/README.md` lists what the shell takes from it.
 
 ## Related
 

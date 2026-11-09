@@ -218,12 +218,19 @@ p {
   flex: 1;
 }
 
-.wordmark {
-  font-weight: 600;
-  font-size: 1.25rem;
-  letter-spacing: 0.01em;
-  color: var(--color-primary);
-  margin: 0;
+/* Brand lockup from the kit (docs/design/lindra-logo/brand-kit/): the symbol
+   stays at 24 px or more; the margin keeps the writing-line clear space. */
+.brand-lockup {
+  display: block;
+  height: 32px;
+  width: auto;
+  margin: 0 12px 0 4px;
+}
+
+.brand-lockup-large {
+  height: 40px;
+  margin: 0 0 8px;
+  align-self: flex-start;
 }
 
 /* Status area: fixed width so changing text never moves the buttons beside it;

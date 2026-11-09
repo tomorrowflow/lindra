@@ -1,26 +1,35 @@
-# Brand kit: what is in the repository and what is not
+# Brand kit: what the shell uses and where it comes from
 
-The operator pushed the design documents to `docs/design/` on 9 November 2026 (commit `713999b`). This note says which part of the brand kit "Editorial Brackets" that covers and how the shell uses it.
+The operator pushed the brand kit "Editorial Brackets" and the design documents to `docs/design/` (commits `713999b`, `17168ea`, `45fa297`, 9 November 2026). The kit's own guidance is `docs/design/lindra-logo/brand-kit/README.md`. This note says what the application takes from it.
 
-## Present in the repository
+## In the repository
 
 | What | Where | Used for |
 | --- | --- | --- |
-| Brand kit guidance: palette, wordmark, minimum size, clear space | `docs/design/lindra-logo/brand-kit/README.md` | the tokens and the logo rules below |
-| Preview sheet of the chosen mark and lockups (raster) | `docs/design/lindra-logo/brand-kit/_preview.jpg` | visual reference only; not a source for the shell |
+| Brand kit guidance: palette, wordmark, minimum size, clear space | `docs/design/lindra-logo/brand-kit/README.md` | the tokens and the logo rules |
+| Symbol, lockups, wordmark, favicons, app icons (SVG and PNG) | `docs/design/lindra-logo/brand-kit/symbol/`, `lockup/`, `web/`, `app/` | source of the copies below |
 | Quiet Clarity theme kit (draft recommendation, 8 November 2026) | `docs/design/lindra/design-theme-prompt-kit.md` | typography, spacing, the amber and red semantic colours |
-| Round 1 logo concepts: Ordered Strands, Folded L, Open Frame, Quiet Convergence, Distinctive Wordmark | `docs/design/lindra-logo/svg/`, `lindra-concepts.html`, `lindra-concepts.png` | history; none of these is the chosen mark |
-| Round 2 and round 3 exploration sheets (raster) | `docs/design/lindra-logo/round2/`, `round3/` | history |
-| Source Sans 3, the wordmark's typeface (SIL OFL 1.1) | `lindra/static/vendor/source-sans-3/` | the shell's text and the product name in the top bar |
+| Logo explorations, rounds 1 to 3 | `docs/design/lindra-logo/svg/`, `round2/`, `round3/`, `lindra-concepts.*` | history; round 3's Editorial Brackets became the kit |
+| Source Sans 3, the wordmark's typeface (SIL OFL 1.1) | `lindra/static/vendor/source-sans-3/` | the shell's text; the wordmark itself is outlined and needs no font |
 
-How the kit became tokens, with every pair contrast-checked: `docs/ui/contrast.md`. Where the theme kit and the brand kit disagree (the theme kit proposes `#24665B` for the primary, `#F7F8F5` for paper, `#203532` for ink), the brand kit wins per ADR 0009; the theme kit's amber `#865810` and red `#B43F46` were adopted for warning and error because the brand kit has no semantic colours and both pass.
+## Copies the application serves
 
-## Not present
+Copied byte for byte from the kit into `lindra/static/img/` on 9 November 2026. When the kit changes, copy again from the same paths.
 
-The brand kit README lists folders `symbol/`, `lockup/`, `web/` and `app/` with the vector mark, the lockups, the outlined wordmark, the favicons and the app icons. These folders are not in `docs/design/`; only the README and the preview sheet arrived. The round 1 SVGs are earlier concepts, not the Editorial Brackets mark.
+| File in `lindra/static/img/` | Kit source | Where it appears |
+| --- | --- | --- |
+| `lindra-horizontal-color.svg` | `lockup/lindra-horizontal-color.svg` | top bar of the shell (32 px high) and the login card (40 px) |
+| `lindra-symbol-color.svg` | `symbol/lindra-symbol-color.svg` | reserved for places that fit only the symbol; not used yet |
+| `favicon.svg`, `favicon.ico`, `apple-touch-icon.png` | `web/` | browser tab and iPad home screen, linked from `lindra/templates/base.html` with the kit's `theme-color` |
 
-So the shell still shows the product name as text (lowercase, Source Sans 3 SemiBold, Teal) and no symbol. The layout keeps one place for the mark, in front of the name in the top bar, at 24 px or more with the writing-line clear space the kit asks for. No favicon is served. Nobody redrew the mark from the preview image: that would be logo work, which ADR 0009 keeps out of the writing workflow.
+Rules applied from the kit: the full symbol is never shown under 24 px (the top bar shows it at 32 px); the clear space around the lockup is at least the height of one of its writing lines; the Ink wordmark sits on Paper, which `docs/ui/contrast.md` records at 12.10 to 1.
 
-## To complete
+Not taken over: `site.webmanifest`, the Open Graph image and the app icons. Lindra is a private web application with no install flow and no public page in the first release; a later ticket that adds a home-screen install takes `web/site.webmanifest` and the `icon-*.png` files from the kit.
 
-The operator adds the kit's `symbol/`, `lockup/` and `web/` folders under `docs/design/lindra-logo/brand-kit/`. A follow-up then copies `symbol/small-color.svg` and the full symbol into `lindra/static/img/`, places the symbol in the top bar and serves `web/favicon.svg`.
+## Tokens
+
+How the palette became the Quiet Clarity tokens, with every text-on-surface pair checked: `docs/ui/contrast.md`. Where the theme kit and the brand kit disagree (the theme kit proposes `#24665B` for the primary, `#F7F8F5` for paper, `#203532` for ink), the brand kit wins per ADR 0009. The theme kit's amber `#865810` and red `#B43F46` are used for warning and error because the brand kit has no semantic colours and both pass.
+
+## Known leftovers in the kit folder
+
+`docs/design/lindra-logo/brand-kit/` contains a few two- or three-byte files with cut-off names (`symbol/lindra-symbol-`, `symbol/lindra-symbol-whi`, `lockup/lindra-horizon`, `lockup/lindra-s`, `web/favicon-`). The operator will remove them; nothing references them.
