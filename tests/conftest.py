@@ -15,8 +15,8 @@ TOKEN = "test-token-for-the-suite"
 
 
 @pytest.fixture
-def app():
-    return create_app(Settings(token=TOKEN))
+def app(tmp_path):
+    return create_app(Settings(token=TOKEN, data_dir=tmp_path))
 
 
 @pytest.fixture

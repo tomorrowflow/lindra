@@ -1,0 +1,7 @@
+# The long-lived test tier (user and node lindra-test, project lindra-test,
+# port 8780). Layered over compose.yaml by `scripts/env.py up --tier test`, which
+# writes the port and the bind address (0.0.0.0, so other nodes reach it) into
+# the env file.
+services:
+  lindra:
+    restart: unless-stopped
