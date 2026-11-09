@@ -1,0 +1,444 @@
+/*
+  Quiet Clarity: the one light theme of Lindra (ADR 0009).
+
+  Tokens derive from the brand kit "Editorial Brackets": Teal, Sage, Ink,
+  Paper, White. Every text-on-surface pair is checked by
+  scripts/contrast_check.py; the results live in docs/ui/contrast.md. This
+  file is written by hand and loaded after the daisyUI component CSS; it is
+  not inside a cascade layer, so its rules win over the components.
+*/
+
+/* ---- Fonts: Source Sans 3, self-hosted (SIL OFL 1.1) ---- */
+
+@font-face {
+  font-family: "Source Sans 3";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("../vendor/source-sans-3/SourceSans3-Regular.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Source Sans 3";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("../vendor/source-sans-3/SourceSans3-Medium.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Source Sans 3";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("../vendor/source-sans-3/SourceSans3-Semibold.woff2") format("woff2");
+}
+
+/* ---- Tokens ---- */
+
+:root {
+  color-scheme: light;
+
+  /* Surfaces: White for writing surfaces, Paper for the page. */
+  --color-base-100: #ffffff;
+  --color-base-200: #f7f5f0;
+  --color-base-300: #eae6dd;
+  --color-base-content: #243331;
+
+  /* Teal is the one accent: primary action, selection, focus. */
+  --color-primary: #245b57;
+  --color-primary-content: #ffffff;
+  --color-secondary: #a8b9a7;
+  --color-secondary-content: #243331;
+  --color-accent: #245b57;
+  --color-accent-content: #ffffff;
+  --color-neutral: #243331;
+  --color-neutral-content: #f7f5f0;
+
+  /* Semantic colours only carry meaning and sit inside the palette. Amber and
+     red follow the Quiet Clarity theme kit (docs/design/lindra/); both pass
+     the contrast check on every surface they are used on. */
+  --color-info: #245b57;
+  --color-info-content: #ffffff;
+  --color-success: #2f6b4f;
+  --color-success-content: #ffffff;
+  --color-warning: #865810;
+  --color-warning-content: #ffffff;
+  --color-error: #b43f46;
+  --color-error-content: #ffffff;
+
+  /* Text roles beyond the primary Ink, and the tints behind semantic text. */
+  --text-secondary: #4f5f5d;
+  --sage-tint: #e3e9e2;
+  --teal-on-tint: #1b4542;
+  --warning-tint: #fff2d9;
+  --error-tint: #fbeeec;
+  --hairline: rgb(36 51 49 / 10%);
+
+  /* Shape: controls 8, boxes 12. 44 px fields and buttons for touch. */
+  --radius-selector: 0.5rem;
+  --radius-field: 0.5rem;
+  --radius-box: 0.75rem;
+  --size-selector: 0.25rem;
+  --size-field: 0.275rem;
+  --border: 1px;
+  --depth: 0;
+  --noise: 0;
+
+  --font-ui: "Source Sans 3", -apple-system, system-ui, "Segoe UI", sans-serif;
+  --topbar-height: 56px;
+  --action-bar-height: 72px;
+  --sidebar-width: 272px;
+}
+
+html {
+  font-family: var(--font-ui);
+  font-size: 17px;
+  line-height: 1.5;
+  background-color: var(--color-base-200);
+  color: var(--color-base-content);
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  min-height: 100dvh;
+  font-variant-numeric: tabular-nums;
+}
+
+h1,
+h2,
+h3 {
+  font-weight: 500;
+  line-height: 1.25;
+}
+
+p {
+  margin: 0;
+}
+
+.text-secondary {
+  color: var(--text-secondary);
+}
+
+/* ---- Focus: visible for every keyboard user, one ring everywhere ---- */
+
+:focus-visible,
+.btn:focus-visible,
+.input:focus-visible,
+.input:focus-within,
+.drawer-toggle:focus-visible ~ .drawer-content label.drawer-button {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+  box-shadow: none;
+}
+
+/* ---- Controls: native buttons and inputs under daisyUI classes ---- */
+
+.btn {
+  min-height: 44px;
+  min-width: 44px;
+  font-weight: 500;
+  font-size: 1rem;
+  gap: 8px;
+  padding-inline: 16px;
+}
+
+.btn:disabled,
+.btn[disabled] {
+  /* Disabled state: lighter and without pointer, not a colour change alone. */
+  color: var(--text-secondary);
+  background-color: var(--color-base-300);
+  border-color: transparent;
+  cursor: not-allowed;
+}
+
+.btn-ghost {
+  color: var(--color-base-content);
+}
+
+.btn-ghost:hover {
+  background-color: var(--color-base-300);
+}
+
+.input {
+  width: 100%;
+  min-height: 44px;
+  font-size: 1rem;
+  border-color: rgb(36 51 49 / 25%);
+}
+
+.input:focus,
+.input:focus-within {
+  border-color: var(--color-primary);
+}
+
+.icon {
+  flex: none;
+}
+
+.alert {
+  gap: 8px;
+  padding: 12px 16px;
+  border-radius: var(--radius-box);
+  font-size: 1rem;
+}
+
+.alert-error {
+  background-color: var(--error-tint);
+  color: var(--color-error);
+  border: 1px solid rgb(180 63 70 / 25%);
+}
+
+/* ---- Shell layout (ADR 0008): sidebar, top bar, step with stable action bar ---- */
+
+.shell {
+  height: 100dvh;
+}
+
+.shell-main {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  min-width: 0;
+}
+
+.topbar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: var(--topbar-height);
+  padding: 0 16px;
+  background-color: var(--color-base-200);
+  border-bottom: 1px solid var(--hairline);
+}
+
+.topbar-spacer,
+.action-spacer {
+  flex: 1;
+}
+
+/* Brand lockup from the kit (docs/design/lindra-logo/brand-kit/): the symbol
+   stays at 24 px or more; the margin keeps the writing-line clear space. */
+.brand-lockup {
+  display: block;
+  height: 32px;
+  width: auto;
+  margin: 0 12px 0 4px;
+}
+
+.brand-lockup-large {
+  height: 40px;
+  margin: 0 0 8px;
+  align-self: flex-start;
+}
+
+/* Status area: fixed width so changing text never moves the buttons beside it;
+   no border, no background, no pointer, so it never reads as a button. */
+.status-area {
+  flex: none;
+  width: 176px;
+  display: flex;
+  justify-content: flex-end;
+  color: var(--text-secondary);
+  font-size: 0.9375rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.status-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  max-width: 100%;
+}
+
+.status-indicator > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.status-ok {
+  color: var(--color-success);
+}
+
+.step {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.step-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.step-title {
+  font-size: 1.5rem;
+  margin: 0;
+}
+
+/* Action bar: the buttons keep their size and place while the body scrolls. */
+.action-bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: var(--action-bar-height);
+  padding: 0 24px;
+  padding-bottom: env(safe-area-inset-bottom);
+  background-color: var(--color-base-200);
+  border-top: 1px solid var(--hairline);
+}
+
+.action-button {
+  width: 136px;
+  height: 44px;
+  justify-content: center;
+}
+
+/* ---- Sidebar: a drawer in portrait, open beside the work from 1024 px ---- */
+
+/* daisyUI makes the toggle 0 by 0, which browsers skip when tabbing. Give it
+   a size and hide it visually instead, so the keyboard reaches the drawer
+   (the ring shows on the opener, Space opens and closes). */
+.shell > .drawer-toggle {
+  width: 1px;
+  height: 1px;
+  clip-path: inset(50%);
+  overflow: hidden;
+}
+
+.drawer-side {
+  height: 100dvh;
+}
+
+.sidebar {
+  width: var(--sidebar-width);
+  min-height: 100%;
+  padding: 16px 12px 24px;
+  background-color: var(--color-base-100);
+  border-right: 1px solid var(--hairline);
+}
+
+.sidebar-title {
+  font-size: 0.9375rem;
+  color: var(--text-secondary);
+  margin: 0 12px 8px;
+}
+
+.sidebar-menu {
+  width: 100%;
+  padding: 0;
+  font-size: 1rem;
+  gap: 4px;
+}
+
+.sidebar-menu .menu-title {
+  color: var(--color-base-content);
+  font-weight: 500;
+  padding: 8px 12px;
+}
+
+.sidebar-empty {
+  padding: 8px 12px;
+  min-height: 44px;
+}
+
+/* The persistent sidebar needs no opener and no overlay. */
+@media (min-width: 1024px) {
+  .shell {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+  }
+
+  .shell > .drawer-toggle ~ .drawer-content {
+    grid-column-start: 2;
+  }
+
+  .shell > .drawer-toggle ~ .drawer-side {
+    position: sticky;
+    grid-column-start: 1;
+    pointer-events: auto;
+    visibility: visible;
+    opacity: 1;
+    width: auto;
+    overflow-y: auto;
+    display: block;
+  }
+
+  .shell > .drawer-toggle ~ .drawer-side > .drawer-overlay {
+    display: none;
+  }
+
+  .shell > .drawer-toggle ~ .drawer-side > .sidebar {
+    translate: 0;
+    transition: none;
+  }
+
+  .drawer-button,
+  .shell > .drawer-toggle {
+    display: none;
+  }
+}
+
+/* ---- Login ---- */
+
+.login {
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.login-card {
+  width: min(420px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 32px;
+  background-color: var(--color-base-100);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-box);
+}
+
+.login-card h1 {
+  font-size: 1.5rem;
+  margin: 0;
+}
+
+.login-card .fieldset {
+  gap: 8px;
+  font-size: 1rem;
+}
+
+.login-card .fieldset-label {
+  color: var(--color-base-content);
+}
+
+.login-card .btn {
+  align-self: flex-start;
+  min-width: 136px;
+}
+
+/* ---- Motion: a hover is a colour change; nothing moves for its own sake ---- */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -16,6 +16,10 @@ Supplied by the operator on 8 November 2026 as `lindra-logo/brand-kit/` (operato
 - The scaffold ticket needs readable repo-local copies of the assets and guidance. The worker obtains them from the operator; nobody claims to have read the kit without access.
 - Logo and brand exploration stays non-blocking for the writing workflow (ADR 0009).
 
+## Update, 9 November 2026
+
+The operator pushed the complete kit to `docs/design/lindra-logo/brand-kit/` (`README.md`, preview sheet, `symbol/`, `lockup/`, `web/`, `app/`), together with the round 1 to 3 logo explorations and the theme kit (`docs/design/lindra/design-theme-prompt-kit.md`). `docs/brand/README.md` lists what the shell takes from it.
+
 ## Related
 
 - `docs/research/2026-11-08-design-direction-from-operator-reports.md`

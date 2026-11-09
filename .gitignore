@@ -1,0 +1,17 @@
+# Secrets: the application token lives here and is never committed.
+.env
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+build/
+
+# Downloads and scratch work
+.scratch/
+
+# macOS folder metadata
+.DS_Store
