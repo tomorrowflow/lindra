@@ -110,8 +110,16 @@ def fetch_source_sans() -> dict[str, str]:
     with zipfile.ZipFile(io.BytesIO(archive)) as zipped:
         for inside, target in SOURCE_SANS_FILES.items():
             files[f"source-sans-3/{target}"] = zipped.read(inside)
-    files["source-sans-3/LICENSE.md"] = download(SOURCE_SANS_LICENSE_URL, None)
+    files["source-sans-3/LICENSE.md"] = strip_trailing_whitespace(
+        download(SOURCE_SANS_LICENSE_URL, None)
+    )
     return write_all(files)
+
+
+def strip_trailing_whitespace(text: bytes) -> bytes:
+    """Trailing spaces in upstream text would fail the repository's whitespace check."""
+    lines = text.decode("utf-8").splitlines()
+    return ("\n".join(line.rstrip() for line in lines) + "\n").encode("utf-8")
 
 
 def write_all(files: dict[str, bytes]) -> dict[str, str]:
