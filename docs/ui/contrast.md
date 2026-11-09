@@ -26,7 +26,7 @@ Adjusted values, each a darker or lighter step of the same hue, recorded as ADR 
 | Warning tint `--warning-tint` | `#FFF2D9` | the theme kit's caution surface |
 | Success text | `#2F6B4F` | green near Teal, darkened until it passes as text |
 
-The theme kit also proposes its own paper, ink and primary values; the brand kit's Paper, Ink and Teal are used instead (ADR 0009: the brand kit is the source of the tokens).
+The theme kit also proposes its own paper, ink and primary values. The tokens keep the brand kit's Paper, Ink and Teal because ADR 0009 names the brand kit as their source.
 
 ## Results
 
@@ -51,4 +51,4 @@ The theme kit also proposes its own paper, ink and primary values; the brand kit
 | Success text on the page | Success text `#2F6B4F` | Paper (brand kit) `#F7F5F0` | 5.78 to 1 | passes |
 | Sage as text on Paper (rejected, recorded) | Sage (brand kit) `#A8B9A7` | Paper (brand kit) `#F7F5F0` | 1.90 to 1 | rejected |
 
-Sage fails as text on every light surface, so it is used only as a tint behind Ink or dark Teal text. A later ticket that adds a token pair adds it to the script's `PAIRS` list and regenerates this table.
+Sage fails as text on every light surface, so it serves only as a tint behind Ink or dark Teal text. A later ticket that adds a token pair adds it to the script's `PAIRS` list and regenerates this table.

@@ -14,7 +14,7 @@ The operator pushed the brand kit "Editorial Brackets" and the design documents 
 
 ## Copies the application serves
 
-Copied byte for byte from the kit into `lindra/static/img/` on 9 November 2026. When the kit changes, copy again from the same paths.
+Ticket LFR-01 copied these files byte for byte from the kit into `lindra/static/img/` on 9 November 2026. When the kit changes, copy again from the same paths.
 
 | File in `lindra/static/img/` | Kit source | Where it appears |
 | --- | --- | --- |
@@ -22,13 +22,13 @@ Copied byte for byte from the kit into `lindra/static/img/` on 9 November 2026. 
 | `lindra-symbol-color.svg` | `symbol/lindra-symbol-color.svg` | reserved for places that fit only the symbol; not used yet |
 | `favicon.svg`, `favicon.ico`, `apple-touch-icon.png` | `web/` | browser tab and iPad home screen, linked from `lindra/templates/base.html` with the kit's `theme-color` |
 
-Rules applied from the kit: the full symbol is never shown under 24 px (the top bar shows it at 32 px); the clear space around the lockup is at least the height of one of its writing lines; the Ink wordmark sits on Paper in the top bar and on White in the login card, which `docs/ui/contrast.md` records at 12.10 and 13.18 to 1.
+The shell follows the kit's rules. The full symbol never appears under 24 px (the top bar shows it at 32 px). The clear space around the lockup is at least the height of one of its writing lines. The Ink wordmark sits on Paper in the top bar and on White in the login card, which `docs/ui/contrast.md` records at 12.10 and 13.18 to 1.
 
 Not taken over: `site.webmanifest`, the Open Graph image and the app icons. Lindra is a private web application with no install flow and no public page in the first release; a later ticket that adds a home-screen install takes `web/site.webmanifest` and the `icon-*.png` files from the kit.
 
 ## Tokens
 
-How the palette became the Quiet Clarity tokens, with every text-on-surface pair checked: `docs/ui/contrast.md`. Where the theme kit and the brand kit disagree (the theme kit proposes `#24665B` for the primary, `#F7F8F5` for paper, `#203532` for ink), the brand kit wins per ADR 0009. The theme kit's amber `#865810` and red `#B43F46` are used for warning and error because the brand kit has no semantic colours and both pass.
+`docs/ui/contrast.md` records how the palette became the Quiet Clarity tokens and the contrast of every text-on-surface pair. Where the theme kit and the brand kit disagree (the theme kit proposes `#24665B` for the primary, `#F7F8F5` for paper, `#203532` for ink), the brand kit wins per ADR 0009. Warning and error use the theme kit's amber `#865810` and red `#B43F46` because the brand kit has no semantic colours and both pass.
 
 ## Known leftovers in the kit folder
 

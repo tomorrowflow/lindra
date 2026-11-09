@@ -34,8 +34,8 @@ The UI is daisyUI 5 component CSS over native semantic HTML controls, pinned and
 
 Every ticket that changes the UI, app copy, documentation or a report:
 
-1. Reads the unslop skill before work: `~/.claude/library/unslop/unslop/SKILL.md` and its `references/signs.md` (CC BY 4.0, Damir Sokolovsky). If the files are not readable, say so in the report; never claim a skill ran when it was unavailable.
-2. Checks the final diff against the signs.
+1. Reads both unslop skills before work. For UI: `~/.claude/library/unslop/unslop/SKILL.md` and its `references/signs.md` (CC BY 4.0, Damir Sokolovsky). For writing (app copy, documentation, reports): the pstack `unslop` skill, node-local copy at `~/.claude/library/pstack/unslop/SKILL.md`, source `/workspace/shared/syncthing/software-factory/pstack/skills/unslop/SKILL.md`. If a file is not readable, say so in the report; never claim a skill ran when it was unavailable.
+2. Checks the final diff against both sets of signs.
 3. Names in the proof the signs checked and every remaining finding with its reason.
 
 Keep the approved layout (ADR 0008), libraries and brand kit. No unrelated redesign, no story videos, no image generation.

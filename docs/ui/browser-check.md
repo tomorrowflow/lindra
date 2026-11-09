@@ -1,10 +1,10 @@
 # Target-browser check for the CSS distribution
 
-ADR 0009 makes daisyUI 5 conditional on a check against the support policy: the latest two major Safari and iPadOS releases, and current desktop Chrome, Firefox, Edge and Safari. Recorded by the scaffold ticket (LFR-01) on 8 November 2026.
+ADR 0009 makes daisyUI 5 conditional on a check against the support policy: the latest two major Safari and iPadOS releases, and current desktop Chrome, Firefox, Edge and Safari. Ticket LFR-01 recorded this check on 8 November 2026.
 
 ## What was checked
 
-The distribution is daisyUI 5.7.50, assembled from the package's own per-component CSS by `scripts/fetch_assets.py` (base layer plus button, drawer, menu, fieldset, label, input, alert). The CSS features it relies on were read from the assembled file:
+The distribution is daisyUI 5.7.50. `scripts/fetch_assets.py` assembles it from the package's own per-component CSS (base layer plus button, drawer, menu, fieldset, label, input, alert). The author read the assembled file for the CSS features it relies on:
 
 | Feature | Where daisyUI uses it | Shipped in |
 | --- | --- | --- |
@@ -19,14 +19,14 @@ The distribution is daisyUI 5.7.50, assembled from the package's own per-compone
 | `transition-behavior: allow-discrete` | drawer visibility | Safari 17.4, Chrome 117, Firefox 129 |
 | `animation-timeline: scroll()` | root scroll-gutter helper only | Chrome 115; Safari 26; Firefox behind a flag |
 
-The upstream statement is "daisyUI 5 requires a browser that supports Tailwind CSS 4: Safari 16.4, Chrome 111, Firefox 128 or newer". The version numbers above come from MDN compatibility data as known to the author and were not re-verified against a live source on this network.
+The upstream statement is "daisyUI 5 requires a browser that supports Tailwind CSS 4: Safari 16.4, Chrome 111, Firefox 128 or newer". The version numbers above are MDN compatibility data as the author remembers them; this network allowed no live check against MDN.
 
 ## Verdict
 
-- The two latest major Safari and iPadOS releases are well above every minimum, as are current Chrome, Edge and Firefox. The one feature outside the policy (`animation-timeline`) is a progressive helper for the scrollbar gutter; without it the page falls back to the default gutter and nothing else changes.
-- The check therefore passes on paper. No Bootstrap alternative is needed.
+- The two latest major Safari and iPadOS releases and current Chrome, Edge and Firefox all exceed every minimum. The one feature outside the policy (`animation-timeline`) only sets the scrollbar gutter; a browser without it shows the default gutter and nothing else changes.
+- The check passes on the version table. No Bootstrap alternative is needed.
 
 ## What was not checked here
 
-- No Safari, Firefox or Edge could run on the factory node. Rendering was verified in Chrome Headless Shell 156 through Playwright only (`docs/screenshots/LFR-01/`).
-- Real iPad behaviour is the operator-run check in `docs/issues/lindra-first-release/01-scaffold.md`: on Ella's iPad in Safari, the sample page renders, controls are tappable at 44 by 44 CSS pixels, keyboard focus is visible with an external keyboard, reduced motion is respected and the drawer opens and closes in portrait. The result is recorded in a card comment naming the iPad model and the Safari version; a failure goes back to the operator with a Bootstrap alternative, nothing is substituted silently.
+- No Safari, Firefox or Edge could run on the factory node. Playwright rendered the pages in Chrome Headless Shell 156 only (`docs/screenshots/LFR-01/`).
+- The operator checks the real iPad, as `docs/issues/lindra-first-release/01-scaffold.md` asks: on Ella's iPad in Safari, the sample page renders, controls are tappable at 44 by 44 CSS pixels, keyboard focus is visible with an external keyboard, reduced motion is respected and the drawer opens and closes in portrait. The operator records the result in a card comment naming the iPad model and the Safari version. A failure goes back to the operator with a Bootstrap alternative; nobody substitutes silently.
