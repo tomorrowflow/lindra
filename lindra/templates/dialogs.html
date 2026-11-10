@@ -1,0 +1,106 @@
+{#
+  The three case dialogs. Each is a native <dialog> rendered open, so it works
+  before any script runs; static/js/dialogs.js turns it into a modal. The head and
+  the action row never move: only the body scrolls, and every field keeps a message
+  slot of fixed height, so an error never shifts the buttons (ADR 0008).
+#}
+{% from "icons.html" import icon %}
+
+{% macro field(name, label, form, errors, type="text", slot=true) %}
+<div class="field">
+  <label class="field-label" for="{{ name }}">{{ label }}</label>
+  <input class="input{% if errors.get(name) %} input-error{% endif %}" id="{{ name }}" name="{{ name }}" type="{{ type }}" value="{{ form.get(name, '') }}"{% if errors.get(name) %} aria-invalid="true"{% endif %}{% if slot %} aria-describedby="{{ name }}-error"{% endif %}>
+  {% if slot %}<p class="field-error" id="{{ name }}-error">{{ errors.get(name, "") }}</p>{% endif %}
+</div>
+{% endmacro %}
+
+{% macro new_case_dialog(form, errors) %}
+<dialog class="dialog dialog-tall" open aria-labelledby="dialog-title" data-return="/">
+  <form class="dialog-form" method="post" action="/faelle/neu" novalidate>
+    <header class="dialog-head">
+      <h2 id="dialog-title">Neuer Fall</h2>
+    </header>
+    <div class="dialog-body">
+      {{ field("case_number", "Fallnummer", form, errors) }}
+      {{ field("patient_name", "Patientenname", form, errors) }}
+      {{ field("label", "Kurzbezeichnung (optional)", form, errors) }}
+      <div class="field-row">
+        {{ field("assessment_date", "Datum des Assessments", form, errors, type="date") }}
+        {{ field("assessment_time", "Uhrzeit", form, errors, type="time") }}
+      </div>
+      <div class="field-row">
+        {{ field("period_start", "Behandlungsbeginn", form, errors, type="date") }}
+        {{ field("period_end", "Behandlungsende (einschließlich)", form, errors, type="date") }}
+      </div>
+    </div>
+    <footer class="dialog-actions">
+      <a class="btn" href="/">Abbrechen</a>
+      <button class="btn btn-primary" type="submit">Fall anlegen</button>
+    </footer>
+  </form>
+</dialog>
+{% endmacro %}
+
+{# What a new period would run into; the page and the live check render the same markup. #}
+{% macro period_feedback(errors, conflicts) %}
+<div class="feedback" id="period-feedback" data-ok="{{ 'false' if errors or conflicts else 'true' }}" aria-live="polite">
+  {% if errors %}
+  <div class="alert alert-error" role="alert">
+    {{ icon("circle-alert") }}
+    <span>{{ errors.values() | join(". ") }}</span>
+  </div>
+  {% elif conflicts %}
+  <div class="alert alert-error" role="alert">
+    {{ icon("circle-alert") }}
+    <div class="alert-text">
+      <p>Nicht möglich: Diese Kontakte lägen außerhalb des neuen Zeitraums.</p>
+      <ul class="conflict-list">
+        {% for item in conflicts %}
+        <li>{{ encounter_labels[item.kind] }} am {{ item.occurred_at | german_date }}</li>
+        {% endfor %}
+      </ul>
+      <p>Kontakte werden nie gelöscht oder verschoben. Wählen Sie einen Zeitraum, der alle einschließt.</p>
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endmacro %}
+
+{% macro period_dialog(case, form, errors, conflicts) %}
+<dialog class="dialog dialog-medium" open aria-labelledby="dialog-title" data-return="/faelle/{{ case.id }}">
+  <form class="dialog-form" method="post" action="/faelle/{{ case.id }}/zeitraum" novalidate data-check="/faelle/{{ case.id }}/zeitraum/pruefen">
+    <header class="dialog-head">
+      <h2 id="dialog-title">Behandlungszeitraum ändern</h2>
+      <p class="text-secondary">{{ case.case_number }}, bisher {{ german_period(case.period_start, case.period_end) }}</p>
+    </header>
+    <div class="dialog-body">
+      <div class="field-row">
+        {{ field("period_start", "Behandlungsbeginn", form, errors, type="date", slot=false) }}
+        {{ field("period_end", "Behandlungsende (einschließlich)", form, errors, type="date", slot=false) }}
+      </div>
+      {{ period_feedback(errors, conflicts) }}
+    </div>
+    <footer class="dialog-actions">
+      <a class="btn" href="/faelle/{{ case.id }}">Abbrechen</a>
+      <button class="btn btn-primary" type="submit" data-save{% if errors or conflicts %} disabled{% endif %}>Speichern</button>
+    </footer>
+  </form>
+</dialog>
+{% endmacro %}
+
+{% macro delete_dialog(case) %}
+<dialog class="dialog dialog-short" open aria-labelledby="dialog-title" data-return="/faelle/{{ case.id }}">
+  <form class="dialog-form" method="post" action="/faelle/{{ case.id }}/loeschen">
+    <header class="dialog-head">
+      <h2 id="dialog-title">Fall löschen</h2>
+    </header>
+    <div class="dialog-body">
+      <p>Der Fall {{ case.case_number }} ({{ case.patient_name }}) wird gelöscht, mit allem, was darunter liegt: Assessment, Visiten, Notizen und Entwürfe. Das lässt sich nicht rückgängig machen. Andere Fälle bleiben unberührt.</p>
+    </div>
+    <footer class="dialog-actions">
+      <a class="btn" href="/faelle/{{ case.id }}">Abbrechen</a>
+      <button class="btn btn-error" type="submit">Löschen</button>
+    </footer>
+  </form>
+</dialog>
+{% endmacro %}

@@ -90,21 +90,6 @@ def build_router(store: Store) -> APIRouter:
         except cases.PeriodConflict as error:
             return conflict(error)
 
-    @router.get("/{case_id}/period-check")
-    def check_period(case_id: int, period_start: str = "", period_end: str = "") -> Response:
-        raw = {"period_start": period_start, "period_end": period_end}
-        try:
-            check = cases.check_period(store, case_id, raw)
-        except cases.NotFound as error:
-            return not_found(error)
-        return JSONResponse(
-            {
-                "ok": check.ok,
-                "errors": check.errors,
-                "conflicts": [encounter_json(e) for e in check.conflicts],
-            }
-        )
-
     @router.delete("/{case_id}")
     def delete_case(case_id: int) -> Response:
         try:

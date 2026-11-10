@@ -44,7 +44,6 @@ def seeded_case(client, number):
         ("POST", "/api/cases"),
         ("GET", "/api/cases/1"),
         ("PUT", "/api/cases/1/period"),
-        ("GET", "/api/cases/1/period-check"),
         ("DELETE", "/api/cases/1"),
     ],
 )
@@ -362,31 +361,6 @@ def test_correcting_the_period_of_an_unknown_case_is_not_found(api_client):
     )
 
     assert response.status_code == 404
-
-
-def test_the_period_check_reports_conflicts_without_changing_anything(api_client):
-    created = create(api_client).json()
-
-    check = api_client.get(
-        f"/api/cases/{created['id']}/period-check",
-        params={"period_start": "2026-11-10", "period_end": "2026-11-20"},
-    ).json()
-
-    assert check["ok"] is False
-    assert check["conflicts"][0]["label"] == "Aufnahmeassessment"
-    after = api_client.get(f"/api/cases/{created['id']}").json()
-    assert after["period_start"] == "2026-11-09"
-
-
-def test_the_period_check_accepts_a_period_that_fits(api_client):
-    created = create(api_client).json()
-
-    check = api_client.get(
-        f"/api/cases/{created['id']}/period-check",
-        params={"period_start": "2026-11-01", "period_end": "2026-11-30"},
-    ).json()
-
-    assert check == {"ok": True, "errors": {}, "conflicts": []}
 
 
 # ---- deleting a case ----

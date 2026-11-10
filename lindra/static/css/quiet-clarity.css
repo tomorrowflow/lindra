@@ -329,10 +329,18 @@ p {
   border-right: 1px solid var(--hairline);
 }
 
+.sidebar-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
 .sidebar-title {
   font-size: 0.9375rem;
   color: var(--text-secondary);
-  margin: 0 12px 8px;
+  margin: 0 0 0 12px;
 }
 
 .sidebar-menu {
@@ -342,15 +350,41 @@ p {
   gap: 4px;
 }
 
-.sidebar-menu .menu-title {
-  color: var(--color-base-content);
-  font-weight: 500;
-  padding: 8px 12px;
-}
-
 .sidebar-empty {
   padding: 8px 12px;
   min-height: 44px;
+}
+
+/* One case: number, patient name, period. Every row has the same three lines. */
+.case-link {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0;
+  min-height: 44px;
+  padding: 8px 12px;
+  border-radius: var(--radius-field);
+  line-height: 1.375;
+}
+
+.case-number {
+  font-weight: 500;
+}
+
+.case-period {
+  font-size: 0.9375rem;
+  color: var(--text-secondary);
+}
+
+/* The selected case: Teal on the Sage tint, plus a bar, so colour is not the only cue. */
+.sidebar-menu .case-link.menu-active {
+  background-color: var(--sage-tint);
+  color: var(--teal-on-tint);
+  box-shadow: inset 4px 0 0 var(--color-primary);
+}
+
+.sidebar-menu .case-link.menu-active .case-period {
+  color: var(--teal-on-tint);
 }
 
 /* The persistent sidebar needs no opener and no overlay. */
@@ -387,6 +421,198 @@ p {
   .drawer-button,
   .shell > .drawer-toggle {
     display: none;
+  }
+}
+
+/* ---- Case screens: start, overview ---- */
+
+.step-actions {
+  margin-top: 16px;
+}
+
+.case-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.case-subtitle {
+  font-size: 1.125rem;
+}
+
+.btn-danger {
+  color: var(--color-error);
+}
+
+.btn-danger:hover {
+  background-color: var(--error-tint);
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  align-items: center;
+  gap: 8px 24px;
+  margin: 16px 0 24px;
+}
+
+.facts dt {
+  color: var(--text-secondary);
+}
+
+.facts dd {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+}
+
+.section-title {
+  font-size: 1.125rem;
+  margin: 0 0 8px;
+}
+
+.encounter-list {
+  max-width: 560px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--hairline);
+}
+
+.encounter-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 48px;
+  padding: 0 8px;
+  border-bottom: 1px solid var(--hairline);
+}
+
+/* ---- Dialogs: head and action row stay put, only the body scrolls ---- */
+
+.dialog {
+  width: min(560px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  margin: auto;
+  padding: 0;
+  color: var(--color-base-content);
+  background-color: var(--color-base-100);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-box);
+}
+
+.dialog[open] {
+  display: flex;
+  flex-direction: column;
+}
+
+.dialog::backdrop {
+  background-color: rgb(36 51 49 / 40%);
+}
+
+/* A fixed height per dialog: a message appearing never moves the buttons. */
+.dialog-tall {
+  height: min(728px, calc(100dvh - 32px));
+}
+
+.dialog-medium {
+  height: min(480px, calc(100dvh - 32px));
+}
+
+.dialog-form {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.dialog-head {
+  flex: none;
+  padding: 20px 24px 12px;
+}
+
+.dialog-head h2 {
+  font-size: 1.25rem;
+  margin: 0;
+}
+
+.dialog-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 8px 24px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dialog-actions {
+  flex: none;
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 16px 24px;
+  border-top: 1px solid var(--hairline);
+}
+
+.dialog-actions .btn {
+  min-width: 136px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 16px;
+}
+
+.field-label {
+  font-weight: 500;
+}
+
+/* Room for one line of message under every field, whether or not there is one. */
+.field-error {
+  min-height: 24px;
+  margin: 0;
+  font-size: 0.9375rem;
+  line-height: 24px;
+  color: var(--color-error);
+}
+
+.input-error {
+  border-color: var(--color-error);
+}
+
+.dialog-body > * {
+  flex: none;
+}
+
+.feedback .alert {
+  align-items: start;
+}
+
+.alert-text p {
+  margin: 0;
+}
+
+.conflict-list {
+  margin: 8px 0;
+  padding-left: 20px;
+  list-style: disc;
+}
+
+@media (max-width: 560px) {
+  .field-row {
+    grid-template-columns: 1fr;
   }
 }
 

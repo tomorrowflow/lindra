@@ -1,0 +1,25 @@
+{% extends "shell.html" %}
+{% from "dialogs.html" import new_case_dialog %}
+{% from "icons.html" import icon %}
+{% block title %}Fall auswählen · Lindra{% endblock %}
+{% block step %}
+<div class="step-body">
+  <h1 class="step-title">Fall auswählen</h1>
+  {% if notice %}
+  <div class="alert alert-error" role="alert">
+    {{ icon("circle-alert") }}
+    <span>{{ notice }}</span>
+  </div>
+  {% endif %}
+  <p class="text-secondary">Wählen Sie in der Seitenleiste einen Fall oder legen Sie einen neuen an.</p>
+  <div class="step-actions">
+    <a class="btn btn-primary" href="/faelle/neu">
+      {{ icon("plus") }}
+      <span>Neuer Fall</span>
+    </a>
+  </div>
+</div>
+{% endblock %}
+{% block dialog %}
+{% if dialog == "new_case" %}{{ new_case_dialog(form, errors) }}{% endif %}
+{% endblock %}

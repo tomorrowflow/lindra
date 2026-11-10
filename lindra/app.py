@@ -1,4 +1,4 @@
-"""The Lindra web service: health endpoint, login and the application shell."""
+"""The Lindra web service: health endpoint, login, the case pages and the JSON API."""
 
 from __future__ import annotations
 
@@ -11,12 +11,16 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
-from lindra import auth, case_api, seed
+from lindra import auth, case_api, cases, formatting, pages, seed
 from lindra.config import Settings
 from lindra.store import DATABASE_FILE, Store
 
 PACKAGE_DIR = Path(__file__).resolve().parent
 TEMPLATES = Jinja2Templates(directory=PACKAGE_DIR / "templates")
+TEMPLATES.env.filters["german_date"] = formatting.german_date
+TEMPLATES.env.filters["german_datetime"] = formatting.german_datetime
+TEMPLATES.env.globals["german_period"] = formatting.german_period
+TEMPLATES.env.globals["encounter_labels"] = cases.ENCOUNTER_LABELS
 LOGIN_ERROR = "Der Zugangsschlüssel ist nicht gültig"
 
 
@@ -26,6 +30,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.mount("/static", StaticFiles(directory=PACKAGE_DIR / "static"), name="static")
     store = Store(settings.data_dir / DATABASE_FILE)
     app.include_router(case_api.build_router(store))
+    app.include_router(pages.build_router(store, TEMPLATES))
 
     # Middleware added later wraps the earlier ones, so the session is loaded
     # before the guard looks at it.
@@ -67,10 +72,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             return seed.run(store, settings.data_dir)
         except seed.InvalidCast as error:
             raise HTTPException(status_code=500, detail=str(error)) from error
-
-    @app.get("/", response_class=HTMLResponse)
-    def shell(request: Request) -> Response:
-        return TEMPLATES.TemplateResponse(request, "shell.html")
 
     @app.get(auth.LOGIN_PATH, response_class=HTMLResponse)
     def login_page(request: Request) -> Response:
