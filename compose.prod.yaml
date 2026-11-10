@@ -1,0 +1,7 @@
+# The operator's production stack (user frogger, project lindra-prod). Layered
+# over compose.yaml by `scripts/env.py up --tier production`. The host is an
+# open decision (ADR 0007); the stack holds only the fictional cast until the
+# separate approval of ADR 0006 exists.
+services:
+  lindra:
+    restart: unless-stopped

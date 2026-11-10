@@ -3,15 +3,15 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
-from fastapi import FastAPI, Form, Request
+from fastapi import FastAPI, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
-from lindra import auth
+from lindra import auth, seed
 from lindra.config import Settings
 
 PACKAGE_DIR = Path(__file__).resolve().parent
@@ -39,11 +39,31 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def health() -> dict[str, str]:
         return {"status": "ok"}
 
-    # The one authenticated API route of the scaffold: the environment check
-    # (ticket 02) and the tests use it to prove a token is accepted.
+    # The smallest authenticated route: the environment check and the tests use
+    # it to prove a token is accepted.
     @app.get("/api/session")
     def session_state() -> dict[str, bool]:
         return {"authenticated": True}
+
+    # What `scripts/env.py check` reads: which stand-ins and commit run here, and
+    # whether the seed hook has run on this volume.
+    @app.get("/api/environment")
+    def environment() -> dict[str, Any]:
+        return {
+            "tier": settings.tier,
+            "commit": settings.commit,
+            "text_backend": settings.text_backend,
+            "speech_backend": settings.speech_backend,
+            "seed": seed.read_report(settings.data_dir),
+        }
+
+    # The seed hook `scripts/env.py reset` calls: the fictional cast, nothing else.
+    @app.post("/api/seed")
+    def seed_cast() -> dict[str, Any]:
+        try:
+            return seed.run(settings.data_dir)
+        except seed.InvalidCast as error:
+            raise HTTPException(status_code=500, detail=str(error)) from error
 
     @app.get("/", response_class=HTMLResponse)
     def shell(request: Request) -> Response:

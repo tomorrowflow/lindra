@@ -1,5 +1,9 @@
 # Secrets: the application token lives here and is never committed.
 .env
+# Env files `scripts/env.py` generates per stack, each with its own token.
+.lindra-env/
+# Local data directory of a service run outside Docker.
+/data/
 
 # Python
 .venv/

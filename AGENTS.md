@@ -18,8 +18,13 @@ Run Python through the project virtualenv. Nothing needs Node or a network at ru
 | Vendor assets | `python3 scripts/fetch_assets.py --check` verifies the pins; without `--check` it refetches |
 | Screenshots | `.venv/bin/python -m playwright install chromium` once, then `.venv/bin/python scripts/screenshots.py` |
 | CI lint | `docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.12 -no-color` |
+| Throwaway stack | `python3 scripts/env.py up --project lindra-<ticket>`, then `check`, `reset` and `down` with the same `--project` |
 
 CI (`.github/workflows/ci.yml`) runs install, lint, format check, vendor check, contrast check and tests on every push and pull request.
+
+## Environments
+
+`docs/environments.md` documents every tier (throwaway, test, production): user, node, host, port, compose project, commands, data rule and stand-ins, and the production runbook. A ticket runs only its own throwaway stack through `scripts/env.py` and never touches the test tier or production. The stack runs on the stand-ins and the fictional cast in `lindra/cast.py`; nothing real, pseudonymised or production-copied goes into any tier or into the repository (ADR 0006, ADR 0007).
 
 ## Code and tests
 
