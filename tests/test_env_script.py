@@ -351,6 +351,40 @@ def test_up_pins_a_port_and_bind_address_and_keeps_the_token(env, stack):
     assert env.read_env(env.STATE_DIR / "lindra-prod.env") == pinned
 
 
+@pytest.mark.parametrize(
+    ("bind", "host"),
+    [
+        ("10.0.0.5", "10.0.0.5"),
+        ("127.0.0.1", "127.0.0.1"),
+        ("0.0.0.0", "127.0.0.1"),
+        ("::", "[::1]"),
+        ("fd00::5", "[fd00::5]"),
+    ],
+)
+def test_commands_reach_the_stack_on_the_address_it_is_bound_to(
+    env, stack, monkeypatch, capsys, bind, host
+):
+    urls = []
+    real = stack.http
+
+    def recording(method, url, token=None, timeout=5.0):
+        urls.append(url)
+        return real(method, url, token, timeout)
+
+    monkeypatch.setattr(env, "http", recording)
+    waited = []
+    monkeypatch.setattr(env, "wait_for_health", lambda url: waited.append(url) or True)
+
+    assert run_main(env, "up", "--tier", "production", "--port", "9001", "--bind", bind) == 0
+    assert run_main(env, "check", "--tier", "production") == 0
+    assert run_main(env, "reset", "--tier", "production") == 0
+
+    assert waited == [f"http://{host}:9001"]
+    assert urls
+    assert all(url.startswith(f"http://{host}:9001/") for url in urls)
+    assert "up: lindra-prod runs" in capsys.readouterr().out
+
+
 def test_down_keeps_the_production_volume_unless_purged(env, stack):
     run_main(env, "up", "--tier", "production")
 

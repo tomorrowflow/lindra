@@ -171,7 +171,7 @@ def ensure_env_file(
     values = {
         "LINDRA_TOKEN": stored.get("LINDRA_TOKEN") or secrets.token_urlsafe(32),
         "LINDRA_PORT": str(port or stored.get("LINDRA_PORT") or target.port or free_port()),
-        "LINDRA_BIND": bind or stored.get("LINDRA_BIND") or target.bind,
+        "LINDRA_BIND": format_bind(bind or stored.get("LINDRA_BIND") or target.bind),
         "LINDRA_TIER": target.tier,
     }
     if all(stored.get(key) == value for key, value in values.items()):
@@ -190,8 +190,22 @@ def local_endpoint(target: Target) -> tuple[str, str] | None:
     values = read_env(target.env_file)
     if not values.get("LINDRA_TOKEN") or not values.get("LINDRA_PORT"):
         return None
-    host = "127.0.0.1"
-    return f"http://{host}:{values['LINDRA_PORT']}", values["LINDRA_TOKEN"]
+    return base_url(values), values["LINDRA_TOKEN"]
+
+
+def format_bind(bind: str) -> str:
+    """An IPv6 address needs brackets in a compose port mapping and in a URL."""
+    return f"[{bind}]" if ":" in bind and not bind.startswith("[") else bind
+
+
+def base_url(values: dict[str, str]) -> str:
+    """The URL that reaches the stack: its bind address, or loopback for a wildcard bind.
+
+    A stack bound to one address answers only there, so `127.0.0.1` would miss it.
+    """
+    bind = values.get("LINDRA_BIND") or LOCAL_BIND
+    host = {"0.0.0.0": LOCAL_BIND, "[::]": "[::1]"}.get(bind, bind)
+    return f"http://{host}:{values['LINDRA_PORT']}"
 
 
 # ---------------------------------------------------------------- compose
@@ -279,7 +293,7 @@ def cmd_up(args: argparse.Namespace) -> int:
     values = ensure_env_file(target, args.port, args.bind)
     commit = head_commit()
     compose(target, "up", "-d", "--build", "--wait", "--remove-orphans", commit=commit)
-    url = f"http://127.0.0.1:{values['LINDRA_PORT']}"
+    url = base_url(values)
     if not wait_for_health(url):
         print(f"up: the stack did not answer on {url}/health within {HEALTH_WAIT_SECONDS} s")
         return 1

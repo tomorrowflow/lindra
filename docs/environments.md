@@ -94,7 +94,7 @@ Before the first run, name the host and record it in "The production host is ope
 1. Clone the repository: `git clone https://github.com/tomorrowflow/lindra.git`, then work in the checkout.
 2. Choose the commit. It must be a `main` commit that the test tier runs and that passes `check`. With `LINDRA_TEST_URL` and `LINDRA_TEST_TOKEN` in the profile of `frogger`, run `scripts/env.py check --remote` and read the commit in its last `ok` line. Confirm that the continuous integration run for that commit is green.
 3. Check it out: `git fetch origin main`, then `git checkout --detach <commit>`.
-4. Deploy: `python3 scripts/env.py up --tier production --port <port> --bind <address>`. The first run generates the production token in `.lindra-env/lindra-prod.env`. Keep that file with the operator and never commit it. Later runs reuse the token, port and address.
+4. Deploy: `python3 scripts/env.py up --tier production --port <port> --bind <address>`. The first run generates the production token in `.lindra-env/lindra-prod.env`. Keep that file with the operator and never commit it. Later runs reuse the token, port and address. `check` and `reset` reach the stack on that address; a wildcard address (`0.0.0.0` or `::`) is reached through loopback.
 5. Verify: `python3 scripts/env.py check --tier production` must exit 0. A passing check says the stack works. It does not authorise real patient data.
 6. To update, repeat steps 2 to 5 with a newer commit. To roll back, check out the earlier commit and run step 4 again. The volume stays.
 7. To stop the stack, run `scripts/env.py down --tier production`. Add `--purge` to remove the volume and the env file as well.
