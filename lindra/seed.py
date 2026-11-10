@@ -2,7 +2,8 @@
 
 It seeds the fictional cast and nothing else. It validates the cast, then
 replaces the cast's cases in case storage: each fictional case is deleted by its
-case number and stored again with its assessment and visits. Cases the physician
+case number and stored again with its assessment and visits and their notes (each
+at notes revision 1, as if saved once). Cases the physician
 created under other numbers stay. The report goes to a marker file on the data
 volume so `check` can confirm the hook ran, also after a restart, and counts
 only while every cast case is still in storage.
@@ -53,9 +54,10 @@ def store_cast(store: Store, fictional: cast.Cast) -> None:
                 case.period_end,
             )
             for encounter in case.encounters:
-                tx.add_encounter(
+                encounter_id = tx.add_encounter(
                     case_id, encounter.kind, datetime.combine(encounter.date, SEEDED_TIME)
                 )
+                tx.set_notes(case_id, encounter_id, encounter.notes)
 
 
 def build_report(fictional: cast.Cast) -> dict[str, Any]:

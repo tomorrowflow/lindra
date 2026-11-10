@@ -8,7 +8,7 @@ from fastapi import APIRouter, Body, Response
 from fastapi.responses import JSONResponse
 
 from lindra import cases
-from lindra.store import TIMESTAMP_FORMAT, Case, Encounter, Store
+from lindra.store import TIMESTAMP_FORMAT, Case, Encounter, OpenedEncounter, Store
 
 
 def encounter_json(encounter: Encounter) -> dict[str, Any]:
@@ -17,7 +17,12 @@ def encounter_json(encounter: Encounter) -> dict[str, Any]:
         "kind": encounter.kind,
         "label": cases.ENCOUNTER_LABELS[encounter.kind],
         "occurred_at": encounter.occurred_at.strftime(TIMESTAMP_FORMAT),
+        "notes_revision": encounter.notes_revision,
     }
+
+
+def opened_json(opened: OpenedEncounter) -> dict[str, Any]:
+    return {**encounter_json(opened.encounter), "notes": opened.notes}
 
 
 def case_json(case: Case) -> dict[str, Any]:
@@ -89,6 +94,33 @@ def build_router(store: Store) -> APIRouter:
             return invalid(error)
         except cases.PeriodConflict as error:
             return conflict(error)
+
+    @router.post("/{case_id}/visits")
+    def create_visit(case_id: int, raw: RawBody) -> Response:
+        try:
+            visit = cases.create_visit(store, case_id, raw or {})
+            return JSONResponse(encounter_json(visit), status_code=201)
+        except cases.NotFound as error:
+            return not_found(error)
+        except cases.Invalid as error:
+            return invalid(error)
+
+    @router.get("/{case_id}/encounters/{encounter_id}")
+    def get_encounter(case_id: int, encounter_id: int) -> Response:
+        try:
+            return JSONResponse(opened_json(cases.get_encounter(store, case_id, encounter_id)))
+        except cases.NotFound as error:
+            return not_found(error)
+
+    @router.put("/{case_id}/encounters/{encounter_id}/notes")
+    def save_notes(case_id: int, encounter_id: int, raw: RawBody) -> Response:
+        try:
+            saved = cases.save_notes(store, case_id, encounter_id, raw or {})
+            return JSONResponse(opened_json(saved))
+        except cases.NotFound as error:
+            return not_found(error)
+        except cases.Invalid as error:
+            return invalid(error)
 
     @router.delete("/{case_id}")
     def delete_case(case_id: int) -> Response:

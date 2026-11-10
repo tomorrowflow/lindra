@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% from "icons.html" import icon %}
+{% from "encounters.html" import badge %}
 {% block body %}
 <div class="shell drawer">
   <input id="sidebar-toggle" class="drawer-toggle" type="checkbox" aria-label="Seitenleiste">
@@ -14,10 +15,12 @@
       <div class="topbar-spacer"></div>
       {# The status area never shifts the layout and never looks like a button (ADR 0008). #}
       <div class="status-area" role="status" aria-live="polite">
+        {% block status %}
         <span class="status-indicator status-ok">
           {{ icon("circle-check") }}
           <span>Verbunden</span>
         </span>
+        {% endblock %}
       </div>
       <form method="post" action="/abmelden">
         <button class="btn btn-ghost" type="submit">
@@ -62,7 +65,7 @@
       <ul class="menu sidebar-menu">
         {% for item in cases %}
         <li>
-          <a class="case-link{% if item.id == selected_id %} menu-active{% endif %}" href="/faelle/{{ item.id }}"{% if item.id == selected_id %} aria-current="page"{% endif %}>
+          <a class="case-link{% if item.id == selected_id %} menu-active{% endif %}" href="/faelle/{{ item.id }}"{% if item.id == selected_id %} aria-current="{{ 'true' if selected_encounter_id else 'page' }}"{% endif %}>
             <span class="case-number">{{ item.case_number }}</span>
             <span class="case-name">{{ item.patient_name }}</span>
             <span class="case-period">{{ german_period(item.period_start, item.period_end) }}</span>
@@ -72,10 +75,45 @@
         <li class="sidebar-empty text-secondary">Noch keine Fälle angelegt</li>
         {% endfor %}
       </ul>
+
+      {# The selected case's encounters; review steps expand only beneath the selected one (ADR 0008). #}
+      {% if case %}
+      <div class="sidebar-head sidebar-group">
+        <h2 class="sidebar-title">Kontakte</h2>
+        <a class="btn btn-ghost" href="/faelle/{{ case.id }}/visiten/neu">
+          {{ icon("plus") }}
+          <span>Neue Visite</span>
+        </a>
+      </div>
+      <ul class="encounter-menu">
+        {% for item in case.encounters %}
+        {% set selected = item.id == selected_encounter_id %}
+        <li class="encounter-item">
+          <a class="encounter-link{% if selected %} current{% endif %}" href="/faelle/{{ case.id }}/kontakte/{{ item.id }}/notizen"{% if selected %} aria-current="true"{% endif %}>
+            <span class="encounter-label">{{ encounter_labels[item.kind] }}</span>
+            <span class="encounter-when">{{ item.occurred_at | german_datetime }}</span>
+          </a>
+          {{ badge(item, "side") }}
+          {% if selected %}
+          <ul class="step-list" aria-label="Schritte">
+            <li>
+              <a class="step-link current" href="/faelle/{{ case.id }}/kontakte/{{ item.id }}/notizen" aria-current="page">
+                <span class="step-number">1</span>
+                <span>Notizen</span>
+              </a>
+            </li>
+          </ul>
+          {% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+      {% endif %}
     </nav>
   </aside>
 </div>
 
 {% block dialog %}{% endblock %}
+<script src="/static/js/badges.js" defer></script>
 <script src="/static/js/dialogs.js" defer></script>
+{% block scripts %}{% endblock %}
 {% endblock %}

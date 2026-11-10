@@ -120,6 +120,24 @@ p {
   color: var(--text-secondary);
 }
 
+/* The hidden attribute must win over component display rules such as .btn. */
+[hidden] {
+  display: none !important;
+}
+
+/* Text for screen readers only; it takes no room. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
 /* ---- Focus: visible for every keyboard user, one ring everywhere ---- */
 
 :focus-visible,
@@ -237,7 +255,7 @@ p {
    no border, no background, no pointer, so it never reads as a button. */
 .status-area {
   flex: none;
-  width: 176px;
+  width: 200px;
   display: flex;
   justify-content: flex-end;
   color: var(--text-secondary);
@@ -262,6 +280,19 @@ p {
 
 .status-ok {
   color: var(--color-success);
+}
+
+/* Every state also has its own icon and word, so colour is never the only cue. */
+.status-busy {
+  color: var(--text-secondary);
+}
+
+.status-warn {
+  color: var(--color-warning);
+}
+
+.status-error {
+  color: var(--color-error);
 }
 
 .step {
@@ -483,12 +514,191 @@ p {
 
 .encounter-row {
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  padding: 0 4px 0 0;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.encounter-row-link {
+  flex: 1;
+  display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
   min-height: 48px;
   padding: 0 8px;
-  border-bottom: 1px solid var(--hairline);
+}
+
+.encounter-row-link:hover {
+  background-color: var(--color-base-100);
+}
+
+/* ---- Encounters in the sidebar: rows, state badges, the selected one's steps ---- */
+
+.encounter-row-link,
+.encounter-link,
+.step-link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.sidebar-group {
+  margin-top: 16px;
+}
+
+.encounter-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.encounter-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.encounter-link {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 44px;
+  padding: 6px 12px;
+  border-radius: var(--radius-field);
+  line-height: 1.375;
+}
+
+.encounter-link:hover,
+.step-link:hover {
+  background-color: var(--color-base-200);
+}
+
+.encounter-label {
+  font-weight: 500;
+}
+
+.encounter-when {
+  font-size: 0.9375rem;
+  color: var(--text-secondary);
+}
+
+/* The selected encounter and its step: the same Teal on Sage tint and bar as the case. */
+.encounter-link.current,
+.step-link.current {
+  background-color: var(--sage-tint);
+  color: var(--teal-on-tint);
+  box-shadow: inset 4px 0 0 var(--color-primary);
+}
+
+.encounter-link.current .encounter-when {
+  color: var(--teal-on-tint);
+}
+
+/* The badge is an icon button; its explanation opens below the row on tap. */
+.badge-button {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-field);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.badge-button:hover {
+  background-color: var(--color-base-300);
+}
+
+.badge-button[aria-expanded="true"] {
+  background-color: var(--sage-tint);
+  color: var(--teal-on-tint);
+}
+
+.badge-explanation {
+  flex-basis: 100%;
+  margin: 0 0 4px;
+  padding: 8px 12px;
+  font-size: 0.9375rem;
+  color: var(--text-secondary);
+  background-color: var(--color-base-200);
+  border-radius: var(--radius-field);
+}
+
+.step-list {
+  flex-basis: 100%;
+  margin: 4px 0 8px 12px;
+  padding: 0 0 0 8px;
+  list-style: none;
+  border-left: 1px solid var(--hairline);
+}
+
+.step-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 6px 12px;
+  border-radius: var(--radius-field);
+}
+
+.step-number {
+  width: 1.25rem;
+  font-size: 0.9375rem;
+  color: var(--text-secondary);
+}
+
+.step-link.current .step-number {
+  color: var(--teal-on-tint);
+}
+
+/* ---- The notes step: one free text area under a stable header ---- */
+
+.case-ref {
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+/* The retry button's place is reserved, so showing it moves nothing. */
+.retry-slot {
+  flex: none;
+  width: 184px;
+  min-height: 44px;
+}
+
+.retry-button {
+  width: 100%;
+}
+
+.notes-step {
+  gap: 12px;
+}
+
+.notes-area {
+  flex: 1;
+  min-height: 240px;
+  width: 100%;
+  padding: 12px 16px;
+  resize: none;
+  font-size: 1rem;
+  line-height: 1.5;
+  background-color: var(--color-base-100);
+  border: 1px solid rgb(36 51 49 / 25%);
+  border-radius: var(--radius-field);
+}
+
+.notes-area:focus {
+  border-color: var(--color-primary);
 }
 
 /* ---- Dialogs: head and action row stay put, only the body scrolls ---- */
@@ -590,6 +800,15 @@ p {
 
 .input-error {
   border-color: var(--color-error);
+}
+
+/* The note under the new-visit fields has room for two lines, used or not. */
+.field-note {
+  min-height: 48px;
+  margin: 0;
+  font-size: 0.9375rem;
+  line-height: 24px;
+  color: var(--text-secondary);
 }
 
 .dialog-body > * {

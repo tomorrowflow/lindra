@@ -13,6 +13,17 @@ for (const dialog of document.querySelectorAll("dialog[data-return]")) {
   if (form) watchPeriod(form);
 }
 
+// The note under the new-visit fields says where the starting values came from. Once
+// the physician changes one of them it no longer applies.
+const visitNote = document.querySelector("#visit-note");
+if (visitNote) {
+  for (const name of ["visit_date", "visit_time"]) {
+    document.getElementById(name).addEventListener("input", () => {
+      visitNote.textContent = "";
+    });
+  }
+}
+
 function watchPeriod(form) {
   const save = form.querySelector("[data-save]");
   let latest = 0;

@@ -6,10 +6,10 @@
 #}
 {% from "icons.html" import icon %}
 
-{% macro field(name, label, form, errors, type="text", slot=true) %}
+{% macro field(name, label, form, errors, type="text", slot=true, min="", max="") %}
 <div class="field">
   <label class="field-label" for="{{ name }}">{{ label }}</label>
-  <input class="input{% if errors.get(name) %} input-error{% endif %}" id="{{ name }}" name="{{ name }}" type="{{ type }}" value="{{ form.get(name, '') }}"{% if errors.get(name) %} aria-invalid="true"{% endif %}{% if slot %} aria-describedby="{{ name }}-error"{% endif %}>
+  <input class="input{% if errors.get(name) %} input-error{% endif %}" id="{{ name }}" name="{{ name }}" type="{{ type }}" value="{{ form.get(name, '') }}"{% if min %} min="{{ min }}"{% endif %}{% if max %} max="{{ max }}"{% endif %}{% if errors.get(name) %} aria-invalid="true"{% endif %}{% if slot %} aria-describedby="{{ name }}-error"{% endif %}>
   {% if slot %}<p class="field-error" id="{{ name }}-error">{{ errors.get(name, "") }}</p>{% endif %}
 </div>
 {% endmacro %}
@@ -83,6 +83,27 @@
     <footer class="dialog-actions">
       <a class="btn" href="/faelle/{{ case.id }}">Abbrechen</a>
       <button class="btn btn-primary" type="submit" data-save{% if errors or conflicts %} disabled{% endif %}>Speichern</button>
+    </footer>
+  </form>
+</dialog>
+{% endmacro %}
+
+{# The date picker stops at the period; the note says where the date came from (ADR 0010). #}
+{% macro visit_dialog(case, form, errors, note) %}
+<dialog class="dialog dialog-medium" open aria-labelledby="dialog-title" data-return="/faelle/{{ case.id }}">
+  <form class="dialog-form" method="post" action="/faelle/{{ case.id }}/visiten/neu" novalidate>
+    <header class="dialog-head">
+      <h2 id="dialog-title">Neue Visite</h2>
+      <p class="text-secondary">{{ case.case_number }}, Behandlungszeitraum {{ german_period(case.period_start, case.period_end) }}</p>
+    </header>
+    <div class="dialog-body">
+      {{ field("visit_date", "Datum", form, errors, type="date", min=case.period_start.isoformat(), max=case.period_end.isoformat()) }}
+      {{ field("visit_time", "Uhrzeit", form, errors, type="time") }}
+      <p class="field-note" id="visit-note">{{ note }}</p>
+    </div>
+    <footer class="dialog-actions">
+      <a class="btn" href="/faelle/{{ case.id }}">Abbrechen</a>
+      <button class="btn btn-primary" type="submit">Visite anlegen</button>
     </footer>
   </form>
 </dialog>

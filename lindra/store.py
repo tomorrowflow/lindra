@@ -30,11 +30,23 @@ CREATE TABLE IF NOT EXISTS encounters (
     id INTEGER PRIMARY KEY,
     case_id INTEGER NOT NULL REFERENCES cases(id) ON DELETE CASCADE,
     kind TEXT NOT NULL CHECK (kind IN ('assessment', 'visit')),
-    occurred_at TEXT NOT NULL
+    occurred_at TEXT NOT NULL,
+    notes TEXT NOT NULL DEFAULT '',
+    notes_revision INTEGER NOT NULL DEFAULT 0
 );
 CREATE UNIQUE INDEX IF NOT EXISTS one_assessment_per_case
     ON encounters (case_id) WHERE kind = 'assessment';
 """
+
+# Columns added after the first release of the schema; a volume created before
+# them gets them when the service starts. (name, definition)
+ADDED_COLUMNS = (
+    ("notes", "TEXT NOT NULL DEFAULT ''"),
+    ("notes_revision", "INTEGER NOT NULL DEFAULT 0"),
+)
+# What a case listing reads of an encounter: everything but the notes text, which
+# can be long and belongs to the one encounter being opened.
+ENCOUNTER_COLUMNS = "id, kind, occurred_at, notes_revision, notes != '' AS has_notes"
 
 
 class DuplicateCaseNumber(Exception):
@@ -46,6 +58,14 @@ class Encounter:
     id: int
     kind: str
     occurred_at: datetime
+    notes_revision: int = 0
+    has_notes: bool = False
+
+
+@dataclass(frozen=True)
+class OpenedEncounter:
+    encounter: Encounter
+    notes: str
 
 
 @dataclass(frozen=True)
@@ -76,12 +96,11 @@ class Tx:
 
     def with_encounters(self, row: sqlite3.Row) -> Case:
         found = self.connection.execute(
-            "SELECT * FROM encounters WHERE case_id = ? ORDER BY occurred_at, id", (row["id"],)
+            f"SELECT {ENCOUNTER_COLUMNS} FROM encounters WHERE case_id = ?"
+            " ORDER BY occurred_at, id",
+            (row["id"],),
         )
-        encounters = tuple(
-            Encounter(e["id"], e["kind"], datetime.strptime(e["occurred_at"], TIMESTAMP_FORMAT))
-            for e in found
-        )
+        encounters = tuple(encounter_from(e) for e in found)
         return Case(
             id=row["id"],
             case_number=row["case_number"],
@@ -114,6 +133,22 @@ class Tx:
         assert cursor.lastrowid is not None
         return cursor.lastrowid
 
+    def get_encounter(self, case_id: int, encounter_id: int) -> OpenedEncounter | None:
+        """One encounter of this case with its notes; None when the case has no such encounter."""
+        row = self.connection.execute(
+            f"SELECT {ENCOUNTER_COLUMNS}, notes FROM encounters WHERE id = ? AND case_id = ?",
+            (encounter_id, case_id),
+        ).fetchone()
+        return OpenedEncounter(encounter_from(row), row["notes"]) if row else None
+
+    def set_notes(self, case_id: int, encounter_id: int, notes: str) -> None:
+        """Save the notes; the revision advances only when the text changed."""
+        self.connection.execute(
+            "UPDATE encounters SET notes = ?, notes_revision = notes_revision + 1"
+            " WHERE id = ? AND case_id = ? AND notes != ?",
+            (notes, encounter_id, case_id, notes),
+        )
+
     def set_period(self, case_id: int, start: date, end: date) -> None:
         self.connection.execute(
             "UPDATE cases SET period_start = ?, period_end = ? WHERE id = ?",
@@ -135,6 +170,16 @@ class Tx:
         return all(number.lower() in found for number in case_numbers)
 
 
+def encounter_from(row: sqlite3.Row) -> Encounter:
+    return Encounter(
+        row["id"],
+        row["kind"],
+        datetime.strptime(row["occurred_at"], TIMESTAMP_FORMAT),
+        row["notes_revision"],
+        bool(row["has_notes"]),
+    )
+
+
 class Store:
     def __init__(self, path: Path) -> None:
         self.path = path
@@ -142,6 +187,10 @@ class Store:
         connection = self.connect()
         try:
             connection.executescript(SCHEMA)
+            present = {row["name"] for row in connection.execute("PRAGMA table_info(encounters)")}
+            for name, definition in ADDED_COLUMNS:
+                if name not in present:
+                    connection.execute(f"ALTER TABLE encounters ADD COLUMN {name} {definition}")
         finally:
             connection.close()
 

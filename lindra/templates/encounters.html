@@ -1,0 +1,16 @@
+{#
+  The state badge of an encounter: an icon button whose explanation opens on tap
+  (static/js/badges.js). The explanation is in the page, hidden, so nothing is
+  fetched and nothing shifts: it opens below the row it belongs to. `place` keeps
+  the element ids apart where one encounter appears twice on a page.
+#}
+{% from "icons.html" import icon %}
+
+{% macro badge(encounter, place) %}
+{% set state = encounter_badge(encounter) %}
+{% set explanation_id = "badge-" ~ place ~ "-" ~ encounter.id %}
+<button class="badge-button" type="button" aria-label="Zustand: {{ state.label }}" aria-expanded="false" aria-controls="{{ explanation_id }}">
+  {{ icon(state.icon) }}
+</button>
+<p class="badge-explanation" id="{{ explanation_id }}" hidden>{{ state.explanation }}</p>
+{% endmacro %}
