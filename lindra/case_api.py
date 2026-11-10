@@ -8,7 +8,7 @@ from fastapi import APIRouter, Body, Response
 from fastapi.responses import JSONResponse
 
 from lindra import cases
-from lindra.store import Case, Encounter, Store
+from lindra.store import TIMESTAMP_FORMAT, Case, Encounter, Store
 
 
 def encounter_json(encounter: Encounter) -> dict[str, Any]:
@@ -16,7 +16,7 @@ def encounter_json(encounter: Encounter) -> dict[str, Any]:
         "id": encounter.id,
         "kind": encounter.kind,
         "label": cases.ENCOUNTER_LABELS[encounter.kind],
-        "occurred_at": encounter.occurred_at.strftime("%Y-%m-%dT%H:%M"),
+        "occurred_at": encounter.occurred_at.strftime(TIMESTAMP_FORMAT),
     }
 
 

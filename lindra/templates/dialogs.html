@@ -45,12 +45,12 @@
 {% macro period_feedback(errors, conflicts) %}
 <div class="feedback" id="period-feedback" data-ok="{{ 'false' if errors or conflicts else 'true' }}" aria-live="polite">
   {% if errors %}
-  <div class="alert alert-error" role="alert">
+  <div class="alert alert-error">
     {{ icon("circle-alert") }}
     <span>{{ errors.values() | join(". ") }}</span>
   </div>
   {% elif conflicts %}
-  <div class="alert alert-error" role="alert">
+  <div class="alert alert-error">
     {{ icon("circle-alert") }}
     <div class="alert-text">
       <p>Nicht möglich: Diese Kontakte lägen außerhalb des neuen Zeitraums.</p>
@@ -89,7 +89,7 @@
 {% endmacro %}
 
 {% macro delete_dialog(case) %}
-<dialog class="dialog dialog-short" open aria-labelledby="dialog-title" data-return="/faelle/{{ case.id }}">
+<dialog class="dialog" open aria-labelledby="dialog-title" data-return="/faelle/{{ case.id }}">
   <form class="dialog-form" method="post" action="/faelle/{{ case.id }}/loeschen">
     <header class="dialog-head">
       <h2 id="dialog-title">Fall löschen</h2>
