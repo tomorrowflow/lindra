@@ -1,4 +1,4 @@
-"""The case pages: start screen, overview, and the three dialogs (ADR 0008).
+"""The case pages: start screen, overview, the dialogs and an encounter's notes step (ADR 0008).
 
 Each dialog is a page of its own: the route renders the screen behind it with the
 dialog open, so the browser's back button, a reload and a refused form all behave
@@ -7,6 +7,8 @@ without client state. The token guard in `lindra/auth.py` covers every route her
 
 from __future__ import annotations
 
+from collections.abc import Callable
+from datetime import datetime
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Form, Request
@@ -14,8 +16,10 @@ from fastapi.responses import RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
-from lindra import cases
+from lindra import cases, formatting, periods
 from lindra.store import Case, Store
+
+Clock = Callable[[], datetime]
 
 
 class PeriodForm(BaseModel):
@@ -33,11 +37,28 @@ class NewCaseForm(PeriodForm):
     assessment_time: str = ""
 
 
+class VisitForm(BaseModel):
+    visit_date: str = ""
+    visit_time: str = ""
+
+
 NewCaseBody = Annotated[NewCaseForm, Form()]
 PeriodBody = Annotated[PeriodForm, Form()]
+VisitBody = Annotated[VisitForm, Form()]
 
 
-def build_router(store: Store, templates: Jinja2Templates) -> APIRouter:
+def visit_defaults(case: Case, now: datetime) -> tuple[dict[str, str], str]:
+    """What the new-visit form starts with and the note that says why."""
+    start = periods.default_visit_at(now, case.period_start, case.period_end)
+    if start is None:
+        today = formatting.german_date(now.date())
+        outside = f"Heute ({today}) liegt außerhalb des Behandlungszeitraums"
+        return {}, f"{outside}; es wird kein Datum vorbelegt."
+    form = {"visit_date": start.date().isoformat(), "visit_time": start.strftime("%H:%M")}
+    return form, "Vorbelegt mit jetzt. Die Uhrzeit lässt sich ändern."
+
+
+def build_router(store: Store, templates: Jinja2Templates, clock: Clock) -> APIRouter:
     router = APIRouter()
 
     def page(
@@ -93,6 +114,56 @@ def build_router(store: Store, templates: Jinja2Templates) -> APIRouter:
     @router.get("/faelle/{case_id}")
     def overview(request: Request, case_id: int) -> Response:
         return with_case(request, case_id, "case.html")
+
+    @router.get("/faelle/{case_id}/visiten/neu")
+    def new_visit_form(request: Request, case_id: int) -> Response:
+        try:
+            case = cases.get_case(store, case_id)
+        except cases.NotFound as error:
+            return not_found(request, error)
+        form, note = visit_defaults(case, clock())
+        return page(
+            request, "case.html", case=case, dialog="new_visit", form=form, errors={}, note=note
+        )
+
+    @router.post("/faelle/{case_id}/visiten/neu")
+    def create_visit(request: Request, case_id: int, body: VisitBody) -> Response:
+        form = body.model_dump()
+        try:
+            visit = cases.create_visit(store, case_id, form)
+        except cases.NotFound as error:
+            return not_found(request, error)
+        except cases.Invalid as error:
+            return with_case(
+                request,
+                case_id,
+                "case.html",
+                status_code=422,
+                dialog="new_visit",
+                form=form,
+                errors=error.errors,
+                note="",
+            )
+        return RedirectResponse(f"/faelle/{case_id}/kontakte/{visit.id}/notizen", status_code=303)
+
+    @router.get("/faelle/{case_id}/kontakte/{encounter_id}/notizen")
+    def notes_step(request: Request, case_id: int, encounter_id: int) -> Response:
+        try:
+            case = cases.get_case(store, case_id)
+        except cases.NotFound as error:
+            return not_found(request, error)
+        try:
+            opened = cases.get_encounter(store, case_id, encounter_id)
+        except cases.NotFound as error:
+            return page(request, "case.html", status_code=404, case=case, notice=str(error))
+        return page(
+            request,
+            "notes.html",
+            case=case,
+            encounter=opened.encounter,
+            notes=opened.notes,
+            selected_encounter_id=opened.encounter.id,
+        )
 
     @router.get("/faelle/{case_id}/zeitraum")
     def period_form(request: Request, case_id: int) -> Response:

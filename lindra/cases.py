@@ -12,20 +12,23 @@ from dataclasses import dataclass
 from datetime import date, datetime, time
 from typing import Any
 
-from lindra import periods
-from lindra.store import Case, DuplicateCaseNumber, Encounter, Store
+from lindra import formatting, periods
+from lindra.store import Case, DuplicateCaseNumber, Encounter, OpenedEncounter, Store
 
 ASSESSMENT = "assessment"
 VISIT = "visit"
 ENCOUNTER_LABELS = {ASSESSMENT: "Aufnahmeassessment", VISIT: "Visite"}
 
 MAX_LENGTHS = {"case_number": 40, "patient_name": 120, "label": 80}
+MAX_NOTES_LENGTH = 100_000
 
 MISSING = {
     "case_number": "Fallnummer angeben",
     "patient_name": "Patientenname angeben",
     "assessment_date": "Datum des Assessments angeben",
     "assessment_time": "Uhrzeit des Assessments angeben",
+    "visit_date": "Datum der Visite angeben",
+    "visit_time": "Uhrzeit der Visite angeben",
     "period_start": "Behandlungsbeginn angeben",
     "period_end": "Behandlungsende angeben",
 }
@@ -34,6 +37,8 @@ INVALID_TIME = "Keine gültige Uhrzeit"
 ASSESSMENT_OUTSIDE = "Das Assessment muss im Behandlungszeitraum liegen"
 DUPLICATE_NUMBER = "Diese Fallnummer gibt es schon"
 NOT_FOUND = "Fall nicht gefunden"
+ENCOUNTER_NOT_FOUND = "Kontakt nicht gefunden"
+NOTES_NOT_TEXT = "Notizen als Text übermitteln"
 
 DATE_PATTERN = re.compile(r"\d{4}-\d{2}-\d{2}")
 TIME_PATTERN = re.compile(r"\d{2}:\d{2}")
@@ -48,7 +53,7 @@ class Invalid(Exception):
 
 
 class NotFound(Exception):
-    """No case has this id."""
+    """No case, or no encounter of the case, has this id; the message says which."""
 
 
 class PeriodConflict(Exception):
@@ -113,6 +118,17 @@ def read_date(raw: Mapping[str, Any], field: str, errors: dict[str, str]) -> dat
     return parsed
 
 
+def read_time(raw: Mapping[str, Any], field: str, errors: dict[str, str]) -> time | None:
+    value = text(raw, field)
+    if not value:
+        errors[field] = MISSING[field]
+        return None
+    parsed = parse_time(value)
+    if parsed is None:
+        errors[field] = INVALID_TIME
+    return parsed
+
+
 def read_period(raw: Mapping[str, Any], errors: dict[str, str]) -> tuple[date, date] | None:
     start = read_date(raw, "period_start", errors)
     end = read_date(raw, "period_end", errors)
@@ -137,14 +153,7 @@ def parse_new_case(raw: Mapping[str, Any]) -> NewCase:
 
     period = read_period(raw, errors)
     assessment_day = read_date(raw, "assessment_date", errors)
-    assessment_time = None
-    time_text = text(raw, "assessment_time")
-    if not time_text:
-        errors["assessment_time"] = MISSING["assessment_time"]
-    else:
-        assessment_time = parse_time(time_text)
-        if assessment_time is None:
-            errors["assessment_time"] = INVALID_TIME
+    assessment_time = read_time(raw, "assessment_time", errors)
     if period and assessment_day and not period[0] <= assessment_day <= period[1]:
         errors["assessment_date"] = ASSESSMENT_OUTSIDE
 
@@ -217,6 +226,69 @@ def change_period(store: Store, case_id: int, raw: Mapping[str, Any]) -> Case:
         changed = tx.get_case(case_id)
     assert changed is not None
     return changed
+
+
+def parse_visit_at(raw: Mapping[str, Any], case: Case) -> datetime:
+    """The date and time of a new visit; its day must lie in the case's treatment period."""
+    errors: dict[str, str] = {}
+    day = read_date(raw, "visit_date", errors)
+    at = read_time(raw, "visit_time", errors)
+    if day and not periods.contains(case.period_start, case.period_end, day):
+        errors["visit_date"] = (
+            "Die Visite muss im Behandlungszeitraum "
+            f"{formatting.german_period(case.period_start, case.period_end)} liegen"
+        )
+    if errors or day is None or at is None:
+        raise Invalid(errors)
+    return datetime.combine(day, at)
+
+
+def create_visit(store: Store, case_id: int, raw: Mapping[str, Any]) -> Encounter:
+    """Add a visit. The period is read in the same transaction that stores the visit."""
+    with store.write() as tx:
+        case = tx.get_case(case_id)
+        if case is None:
+            raise NotFound(NOT_FOUND)
+        encounter_id = tx.add_encounter(case_id, VISIT, parse_visit_at(raw, case))
+        opened = tx.get_encounter(case_id, encounter_id)
+    assert opened is not None
+    return opened.encounter
+
+
+def get_encounter(store: Store, case_id: int, encounter_id: int) -> OpenedEncounter:
+    with store.read() as tx:
+        if tx.get_case(case_id) is None:
+            raise NotFound(NOT_FOUND)
+        opened = tx.get_encounter(case_id, encounter_id)
+    if opened is None:
+        raise NotFound(ENCOUNTER_NOT_FOUND)
+    return opened
+
+
+def parse_notes(raw: Mapping[str, Any]) -> str:
+    """The notes exactly as sent: typed or pasted text keeps every blank and line break."""
+    notes = raw.get("notes")
+    if not isinstance(notes, str):
+        raise Invalid({"notes": NOTES_NOT_TEXT})
+    if len(notes) > MAX_NOTES_LENGTH:
+        raise Invalid({"notes": f"Höchstens {MAX_NOTES_LENGTH} Zeichen"})
+    return notes
+
+
+def save_notes(
+    store: Store, case_id: int, encounter_id: int, raw: Mapping[str, Any]
+) -> OpenedEncounter:
+    """Save the notes of one encounter. Saving the text that is saved already changes nothing,
+    so a browser that never saw the answer can send the same request again."""
+    with store.write() as tx:
+        if tx.get_case(case_id) is None:
+            raise NotFound(NOT_FOUND)
+        if tx.get_encounter(case_id, encounter_id) is None:
+            raise NotFound(ENCOUNTER_NOT_FOUND)
+        tx.set_notes(case_id, encounter_id, parse_notes(raw))
+        saved = tx.get_encounter(case_id, encounter_id)
+    assert saved is not None
+    return saved
 
 
 def delete_case(store: Store, case_id: int) -> None:

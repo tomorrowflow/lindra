@@ -7,7 +7,6 @@ page routes and the browser follows the redirects, as the test client does here.
 from html.parser import HTMLParser
 
 import pytest
-from fastapi.testclient import TestClient
 
 from tests.conftest import TOKEN
 
@@ -34,7 +33,11 @@ class Buttons(HTMLParser):
     def handle_starttag(self, tag, attrs):
         attributes = dict(attrs)
         if tag == "button" or (tag == "a" and "btn" in (attributes.get("class") or "").split()):
-            self._current = {"text": "", "disabled": "disabled" in attributes}
+            self._current = {
+                "text": "",
+                "disabled": "disabled" in attributes,
+                "hidden": "hidden" in attributes,
+            }
             self.buttons.append(self._current)
 
     def handle_data(self, data):
@@ -47,14 +50,6 @@ class Buttons(HTMLParser):
 
     def find(self, label):
         return [b for b in self.buttons if b["text"].strip() == label]
-
-
-@pytest.fixture
-def browser(app):
-    """A browser logged in through the login page."""
-    client = TestClient(app)
-    client.post("/anmelden", data={"token": TOKEN})
-    return client
 
 
 def create_case(browser, **changes):

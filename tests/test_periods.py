@@ -53,3 +53,38 @@ def test_the_time_of_day_never_moves_an_encounter_out_of_its_day():
 def test_a_one_day_period_is_valid_and_an_end_before_the_start_is_not():
     assert periods.order_problem(date(2026, 10, 5), date(2026, 10, 5)) is None
     assert periods.order_problem(date(2026, 10, 6), date(2026, 10, 5)) is not None
+
+
+# ---- the default date of a new visit (ADR 0010) ----
+
+PERIOD = (date(2026, 10, 5), date(2026, 10, 16))
+
+
+def test_a_new_visit_defaults_to_now_when_now_lies_in_the_period():
+    now = datetime(2026, 10, 9, 14, 37, 52, 123456)
+
+    assert periods.default_visit_at(now, *PERIOD) == datetime(2026, 10, 9, 14, 37)
+
+
+def test_a_new_visit_defaults_to_nothing_before_the_period():
+    assert periods.default_visit_at(datetime(2026, 10, 4, 23, 59), *PERIOD) is None
+
+
+def test_a_new_visit_defaults_to_nothing_after_the_period():
+    assert periods.default_visit_at(datetime(2026, 10, 17, 0, 0), *PERIOD) is None
+
+
+def test_the_default_holds_on_the_first_and_on_the_last_day_at_any_time():
+    assert periods.default_visit_at(datetime(2026, 10, 5, 0, 0), *PERIOD) is not None
+    assert periods.default_visit_at(datetime(2026, 10, 16, 23, 59), *PERIOD) is not None
+
+
+def test_a_visit_may_be_dated_on_either_end_of_the_period_and_between():
+    assert periods.contains(*PERIOD, date(2026, 10, 5))
+    assert periods.contains(*PERIOD, date(2026, 10, 10))
+    assert periods.contains(*PERIOD, date(2026, 10, 16))
+
+
+def test_a_visit_outside_the_period_is_refused_a_day_before_and_a_day_after():
+    assert not periods.contains(*PERIOD, date(2026, 10, 4))
+    assert not periods.contains(*PERIOD, date(2026, 10, 17))

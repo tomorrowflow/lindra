@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from pathlib import Path
 from typing import Annotated, Any
+from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
@@ -11,8 +13,9 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
-from lindra import auth, case_api, cases, formatting, pages, seed
+from lindra import auth, badges, case_api, cases, formatting, pages, seed
 from lindra.config import Settings
+from lindra.pages import Clock
 from lindra.store import DATABASE_FILE, Store
 
 PACKAGE_DIR = Path(__file__).resolve().parent
@@ -21,16 +24,25 @@ TEMPLATES.env.filters["german_date"] = formatting.german_date
 TEMPLATES.env.filters["german_datetime"] = formatting.german_datetime
 TEMPLATES.env.globals["german_period"] = formatting.german_period
 TEMPLATES.env.globals["encounter_labels"] = cases.ENCOUNTER_LABELS
+TEMPLATES.env.globals["encounter_badge"] = badges.encounter_badge
+TEMPLATES.env.globals["badge_states"] = badges.STATES
 LOGIN_ERROR = "Der Zugangsschlüssel ist nicht gültig"
 
 
-def create_app(settings: Settings | None = None) -> FastAPI:
+def wall_clock(timezone: str) -> Clock:
+    """The physician's local date and time, without a zone: what the forms compare against."""
+    zone = ZoneInfo(timezone)
+    return lambda: datetime.now(zone).replace(tzinfo=None)
+
+
+def create_app(settings: Settings | None = None, clock: Clock | None = None) -> FastAPI:
+    """Build the service. `clock` is "now" for the pages; tests and screenshots pass a fixed one."""
     settings = settings or Settings.from_env()
     app = FastAPI(title="Lindra", docs_url=None, redoc_url=None, openapi_url=None)
     app.mount("/static", StaticFiles(directory=PACKAGE_DIR / "static"), name="static")
     store = Store(settings.data_dir / DATABASE_FILE)
     app.include_router(case_api.build_router(store))
-    app.include_router(pages.build_router(store, TEMPLATES))
+    app.include_router(pages.build_router(store, TEMPLATES, clock or wall_clock(settings.timezone)))
 
     # Middleware added later wraps the earlier ones, so the session is loaded
     # before the guard looks at it.

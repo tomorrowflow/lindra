@@ -1,5 +1,6 @@
 {% extends "shell.html" %}
-{% from "dialogs.html" import period_dialog, delete_dialog %}
+{% from "dialogs.html" import period_dialog, delete_dialog, visit_dialog %}
+{% from "encounters.html" import badge %}
 {% from "icons.html" import icon %}
 {% block title %}{{ case.case_number }} · Lindra{% endblock %}
 {% block step %}
@@ -14,6 +15,13 @@
       <span>Fall löschen</span>
     </a>
   </header>
+
+  {% if notice %}
+  <div class="alert alert-error" role="alert">
+    {{ icon("circle-alert") }}
+    <span>{{ notice }}</span>
+  </div>
+  {% endif %}
 
   <dl class="facts">
     {% if case.label %}
@@ -35,15 +43,25 @@
     <ul class="encounter-list">
       {% for encounter in case.encounters %}
       <li class="encounter-row">
-        <span class="encounter-kind">{{ encounter_labels[encounter.kind] }}</span>
-        <span class="encounter-date">{{ encounter.occurred_at | german_datetime }}</span>
+        <a class="encounter-row-link" href="/faelle/{{ case.id }}/kontakte/{{ encounter.id }}/notizen">
+          <span class="encounter-kind">{{ encounter_labels[encounter.kind] }}</span>
+          <span class="encounter-date">{{ encounter.occurred_at | german_datetime }}</span>
+        </a>
+        {{ badge(encounter, "main") }}
       </li>
       {% endfor %}
     </ul>
+    <div class="step-actions">
+      <a class="btn btn-primary" href="/faelle/{{ case.id }}/visiten/neu">
+        {{ icon("plus") }}
+        <span>Neue Visite</span>
+      </a>
+    </div>
   </section>
 </div>
 {% endblock %}
 {% block dialog %}
 {% if dialog == "period" %}{{ period_dialog(case, form, errors, conflicts) }}{% endif %}
 {% if dialog == "delete" %}{{ delete_dialog(case) }}{% endif %}
+{% if dialog == "new_visit" %}{{ visit_dialog(case, form, errors, note) }}{% endif %}
 {% endblock %}

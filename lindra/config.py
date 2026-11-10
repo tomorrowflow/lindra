@@ -9,6 +9,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from pathlib import Path
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 ENV_FILE = Path(".env")
 TOKEN_VARIABLE = "LINDRA_TOKEN"
@@ -17,6 +18,9 @@ SPEECH_BACKEND_VARIABLE = "LINDRA_SPEECH_BACKEND"
 DATA_DIR_VARIABLE = "LINDRA_DATA_DIR"
 COMMIT_VARIABLE = "LINDRA_COMMIT"
 TIER_VARIABLE = "LINDRA_TIER"
+TIMEZONE_VARIABLE = "LINDRA_TIMEZONE"
+# "Now" for a new visit is the physician's wall clock, whatever zone the host runs in.
+DEFAULT_TIMEZONE = "Europe/Berlin"
 
 # The name of the deterministic stand-in backends in lindra/standins.py.
 STAND_IN = "fixture"
@@ -33,6 +37,10 @@ class UnsupportedBackend(RuntimeError):
     """Raised when a backend other than the stand-in is requested."""
 
 
+class UnknownTimezone(RuntimeError):
+    """Raised when the configured time zone does not exist."""
+
+
 @dataclass(frozen=True)
 class Settings:
     token: str
@@ -41,6 +49,7 @@ class Settings:
     speech_backend: str = STAND_IN
     commit: str = "unknown"
     tier: str = "development"
+    timezone: str = DEFAULT_TIMEZONE
 
     @classmethod
     def from_env(cls, env_file: Path = ENV_FILE) -> Settings:
@@ -58,7 +67,17 @@ class Settings:
             speech_backend=backend(values, SPEECH_BACKEND_VARIABLE),
             commit=values.get(COMMIT_VARIABLE, "").strip() or "unknown",
             tier=values.get(TIER_VARIABLE, "").strip() or "development",
+            timezone=timezone(values),
         )
+
+
+def timezone(values: dict[str, str]) -> str:
+    chosen = values.get(TIMEZONE_VARIABLE, "").strip() or DEFAULT_TIMEZONE
+    try:
+        ZoneInfo(chosen)
+    except (ZoneInfoNotFoundError, ValueError) as error:
+        raise UnknownTimezone(f"{TIMEZONE_VARIABLE}={chosen} is not a time zone.") from error
+    return chosen
 
 
 def backend(values: dict[str, str], variable: str) -> str:
