@@ -1,0 +1,38 @@
+{#
+  The status area of an encounter step. One indicator shows the most urgent of several
+  states (static/js/status.js): a generation in progress or failed, then the save state of
+  the text being typed, then a short "Kopiert". The indicator is text with an icon, never a
+  button; recovery actions are separate buttons elsewhere. The states are also in a template
+  the scripts copy from.
+#}
+{% from "icons.html" import icon %}
+
+{% set status_states = [
+  ("saved", "ok", "circle-check", "Gespeichert", ""),
+  ("saving", "busy", "loader-circle", "Speichert …", ""),
+  ("offline", "warn", "cloud-off", "Nicht gespeichert", ", die Verbindung ist unterbrochen"),
+  ("failed", "error", "circle-alert", "Speichern fehlgeschlagen", ""),
+  ("generating", "busy", "loader-circle", "Entwurf wird erzeugt …", ""),
+  ("generation-failed", "error", "circle-alert", "Entwurf nicht erzeugt", ""),
+  ("copied", "ok", "clipboard-check", "Kopiert", ""),
+  ("copy-failed", "error", "circle-alert", "Kopieren nicht möglich", ""),
+] %}
+
+{% macro status_area(initial) %}
+{% for key, tone, symbol, words, extra in status_states if key == initial %}
+<span class="status-indicator status-{{ tone }}" data-save-indicator>
+  {{ icon(symbol) }}
+  <span>{{ words }}</span>{% if extra %}<span class="visually-hidden">{{ extra }}</span>{% endif %}
+</span>
+{% endfor %}
+<template id="status-states">
+  {% for key, tone, symbol, words, extra in status_states %}
+  <span data-state="{{ key }}" data-tone="{{ tone }}">{{ icon(symbol) }}<span>{{ words }}</span>{% if extra %}<span class="visually-hidden">{{ extra }}</span>{% endif %}</span>
+  {% endfor %}
+</template>
+{% endmacro %}
+
+{# The state a page starts in: what the generation is doing, else saved. #}
+{% macro initial_status(generation) -%}
+{{ {"running": "generating", "failed": "generation-failed"}.get(generation.state, "saved") }}
+{%- endmacro %}

@@ -7,22 +7,46 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Body, Response
 from fastapi.responses import JSONResponse
 
-from lindra import cases
+from lindra import badges, cases, drafts
 from lindra.store import TIMESTAMP_FORMAT, Case, Encounter, OpenedEncounter, Store
 
 
 def encounter_json(encounter: Encounter) -> dict[str, Any]:
+    if not encounter.has_proposal:
+        proposal = "none"
+    elif encounter.proposal_revision == encounter.notes_revision:
+        proposal = "pending"
+    else:
+        proposal = "outdated"
     return {
         "id": encounter.id,
         "kind": encounter.kind,
         "label": cases.ENCOUNTER_LABELS[encounter.kind],
         "occurred_at": encounter.occurred_at.strftime(TIMESTAMP_FORMAT),
         "notes_revision": encounter.notes_revision,
+        "has_draft": encounter.has_draft,
+        "proposal": proposal,
+        "possibly_outdated": drafts.draft_possibly_outdated(
+            encounter.draft_revision, encounter.notes_revision
+        ),
+        "acceptances": encounter.acceptances,
     }
 
 
 def opened_json(opened: OpenedEncounter) -> dict[str, Any]:
-    return {**encounter_json(opened.encounter), "notes": opened.notes}
+    """The encounter with its notes and the badge the sidebar shows for it now."""
+    state = badges.encounter_state(opened.encounter)
+    badge = badges.STATES[state]
+    return {
+        **encounter_json(opened.encounter),
+        "notes": opened.notes,
+        "badge": {
+            "state": state,
+            "icon": badge.icon,
+            "label": badge.label,
+            "explanation": badge.explanation,
+        },
+    }
 
 
 def case_json(case: Case) -> dict[str, Any]:

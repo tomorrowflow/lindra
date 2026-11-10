@@ -406,7 +406,7 @@ def test_the_notes_step_loads_its_script_and_tells_it_where_to_save(browser):
     page = browser.get(path).text
 
     assert f'data-save-url="{api_path(path)}"' in page
-    assert '<script src="/static/js/notes.js"' in page
+    assert '<script type="module" src="/static/js/notes.js"' in page
 
 
 def test_the_selected_encounter_shows_its_steps_beneath_it_and_no_other_does(browser):
@@ -466,6 +466,9 @@ def test_the_action_bar_is_the_same_on_the_overview_and_on_the_notes_step(browse
     notes = browser.get(first_encounter(browser, location)).text
 
     def action_bar(page):
-        return page.split('<footer class="action-bar">', 1)[1].split("</footer>", 1)[0]
+        """The controls of the bar in order: their classes (size and place) and their labels."""
+        bar = page.split('<footer class="action-bar">', 1)[1].split("</footer>", 1)[0]
+        controls = re.findall(r'<(?:a|button)[^>]* class="(btn [^"]*)"', bar)
+        return controls, re.findall(r"<span>([^<]*)</span>", bar)
 
     assert action_bar(overview) == action_bar(notes)

@@ -43,12 +43,23 @@ CREATE UNIQUE INDEX IF NOT EXISTS one_assessment_per_case
 ADDED_COLUMNS = (
     ("notes", "TEXT NOT NULL DEFAULT ''"),
     ("notes_revision", "INTEGER NOT NULL DEFAULT 0"),
+    # The accepted draft as JSON; empty until a proposal is accepted or a section is written.
+    ("draft", "TEXT NOT NULL DEFAULT ''"),
+    # The notes revision the draft was last accepted at; null while only written by hand.
+    ("draft_revision", "INTEGER"),
+    # The pending proposal as JSON, bound to the notes revision it was generated from.
+    ("proposal", "TEXT NOT NULL DEFAULT ''"),
+    ("proposal_revision", "INTEGER"),
+    # The encounter's clarification list as JSON, adopted from a proposal on acceptance.
+    ("clarifications", "TEXT NOT NULL DEFAULT '[]'"),
+    ("acceptances", "INTEGER NOT NULL DEFAULT 0"),
 )
-# What a case listing reads of an encounter: everything but the notes text, which
-# can be long and belongs to the one encounter being opened.
+# What a case listing reads of an encounter: everything but the notes and the draft texts,
+# which can be long and belong to the one encounter being opened.
 ENCOUNTER_COLUMNS = (
     "id, kind, occurred_at, notes_revision,"
-    " trim(notes, ' ' || char(9) || char(10) || char(13)) != '' AS has_notes"
+    " trim(notes, ' ' || char(9) || char(10) || char(13)) != '' AS has_notes,"
+    " draft != '' AS has_draft, draft_revision, proposal_revision, acceptances"
 )
 
 
@@ -63,12 +74,30 @@ class Encounter:
     occurred_at: datetime
     notes_revision: int = 0
     has_notes: bool = False
+    has_draft: bool = False
+    draft_revision: int | None = None
+    proposal_revision: int | None = None
+    acceptances: int = 0
+
+    @property
+    def has_proposal(self) -> bool:
+        return self.proposal_revision is not None
+
+
+@dataclass(frozen=True)
+class Review:
+    """What an encounter holds of its draft, as the JSON text it is stored as."""
+
+    draft: str = ""
+    proposal: str = ""
+    clarifications: str = "[]"
 
 
 @dataclass(frozen=True)
 class OpenedEncounter:
     encounter: Encounter
     notes: str
+    review: Review = Review()
 
 
 @dataclass(frozen=True)
@@ -139,10 +168,14 @@ class Tx:
     def get_encounter(self, case_id: int, encounter_id: int) -> OpenedEncounter | None:
         """One encounter of this case with its notes; None when the case has no such encounter."""
         row = self.connection.execute(
-            f"SELECT {ENCOUNTER_COLUMNS}, notes FROM encounters WHERE id = ? AND case_id = ?",
+            f"SELECT {ENCOUNTER_COLUMNS}, notes, draft, proposal, clarifications"
+            " FROM encounters WHERE id = ? AND case_id = ?",
             (encounter_id, case_id),
         ).fetchone()
-        return OpenedEncounter(encounter_from(row), row["notes"]) if row else None
+        if row is None:
+            return None
+        review = Review(row["draft"], row["proposal"], row["clarifications"])
+        return OpenedEncounter(encounter_from(row), row["notes"], review)
 
     def set_notes(self, case_id: int, encounter_id: int, notes: str) -> None:
         """Save the notes; the revision advances only when the text changed."""
@@ -150,6 +183,38 @@ class Tx:
             "UPDATE encounters SET notes = ?, notes_revision = notes_revision + 1"
             " WHERE id = ? AND case_id = ? AND notes != ?",
             (notes, encounter_id, case_id, notes),
+        )
+
+    def set_proposal(self, encounter_id: int, proposal: str, notes_revision: int) -> None:
+        """Hold a proposal next to the draft; a pending one is replaced."""
+        self.connection.execute(
+            "UPDATE encounters SET proposal = ?, proposal_revision = ? WHERE id = ?",
+            (proposal, notes_revision, encounter_id),
+        )
+
+    def clear_proposal(self, encounter_id: int) -> None:
+        self.connection.execute(
+            "UPDATE encounters SET proposal = '', proposal_revision = NULL WHERE id = ?",
+            (encounter_id,),
+        )
+
+    def set_draft(self, encounter_id: int, draft: str) -> None:
+        """Store the draft after a hand edit; it keeps the revision it was accepted at."""
+        self.connection.execute(
+            "UPDATE encounters SET draft = ? WHERE id = ?",
+            (draft, encounter_id),
+        )
+
+    def accept_proposal(
+        self, encounter_id: int, draft: str, notes_revision: int, clarifications: str
+    ) -> None:
+        """One step: the merged draft and the proposal's clarification list replace the
+        current ones, the proposal is gone and the acceptance counter advances."""
+        self.connection.execute(
+            "UPDATE encounters SET draft = ?, draft_revision = ?, clarifications = ?,"
+            " proposal = '', proposal_revision = NULL, acceptances = acceptances + 1"
+            " WHERE id = ?",
+            (draft, notes_revision, clarifications, encounter_id),
         )
 
     def set_period(self, case_id: int, start: date, end: date) -> None:
@@ -180,6 +245,10 @@ def encounter_from(row: sqlite3.Row) -> Encounter:
         datetime.strptime(row["occurred_at"], TIMESTAMP_FORMAT),
         row["notes_revision"],
         bool(row["has_notes"]),
+        bool(row["has_draft"]),
+        row["draft_revision"],
+        row["proposal_revision"],
+        row["acceptances"],
     )
 
 

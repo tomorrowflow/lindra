@@ -1,0 +1,113 @@
+{#
+  The frame every step of an encounter shares: the status area, the generation strip under
+  the header and the action bar. A step fills `header`, `content` and, when it has one,
+  `note` (a line above the action bar) and `scripts`. The action bar has the same buttons in
+  the same places on every step (ADR 0008): back and next at the left, discard and copy
+  before the dictation control at the right.
+#}
+{% extends "shell.html" %}
+{% from "icons.html" import icon %}
+{% from "status.html" import status_area, initial_status %}
+
+{% block status %}{{ status_area(initial_status(generation) | trim) }}{% endblock %}
+
+{% block step %}
+<div class="step-body {% block body_class %}{% endblock %}">
+  {% block header %}{% endblock %}
+
+  {# Generation: only this button creates a draft. The retry button's place is reserved. #}
+  {% if draftable %}
+  <div class="strip" data-generation="{{ generation.state }}" data-generate-url="/api/cases/{{ case.id }}/encounters/{{ encounter.id }}/generate" data-state-url="/api/cases/{{ case.id }}/encounters/{{ encounter.id }}/generation">
+    <button class="btn btn-primary strip-button" type="button" data-generate{% if generation.state == "running" %} disabled{% endif %}>
+      {{ icon("file-pen") }}
+      <span>{{ "Neu erzeugen" if rev.proposal else "Entwurf erzeugen" }}</span>
+    </button>
+    <div class="retry-slot">
+      <button class="btn retry-button" type="button" data-retry-generation{% if generation.state != "failed" %} hidden{% endif %}>
+        {{ icon("rotate-cw") }}
+        <span>Erneut versuchen</span>
+      </button>
+    </div>
+    <p class="strip-note" data-generation-reason>{% if generation.state == "failed" %}{{ generation.reason }}{% endif %}</p>
+  </div>
+  {% if rev.possibly_outdated %}
+  <div class="marker">
+    <button class="marker-button" type="button" aria-expanded="false" aria-controls="stale-explanation">
+      {{ icon("triangle-alert") }}
+      <span>Entwurf möglicherweise veraltet</span>
+      <span class="more">Mehr</span>
+    </button>
+    <p class="badge-explanation" id="stale-explanation" hidden>Die Notizen haben sich geändert, seit der Entwurf übernommen wurde. Lindra vermutet nicht, welche Abschnitte betroffen sind. Erzeugen Sie einen neuen Vorschlag, um das zu sehen.</p>
+  </div>
+  {% endif %}
+  {% endif %}
+
+  {% block content %}{% endblock %}
+</div>
+{% block note %}{% endblock %}
+{% endblock %}
+
+{% block action_bar %}
+<footer class="action-bar">
+  {% if previous_step %}
+  <a class="btn action-button" href="{{ previous_step.url }}">
+    {{ icon("chevron-left") }}
+    <span>Zurück</span>
+  </a>
+  {% else %}
+  <button class="btn action-button" type="button" disabled>
+    {{ icon("chevron-left") }}
+    <span>Zurück</span>
+  </button>
+  {% endif %}
+
+  {% block forward %}
+  {% if next_step %}
+  <a class="btn btn-primary action-button" href="{{ next_step.url }}">
+    <span>Weiter</span>
+    {{ icon("chevron-right") }}
+  </a>
+  {% else %}
+  <button class="btn btn-primary action-button" type="button" disabled>
+    <span>Weiter</span>
+    {{ icon("chevron-right") }}
+  </button>
+  {% endif %}
+  {% endblock %}
+
+  <div class="action-spacer"></div>
+
+  {# Discard drops the whole pending proposal, from any step; there is no per-section discard. #}
+  {% if rev.proposal %}
+  <form class="bar-form" method="post" action="/faelle/{{ case.id }}/kontakte/{{ encounter.id }}/abschluss/verwerfen">
+    <input type="hidden" name="back" value="{{ request.url.path }}">
+    <button class="btn action-button" type="submit" aria-label="Vorschlag verwerfen">
+      {{ icon("x") }}
+      <span>Verwerfen</span>
+    </button>
+  </form>
+  {% else %}
+  <button class="btn action-button" type="button" disabled>
+    {{ icon("x") }}
+    <span>Verwerfen</span>
+  </button>
+  {% endif %}
+
+  {% block copy_tool %}
+  <button class="btn action-button" type="button" disabled>
+    {{ icon("copy") }}
+    <span>Kopieren</span>
+  </button>
+  {% endblock %}
+
+  <button class="btn action-button" type="button" disabled>
+    {{ icon("mic") }}
+    <span>Diktat</span>
+  </button>
+</footer>
+{% endblock %}
+
+{% block scripts %}
+<script type="module" src="/static/js/generate.js"></script>
+{% block step_scripts %}{% endblock %}
+{% endblock %}

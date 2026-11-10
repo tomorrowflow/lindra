@@ -1,0 +1,81 @@
+{#
+  One section of the review: the current draft and the proposal in two large panes, side by
+  side and stacked in portrait. The draft pane is where the physician writes; the proposal
+  pane only shows. Nothing here accepts or discards a single section.
+#}
+{% extends "encounter_step.html" %}
+{% from "icons.html" import icon %}
+{% set title = rev.titles[index] %}
+{% set number = index + 1 %}
+{% set section = rev.sections[index] %}
+{% set draft_text = section_text(section) %}
+{% block title %}{{ title }} · {{ case.case_number }} · Lindra{% endblock %}
+{% block body_class %}section-step{% endblock %}
+
+{% block header %}
+<header class="case-header">
+  <div class="header-main">
+    <p class="case-ref">{{ case.case_number }} · {{ case.patient_name }} · {{ encounter_labels[encounter.kind] }}, {{ encounter.occurred_at | german_datetime }}</p>
+    {% include "section_head.html" %}
+  </div>
+  {# Always in the layout, shown only after a failed save: showing it moves nothing. #}
+  <div class="retry-slot">
+    <button class="btn retry-button" type="button" data-retry hidden>
+      {{ icon("rotate-cw") }}
+      <span>Erneut speichern</span>
+    </button>
+  </div>
+</header>
+{% endblock %}
+
+{% block content %}
+<div class="panes">
+  <section class="pane" aria-labelledby="pane-draft">
+    <h2 class="pane-title" id="pane-draft">Aktueller Entwurf</h2>
+    <label class="visually-hidden" for="section-text">Text des Abschnitts {{ title }}</label>
+    <textarea class="textarea pane-text" id="section-text" lang="de" data-section data-save-url="/api/cases/{{ case.id }}/encounters/{{ encounter.id }}/draft/sections/{{ number }}" data-head-url="/faelle/{{ case.id }}/kontakte/{{ encounter.id }}/abschnitte/{{ number }}/kopf" placeholder="Noch kein Entwurf. Erzeugen Sie einen aus den Notizen oder schreiben Sie diesen Abschnitt selbst.">{# An HTML parser drops one line break right after the tag. #}{% if draft_text[:1] in ("\n", "\r") %}{{ "\n" }}{% endif %}{{ draft_text }}</textarea>
+  </section>
+
+  <section class="pane pane-proposal" aria-labelledby="pane-proposal">
+    <h2 class="pane-title" id="pane-proposal">Vorschlag</h2>
+    {% if rev.proposal %}
+    {% set proposed = rev.proposal.sections[index] %}
+    <div class="pane-text proposal-text" tabindex="0" role="region" aria-labelledby="pane-proposal">
+      {% for paragraph in proposed.paragraphs %}
+      {% if paragraph.heading and (loop.first or loop.previtem.heading != paragraph.heading) %}
+      <h3 class="para-heading">{{ paragraph.heading }}</h3>
+      {% endif %}
+      <p>{{ paragraph.text }}</p>
+      {% else %}
+      <p class="pane-empty">Der Vorschlag lässt diesen Abschnitt leer.</p>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="pane-empty">Noch kein Vorschlag. «Entwurf erzeugen» legt einen aus den Notizen an.</p>
+    {% endif %}
+  </section>
+</div>
+
+{# The open questions of the encounter's list for this section. #}
+{% set questions = rev.clarifications_for(title) %}
+{% if questions %}
+<section class="clarifications" aria-labelledby="clarifications-title">
+  <h2 class="clarifications-title" id="clarifications-title">{{ icon("circle-help") }}<span>Zu klären</span></h2>
+  <ul>
+    {% for item in questions %}<li>{{ item.text }}</li>{% endfor %}
+  </ul>
+</section>
+{% endif %}
+{% endblock %}
+
+{% block copy_tool %}
+<button class="btn action-button" type="button" data-copy data-copy-from="#section-text" data-copied-url="/api/cases/{{ case.id }}/encounters/{{ encounter.id }}/draft/sections/{{ number }}/copied"{% if not draft_text.strip() %} disabled{% endif %}>
+  {{ icon("copy") }}
+  <span>Kopieren</span>
+</button>
+{% endblock %}
+
+{% block step_scripts %}
+<script type="module" src="/static/js/section.js"></script>
+<script type="module" src="/static/js/copy.js"></script>
+{% endblock %}
