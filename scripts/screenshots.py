@@ -494,22 +494,29 @@ def notes_screens(page: Page, base_url: str, out: Path, name: str) -> list[str]:
 
     # Opening notes changes nothing: the text area holds exactly the saved text, also when
     # it starts with a line break, and an untouched step sends no save.
+    # A browser turns a carriage return in the text area into a line feed.
     saved_url = page.url
-    for notes in ("", "\nzweite Zeile", "Text\n"):
+    save_url = f"{base_url}{page.get_attribute('#notes', 'data-save-url')}"
+    methods: list[str] = []
+    page.on("request", lambda request: methods.append(request.method))
+    for notes, shown in (
+        ("", ""),
+        ("\nzweite Zeile", "\nzweite Zeile"),
+        ("\r\nzweite Zeile", "\nzweite Zeile"),
+        ("Text\n", "Text\n"),
+    ):
         httpx.put(
-            f"{base_url}{page.get_attribute('#notes', 'data-save-url')}",
-            json={"notes": notes},
-            headers={"Authorization": f"Bearer {TOKEN}"},
+            save_url, json={"notes": notes}, headers={"Authorization": f"Bearer {TOKEN}"}
         ).raise_for_status()
-        saves: list[str] = []
-        page.on("request", lambda request, saves=saves: saves.append(request.method))
+        methods.clear()
         page.goto(saved_url)
+        # Longer than the pause before an autosave, so a save on open would show up.
         page.wait_for_timeout(1500)
-        if page.input_value("#notes") != notes:
+        if page.input_value("#notes") != shown:
             findings.append(
-                f"{name}: the text area shows {page.input_value('#notes')!r}, not {notes!r}"
+                f"{name}: the text area shows {page.input_value('#notes')!r}, not {shown!r}"
             )
-        if "PUT" in saves:
+        if "PUT" in methods:
             findings.append(f"{name}: opening the notes step sent a save for {notes!r}")
         if status_text(page) != "Gespeichert":
             findings.append(f"{name}: opening the notes step reads {status_text(page)!r}")

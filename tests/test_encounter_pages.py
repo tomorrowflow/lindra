@@ -344,6 +344,18 @@ def test_a_note_that_starts_with_a_blank_line_keeps_it(browser):
     assert textarea_of(page) == "\n\nzweite Zeile"
 
 
+@pytest.mark.parametrize("notes", ["\r\nzweite Zeile", "\rzweite Zeile"])
+def test_a_note_that_starts_with_a_windows_or_old_style_break_keeps_it_too(browser, notes):
+    location = create_case(browser)
+    path = first_encounter(browser, location)
+    browser.put(api_path(path), json={"notes": notes})
+
+    page = browser.get(path).text
+
+    # The same extra line break as for "\n": the parser drops exactly one.
+    assert textarea_of(page) == "\n" + notes
+
+
 @pytest.mark.parametrize("notes", ["", "Rückenschmerz", "erste Zeile\nzweite Zeile\n"])
 def test_a_note_is_in_the_text_area_without_a_line_break_added_in_front(browser, notes):
     location = create_case(browser)
