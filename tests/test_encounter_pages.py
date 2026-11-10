@@ -146,6 +146,19 @@ def test_each_encounter_carries_a_state_badge_with_its_explanation_on_tap(browse
     assert re.search(r'<p class="badge-explanation" id="[^"]+" hidden>', seeded)
 
 
+def test_the_badge_follows_the_saved_notes_and_blank_notes_count_as_none(browser):
+    location = create_case(browser)
+    path = first_encounter(browser, location)
+
+    browser.put(api_path(path), json={"notes": " \n\t "})
+    blank = sidebar_of(browser.get(path).text)
+    browser.put(api_path(path), json={"notes": "Rückenschmerz"})
+    written = sidebar_of(browser.get(path).text)
+
+    assert 'aria-label="Zustand: Keine Notizen"' in blank
+    assert 'aria-label="Zustand: Notizen gespeichert, noch kein Entwurf"' in written
+
+
 def test_a_badge_says_nothing_about_clinical_correctness(browser):
     seed(browser)
 

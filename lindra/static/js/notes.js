@@ -8,6 +8,8 @@ const area = document.querySelector("[data-notes]");
 const indicator = document.querySelector("[data-save-indicator]");
 const retry = document.querySelector("[data-retry]");
 const states = document.querySelector("#save-states").content;
+const badge = document.querySelector(".encounter-link.current ~ .badge-button");
+const badgeStates = document.querySelector("#badge-states").content;
 
 const PAUSE_MS = 800;
 
@@ -24,17 +26,27 @@ function show(next) {
   retry.hidden = next !== "offline" && next !== "failed";
 }
 
-function request(text, keepalive = false) {
+// The sidebar badge of this encounter follows the notes: empty or not.
+function updateBadge(text) {
+  const source = badgeStates.querySelector(`[data-state="${text.trim() ? "notes" : "empty"}"]`);
+  badge.setAttribute("aria-label", `Zustand: ${source.dataset.label}`);
+  badge.innerHTML = source.innerHTML;
+  document.getElementById(badge.getAttribute("aria-controls")).textContent =
+    source.dataset.explanation;
+}
+
+function request(text) {
   return fetch(area.dataset.saveUrl, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ notes: text }),
     credentials: "same-origin",
-    keepalive,
   });
 }
 
-async function save() {
+// `manual` is a tap on the retry button or the network coming back. A save that only
+// follows typing after a failure tries again without changing the status until it ends.
+async function save(manual = false) {
   clearTimeout(timer);
   // The save in flight looks at the text again when it ends.
   if (inFlight) return;
@@ -44,13 +56,14 @@ async function save() {
     return;
   }
   inFlight = true;
-  show("saving");
+  if (manual || state === "saved" || state === "saving") show("saving");
   let outcome;
   try {
     const response = await request(text);
     if (response.ok) {
       savedText = text;
       area.dataset.revision = (await response.json()).notes_revision;
+      updateBadge(text);
       outcome = "saved";
     } else {
       outcome = "failed";
@@ -68,7 +81,6 @@ async function save() {
 
 area.addEventListener("input", () => {
   clearTimeout(timer);
-  // After a failure the status stays what it was until a save has been tried again.
   if (state === "saved" || state === "saving") show("saving");
   timer = setTimeout(save, PAUSE_MS);
 });
@@ -77,18 +89,15 @@ area.addEventListener("input", () => {
 // focus never falls onto a button that is about to disappear.
 retry.addEventListener("click", () => {
   area.focus();
-  save();
+  save(true);
 });
 window.addEventListener("online", () => {
-  if (state === "offline") save();
+  if (state === "offline") save(true);
 });
 
-// Leaving the tab (an iPad switching apps, a closing tab) saves at once; a page that is
-// going away uses a keep-alive request so the browser finishes it.
+// Leaving the tab (an iPad switching apps) saves at once.
 document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState !== "hidden" || area.value === savedText) return;
-  clearTimeout(timer);
-  request(area.value, true).catch(() => {});
+  if (document.visibilityState === "hidden") save();
 });
 
 // Ask before the tab closes with text that is not saved.

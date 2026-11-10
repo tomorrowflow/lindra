@@ -35,6 +35,12 @@
   <label class="visually-hidden" for="notes">Notizen zu diesem Kontakt</label>
   <textarea class="textarea notes-area" id="notes" name="notes" lang="de" data-notes data-save-url="/api/cases/{{ case.id }}/encounters/{{ encounter.id }}/notes" data-revision="{{ encounter.notes_revision }}" placeholder="Eigene Notizen zu diesem Kontakt, in beliebiger Reihenfolge">
 {{ notes }}</textarea>
+  {# The two badge states of an encounter's notes; notes.js swaps the sidebar badge after a save. #}
+  <template id="badge-states">
+    {% for key, state in badge_states.items() %}
+    <span data-state="{{ key }}" data-label="{{ state.label }}" data-explanation="{{ state.explanation }}">{{ icon(state.icon) }}</span>
+    {% endfor %}
+  </template>
 </div>
 {% endblock %}
 {% block scripts %}

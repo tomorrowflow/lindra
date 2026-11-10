@@ -33,5 +33,8 @@ NOTES_ONLY = Badge(
 )
 
 
+STATES = {"empty": NO_NOTES, "notes": NOTES_ONLY}
+
+
 def encounter_badge(encounter: Encounter) -> Badge:
     return NOTES_ONLY if encounter.has_notes else NO_NOTES

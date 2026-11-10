@@ -392,6 +392,9 @@ def notes_screens(page: Page, base_url: str, out: Path, name: str) -> list[str]:
     findings += [
         f"{name}: saving moved the {k}" for k in moved(saved_layout, layout_of_notes_step(page))
     ]
+    badge = page.get_attribute(".encounter-link.current ~ .badge-button", "aria-label")
+    if badge != "Zustand: Notizen gespeichert, noch kein Entwurf":
+        findings.append(f"{name}: the sidebar badge did not follow the saved notes: {badge!r}")
     page.screenshot(path=out / f"notes-saved-{name}.png")
 
     # The save is in flight: held back until the picture is taken.
@@ -461,6 +464,13 @@ def notes_screens(page: Page, base_url: str, out: Path, name: str) -> list[str]:
         for k in moved(saved_layout, layout_of_notes_step(page))
     ]
     page.screenshot(path=out / f"notes-failed-{name}.png")
+    # Typing on after a failure does not flip the status back and forth.
+    page.keyboard.type(" Besser", delay=15)
+    page.wait_for_timeout(1500)
+    if "fehlgeschlagen" not in status_text(page):
+        findings.append(
+            f"{name}: typing after a failed save changed the status: {status_text(page)!r}"
+        )
     page.unroute(notes_route)
     page.click("[data-retry]")
     page.wait_for_function(

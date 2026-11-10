@@ -25,6 +25,7 @@ TEMPLATES.env.filters["german_datetime"] = formatting.german_datetime
 TEMPLATES.env.globals["german_period"] = formatting.german_period
 TEMPLATES.env.globals["encounter_labels"] = cases.ENCOUNTER_LABELS
 TEMPLATES.env.globals["encounter_badge"] = badges.encounter_badge
+TEMPLATES.env.globals["badge_states"] = badges.STATES
 LOGIN_ERROR = "Der Zugangsschlüssel ist nicht gültig"
 
 

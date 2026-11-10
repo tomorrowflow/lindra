@@ -46,7 +46,10 @@ ADDED_COLUMNS = (
 )
 # What a case listing reads of an encounter: everything but the notes text, which
 # can be long and belongs to the one encounter being opened.
-ENCOUNTER_COLUMNS = "id, kind, occurred_at, notes_revision, notes != '' AS has_notes"
+ENCOUNTER_COLUMNS = (
+    "id, kind, occurred_at, notes_revision,"
+    " trim(notes, ' ' || char(9) || char(10) || char(13)) != '' AS has_notes"
+)
 
 
 class DuplicateCaseNumber(Exception):
