@@ -65,7 +65,7 @@ export function autosave({ area, url, payload, retry, onSaved }) {
     }
   }
 
-  // Resolves when everything typed is saved, or when saving fails.
+  // Resolves with true when everything typed is saved, with false when saving fails.
   async function flush() {
     clearTimeout(timer);
     while (inFlight || area.value !== savedText) {
@@ -74,8 +74,9 @@ export function autosave({ area, url, payload, retry, onSaved }) {
       } else {
         await save(true);
       }
-      if (state === "failed" || state === "offline") return;
+      if (state === "failed" || state === "offline") return false;
     }
+    return true;
   }
 
   area.addEventListener("input", () => {
@@ -105,11 +106,31 @@ export function autosave({ area, url, payload, retry, onSaved }) {
     event.preventDefault();
   });
 
-  saves.push(flush);
+  saves.push({ flush, dirty: () => area.value !== savedText });
   return { save, flush };
 }
 
-// Everything the physician typed on this page is saved, or saving failed.
-export function flushAll() {
-  return Promise.all(saves.map((flush) => flush()));
+// True when everything the physician typed on this page is saved, false when saving failed.
+export async function flushAll() {
+  const results = await Promise.all(saves.map((entry) => entry.flush()));
+  return results.every(Boolean);
 }
+
+const unsaved = () => saves.some((entry) => entry.dirty());
+
+// Following a link or sending a form with unsaved text saves it first, so a tap on Weiter or
+// Übernehmen never leaves a hand edit behind (an iPad does not ask before leaving). If the
+// save fails the page stays and the status area says so.
+document.addEventListener("click", async (event) => {
+  const link = event.target.closest("a[href]");
+  const plain = event.button === 0 && !(event.metaKey || event.ctrlKey || event.shiftKey);
+  if (!link || event.defaultPrevented || !plain || link.target || !unsaved()) return;
+  event.preventDefault();
+  if (await flushAll()) location.assign(link.href);
+});
+
+document.addEventListener("submit", async (event) => {
+  if (event.defaultPrevented || !unsaved()) return;
+  event.preventDefault();
+  if (await flushAll()) event.target.submit();
+});

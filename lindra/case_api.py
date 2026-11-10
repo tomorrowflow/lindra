@@ -7,17 +7,15 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Body, Response
 from fastapi.responses import JSONResponse
 
-from lindra import badges, cases, drafts
+from lindra import badges, cases
 from lindra.store import TIMESTAMP_FORMAT, Case, Encounter, OpenedEncounter, Store
 
 
 def encounter_json(encounter: Encounter) -> dict[str, Any]:
     if not encounter.has_proposal:
         proposal = "none"
-    elif encounter.proposal_revision == encounter.notes_revision:
-        proposal = "pending"
     else:
-        proposal = "outdated"
+        proposal = "outdated" if encounter.proposal_outdated else "pending"
     return {
         "id": encounter.id,
         "kind": encounter.kind,
@@ -26,9 +24,7 @@ def encounter_json(encounter: Encounter) -> dict[str, Any]:
         "notes_revision": encounter.notes_revision,
         "has_draft": encounter.has_draft,
         "proposal": proposal,
-        "possibly_outdated": drafts.draft_possibly_outdated(
-            encounter.draft_revision, encounter.notes_revision
-        ),
+        "possibly_outdated": encounter.draft_possibly_outdated,
         "acceptances": encounter.acceptances,
     }
 

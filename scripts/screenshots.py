@@ -679,10 +679,10 @@ def review_screens(page: Page, base_url: str, out: Path, name: str) -> list[str]
     page.wait_for_function(
         "document.querySelector('[data-save-indicator]').textContent.includes('Gespeichert')"
     )
-    page.wait_for_selector("#section-head .section-badge[aria-label='Von Hand bearbeitet']")
+    page.wait_for_selector("#section-head .section-badge[aria-label='Manuell bearbeitet']")
     if not page.is_enabled(".action-bar [data-copy]"):
         findings.append(f"{name}: copy stays disabled after typing in the draft pane")
-    if "Von Hand bearbeitet" not in page.inner_text(".state-line"):
+    if "Manuell bearbeitet" not in page.inner_text(".state-line"):
         findings.append(f"{name}: the state line does not follow the hand edit")
     if "Bandscheibenvorfall L4/5" not in page.inner_text(".proposal-text"):
         findings.append(f"{name}: the proposal's alternative vanished after the hand edit")
@@ -709,7 +709,7 @@ def review_screens(page: Page, base_url: str, out: Path, name: str) -> list[str]
 
     # The retained section says Nicht aktualisiert, spelled out; the others are replaced.
     go_to_step(page, portrait, 3)
-    if head_badges(page) != ["Von Hand bearbeitet", "Nicht aktualisiert"]:
+    if head_badges(page) != ["Manuell bearbeitet", "Nicht aktualisiert"]:
         findings.append(f"{name}: the retained section carries {head_badges(page)}")
     if "Nicht aktualisiert" not in page.inner_text("#section-head .badge-word"):
         findings.append(f"{name}: Nicht aktualisiert is not spelled out on the active section")
@@ -792,6 +792,16 @@ def review_screens(page: Page, base_url: str, out: Path, name: str) -> list[str]
     )
     if not page.evaluate("navigator.clipboard.readText()").startswith("Tiefer Rückenschmerz"):
         findings.append(f"{name}: the section step copied the wrong text")
+
+    # Leaving a step with unsaved text saves it first: no pause, straight on to Weiter.
+    go_to_step(page, portrait, 6)
+    page.click("#section-text")
+    page.keyboard.type("Sofort weitergegangen.")
+    page.click(".action-bar a:has-text('Weiter')")
+    page.wait_for_url("**/abschnitte/6")
+    go_to_step(page, portrait, 6)
+    if "Sofort weitergegangen." not in page.input_value("#section-text"):
+        findings.append(f"{name}: text typed just before Weiter was lost")
 
     # Buttons keep their size and place across every step.
     for step, layout in bars.items():

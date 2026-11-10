@@ -23,7 +23,10 @@ if (strip) {
 
   async function generate() {
     // What was typed reaches the server first, or the proposal would be outdated on arrival.
-    await flushAll();
+    if (!(await flushAll())) {
+      failed("Die Notizen sind noch nicht gespeichert. Versuchen Sie es erneut, sobald sie es sind.");
+      return;
+    }
     button.disabled = true;
     retry.hidden = true;
     reason.textContent = "";
@@ -44,8 +47,8 @@ if (strip) {
       return;
     }
     setStatus("generation", null);
-    await flushAll();
-    location.reload();
+    // Reloading shows the proposal; it must not throw away text that did not save.
+    if (await flushAll()) location.reload();
   }
 
   button.addEventListener("click", generate);

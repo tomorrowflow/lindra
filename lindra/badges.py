@@ -79,9 +79,8 @@ STATES = {
 def encounter_state(encounter: Encounter) -> str:
     """The most urgent thing to say about an encounter, as a key of `STATES`."""
     if encounter.has_proposal:
-        outdated = encounter.proposal_revision != encounter.notes_revision
-        return "outdated" if outdated else "proposal"
-    if drafts.draft_possibly_outdated(encounter.draft_revision, encounter.notes_revision):
+        return "outdated" if encounter.proposal_outdated else "proposal"
+    if encounter.draft_possibly_outdated:
         return "possibly_outdated"
     if encounter.has_draft:
         return "draft"
@@ -112,14 +111,14 @@ OUTDATED = Badge(
 )
 MANUAL = Badge(
     icon="pencil",
-    label="Von Hand bearbeitet",
+    label="Manuell bearbeitet",
     explanation="Sie haben diesen Abschnitt selbst geschrieben. Eine Übernahme ersetzt ihn nicht.",
 )
 NOT_UPDATED = Badge(
     icon="circle-minus",
     label="Nicht aktualisiert",
     explanation=(
-        "Dieser Abschnitt ist von Hand bearbeitet. Bei der letzten Übernahme blieb er, wie er war."
+        "Dieser Abschnitt ist manuell bearbeitet. Bei der letzten Übernahme blieb er, wie er war."
     ),
     word="Nicht aktualisiert",
 )
@@ -148,7 +147,7 @@ def section_state(review, index: int) -> Badge:
         if section.manual:
             return Badge(
                 "pencil",
-                "Von Hand bearbeitet, der Vorschlag ersetzt den Abschnitt nicht",
+                "Manuell bearbeitet, der Vorschlag ersetzt den Abschnitt nicht",
                 "Die Fassung des Vorschlags bleibt rechts sichtbar, bis Sie den Vorschlag "
                 "übernehmen oder verwerfen. Wollen Sie sie, übernehmen Sie sie von Hand.",
             )

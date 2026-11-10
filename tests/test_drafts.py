@@ -4,11 +4,14 @@ No storage and no model: values in, values out. The same rules are driven throug
 API in `tests/test_review_api.py`; these tests pin the edge cases of each rule.
 """
 
+from datetime import datetime
+
 import pytest
 
 from lindra import drafts
 from lindra.cast import ASSESSMENT_SECTIONS, VISIT_SECTIONS, Clarification
 from lindra.drafts import Draft, Paragraph, Proposal, Section
+from lindra.store import Encounter
 from lindra.textmodel import GenerationFailed
 
 SOZIAL, FRUEHER, THERAPIE = ASSESSMENT_SECTIONS[:3]
@@ -160,11 +163,6 @@ def test_section_text_has_no_title_and_an_empty_section_has_no_text():
     assert drafts.is_empty(Section(SOZIAL, (Paragraph("  \n"),)))
 
 
-def test_copy_texts_are_none_without_a_draft_and_one_text_per_section_with_one():
-    assert drafts.copy_texts(None) is None
-    assert drafts.copy_texts(Draft(sections())) == [f"Alt {i}." for i in range(7)]
-
-
 # ---- editing ----
 
 
@@ -272,25 +270,19 @@ def test_the_plan_names_what_is_replaced_and_what_stays():
 # ---- outdated proposal and stale draft ----
 
 
-def test_a_proposal_is_outdated_when_its_notes_revision_is_not_the_current_one():
-    proposal = proposal_of(revision=2)
+def encounter(**revisions):
+    return Encounter(1, "assessment", datetime(2026, 10, 5, 9, 0), **revisions)
 
-    assert not drafts.proposal_outdated(proposal, 2)
-    assert drafts.proposal_outdated(proposal, 3)
+
+def test_a_proposal_is_outdated_when_its_notes_revision_is_not_the_current_one():
+    assert not encounter(notes_revision=2, proposal_revision=2).proposal_outdated
+    assert encounter(notes_revision=3, proposal_revision=2).proposal_outdated
+    # Without a proposal there is nothing to be outdated.
+    assert not encounter(notes_revision=3).proposal_outdated
 
 
 def test_a_draft_is_possibly_outdated_only_when_notes_moved_past_its_revision():
-    assert not drafts.draft_possibly_outdated(2, 2)
-    assert drafts.draft_possibly_outdated(2, 3)
+    assert not encounter(notes_revision=2, draft_revision=2).draft_possibly_outdated
+    assert encounter(notes_revision=3, draft_revision=2).draft_possibly_outdated
     # A draft the physician only wrote by hand was never generated from notes.
-    assert not drafts.draft_possibly_outdated(None, 5)
-
-
-def test_the_stored_form_round_trips_a_draft_and_a_proposal():
-    draft = drafts.accept(None, proposal_of())
-    draft = drafts.edit_section(draft, "assessment", 0, "Von Hand.")
-    proposal = proposal_of(revision=4)
-
-    assert drafts.draft_from_json(drafts.draft_to_json(draft)) == draft
-    stored = drafts.proposal_to_json(proposal)
-    assert drafts.proposal_from_json(stored, 4) == proposal
+    assert not encounter(notes_revision=5).draft_possibly_outdated

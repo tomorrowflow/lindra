@@ -13,8 +13,7 @@ import hashlib
 from typing import Any
 
 from lindra.cast import Cast, Paragraph, fixture_audio
-from lindra.drafts import NOTES_SOURCE
-from lindra.textmodel import GenerationFailed, GenerationRequest
+from lindra.textmodel import NOTES_SOURCE, GenerationFailed, GenerationRequest
 
 
 class NotInTheCast(LookupError):

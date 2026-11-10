@@ -113,15 +113,11 @@ class EncounterReview:
 
     @property
     def outdated(self) -> bool:
-        return self.proposal is not None and drafts.proposal_outdated(
-            self.proposal, self.encounter.notes_revision
-        )
+        return self.encounter.proposal_outdated
 
     @property
     def possibly_outdated(self) -> bool:
-        return drafts.draft_possibly_outdated(
-            self.encounter.draft_revision, self.encounter.notes_revision
-        )
+        return self.encounter.draft_possibly_outdated
 
     @property
     def plan(self) -> drafts.Plan | None:

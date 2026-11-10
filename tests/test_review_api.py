@@ -35,17 +35,17 @@ def client(tmp_path):
 class Encounter:
     """One seeded encounter with the paths the physician's browser would call."""
 
-    def __init__(self, client, number=CASE, kind="assessment"):
-        case = seeded_case(client, number)
-        found = next(e for e in case["encounters"] if e["kind"] == kind)
+    def __init__(self, client, number=CASE, kind="assessment", base=None):
         self.client = client
-        self.base = f"/api/cases/{case['id']}/encounters/{found['id']}"
+        if base is None:
+            case = seeded_case(client, number)
+            found = next(e for e in case["encounters"] if e["kind"] == kind)
+            base = f"/api/cases/{case['id']}/encounters/{found['id']}"
+        self.base = base
 
     def through(self, client):
         """The same encounter, reached through another client."""
-        other = object.__new__(Encounter)
-        other.client, other.base = client, self.base
-        return other
+        return Encounter(client, base=self.base)
 
     def get(self, suffix=""):
         return self.client.get(self.base + suffix)

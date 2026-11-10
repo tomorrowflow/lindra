@@ -44,6 +44,7 @@ TEMPLATES.env.globals["badge_states"] = badges.STATES
 TEMPLATES.env.globals["section_badges"] = badges.section_badges
 TEMPLATES.env.globals["section_state"] = badges.section_state
 TEMPLATES.env.globals["section_text"] = drafts.section_text
+TEMPLATES.env.globals["outdated_reason"] = drafts.OUTDATED_REASON
 LOGIN_ERROR = "Der Zugangsschlüssel ist nicht gültig"
 
 

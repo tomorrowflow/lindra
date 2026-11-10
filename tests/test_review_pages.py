@@ -315,8 +315,8 @@ def test_a_hand_edited_section_carries_only_the_manual_badge_while_a_proposal_is
 
     page = review.step(1).text
 
-    assert badge_labels(page) == ["Von Hand bearbeitet"]
-    assert "Von Hand bearbeitet, der Vorschlag ersetzt den Abschnitt nicht" in page
+    assert badge_labels(page) == ["Manuell bearbeitet"]
+    assert "Manuell bearbeitet, der Vorschlag ersetzt den Abschnitt nicht" in page
 
 
 def test_the_open_question_and_copied_badges_appear_on_their_sections(browser, api_client):
@@ -339,7 +339,7 @@ def test_a_retained_section_carries_nicht_aktualisiert_spelled_out_on_its_step(r
     head = page.split('id="section-head"', 1)[1].split('class="state-line"', 1)[0]
     assert 'aria-label="Nicht aktualisiert"' in head
     assert '<span class="badge-word">Nicht aktualisiert</span>' in head
-    assert '<span class="badge-word">Von Hand' not in head
+    assert '<span class="badge-word">Manuell' not in head
     other = review.step(3).text
     assert "Nicht aktualisiert" not in other.split('id="section-head"', 1)[1].split("state-line")[0]
 
@@ -352,20 +352,20 @@ def test_the_sidebar_step_of_a_retained_section_shows_its_badges(review):
     sidebar = sidebar_of(review.step(1).text)
 
     second = sidebar.split('class="step-number">3<', 1)[1].split("</li>", 1)[0]
-    assert "Nicht aktualisiert" in second and "Von Hand bearbeitet" in second
+    assert "Nicht aktualisiert" in second and "Manuell bearbeitet" in second
     third = sidebar.split('class="step-number">4<', 1)[1].split("</li>", 1)[0]
     assert "Nicht aktualisiert" not in third
 
 
 def test_the_section_head_fragment_follows_the_saved_text(review):
     before = review.get("/abschnitte/1/kopf").text
-    assert "Von Hand bearbeitet" not in before
+    assert "Manuell bearbeitet" not in before
 
     review.edit(1, "Meine Fassung.")
     after = review.get("/abschnitte/1/kopf")
 
     assert after.status_code == 200
-    assert "Von Hand bearbeitet" in after.text
+    assert "Manuell bearbeitet" in after.text
     assert after.text.lstrip().startswith('<div class="section-head" id="section-head">')
     assert review.get("/abschnitte/9/kopf").status_code == 404
 

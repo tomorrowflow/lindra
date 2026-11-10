@@ -40,7 +40,7 @@
   {% endif %}
 </section>
 <section class="decision" aria-labelledby="retained-title">
-  <h2 class="decision-title" id="retained-title">{{ icon("pencil") }}<span>Bleibt, weil von Hand bearbeitet</span></h2>
+  <h2 class="decision-title" id="retained-title">{{ icon("pencil") }}<span>Bleibt, weil manuell bearbeitet</span></h2>
   {% if plan.retained %}
   <ul>{% for title in plan.retained %}<li>{{ title }}</li>{% endfor %}</ul>
   <p class="text-secondary">Diese Abschnitte tragen danach den Hinweis «Nicht aktualisiert». Die Fassung des Vorschlags bleibt bis zur Entscheidung auf ihrer Seite zu sehen.</p>
@@ -88,7 +88,7 @@
 {% if accepting and rev.outdated %}
 <p class="step-note" id="outdated-reason" role="note" data-outdated-reason>
   {{ icon("clock") }}
-  <span>Veraltet: Notizen seit diesem Vorschlag geändert</span>
+  <span>{{ outdated_reason }}</span>
   <span class="step-note-more">Verwerfen Sie den Vorschlag oder erzeugen Sie einen neuen.</span>
 </p>
 {% endif %}

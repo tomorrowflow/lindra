@@ -14,6 +14,10 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Protocol
 
+# The only source a reference points to in this release: a passage of the encounter's notes.
+# A visit's background (ticket 09) adds another.
+NOTES_SOURCE = "notes"
+
 
 class GenerationFailed(Exception):
     """The model gave no usable draft. `reason` is a sentence for the status area."""

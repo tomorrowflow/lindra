@@ -13,9 +13,8 @@ from dataclasses import dataclass, replace
 from typing import Any
 
 from lindra.cast import SECTIONS, SUBHEADINGS, Clarification
-from lindra.textmodel import GenerationFailed
+from lindra.textmodel import NOTES_SOURCE, GenerationFailed
 
-NOTES_SOURCE = "notes"
 OUTDATED_REASON = "Veraltet: Notizen seit diesem Vorschlag geändert"
 UNSTRUCTURED = "Das Ergebnis des Textmodells hat nicht die erwartete Struktur."
 
@@ -172,13 +171,6 @@ def is_empty(section: Section) -> bool:
     return not section_text(section).strip()
 
 
-def copy_texts(draft: Draft | None) -> list[str] | None:
-    """The plain text of every section of the current draft; None when there is no draft."""
-    if draft is None:
-        return None
-    return [section_text(section) for section in draft.sections]
-
-
 # ---- editing, acceptance, outdated and stale ----
 
 
@@ -228,16 +220,6 @@ def accept(draft: Draft | None, proposal: Proposal) -> Draft:
         else:
             merged.append(replace(proposed, manual=False, not_updated=False, copied=False))
     return Draft(tuple(merged))
-
-
-def proposal_outdated(proposal: Proposal, notes_revision: int) -> bool:
-    return proposal.notes_revision != notes_revision
-
-
-def draft_possibly_outdated(draft_revision: int | None, notes_revision: int) -> bool:
-    """The notes moved on after the draft was last accepted. A draft that was only written by
-    hand has no revision and is never marked."""
-    return draft_revision is not None and draft_revision < notes_revision
 
 
 def _with(sections: tuple[Section, ...], index: int, section: Section) -> tuple[Section, ...]:

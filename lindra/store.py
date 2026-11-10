@@ -83,6 +83,17 @@ class Encounter:
     def has_proposal(self) -> bool:
         return self.proposal_revision is not None
 
+    @property
+    def proposal_outdated(self) -> bool:
+        """The pending proposal was generated from notes that have changed since (ADR 0008)."""
+        return self.has_proposal and self.proposal_revision != self.notes_revision
+
+    @property
+    def draft_possibly_outdated(self) -> bool:
+        """The notes moved past the revision the draft was last accepted at. A draft that was
+        only written by hand has no revision and is never marked."""
+        return self.draft_revision is not None and self.draft_revision < self.notes_revision
+
 
 @dataclass(frozen=True)
 class Review:

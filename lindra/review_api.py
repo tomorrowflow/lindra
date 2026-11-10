@@ -18,20 +18,9 @@ RawBody = Annotated[dict[str, Any] | None, Body()]
 def section_json(number: int, section: drafts.Section) -> dict[str, Any]:
     return {
         "number": number,
-        "title": section.title,
         "text": drafts.section_text(section),
         "empty": drafts.is_empty(section),
-        "paragraphs": [
-            {
-                "text": p.text,
-                "heading": p.heading,
-                "references": [{"source": r.source, "quote": r.quote} for r in p.references],
-            }
-            for p in section.paragraphs
-        ],
-        "manual": section.manual,
-        "not_updated": section.not_updated,
-        "copied": section.copied,
+        **drafts.section_to_json(section),
     }
 
 
