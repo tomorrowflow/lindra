@@ -491,6 +491,28 @@ def notes_screens(page: Page, base_url: str, out: Path, name: str) -> list[str]:
     findings += [
         f"{name}: reload moved the {k}" for k in moved(saved_layout, layout_of_notes_step(page))
     ]
+
+    # Opening notes changes nothing: the text area holds exactly the saved text, also when
+    # it starts with a line break, and an untouched step sends no save.
+    saved_url = page.url
+    for notes in ("", "\nzweite Zeile", "Text\n"):
+        httpx.put(
+            f"{base_url}{page.get_attribute('#notes', 'data-save-url')}",
+            json={"notes": notes},
+            headers={"Authorization": f"Bearer {TOKEN}"},
+        ).raise_for_status()
+        saves: list[str] = []
+        page.on("request", lambda request, saves=saves: saves.append(request.method))
+        page.goto(saved_url)
+        page.wait_for_timeout(1500)
+        if page.input_value("#notes") != notes:
+            findings.append(
+                f"{name}: the text area shows {page.input_value('#notes')!r}, not {notes!r}"
+            )
+        if "PUT" in saves:
+            findings.append(f"{name}: opening the notes step sent a save for {notes!r}")
+        if status_text(page) != "Gespeichert":
+            findings.append(f"{name}: opening the notes step reads {status_text(page)!r}")
     return findings
 
 

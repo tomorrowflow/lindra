@@ -344,6 +344,17 @@ def test_a_note_that_starts_with_a_blank_line_keeps_it(browser):
     assert textarea_of(page) == "\n\nzweite Zeile"
 
 
+@pytest.mark.parametrize("notes", ["", "Rückenschmerz", "erste Zeile\nzweite Zeile\n"])
+def test_a_note_is_in_the_text_area_without_a_line_break_added_in_front(browser, notes):
+    location = create_case(browser)
+    path = first_encounter(browser, location)
+    browser.put(api_path(path), json={"notes": notes})
+
+    page = browser.get(path).text
+
+    assert textarea_of(page) == notes
+
+
 def test_the_status_area_says_saved_and_holds_no_button(browser):
     location = create_case(browser)
 
