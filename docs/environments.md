@@ -8,7 +8,7 @@ Lindra runs in three tiers: a throwaway stack per ticket, one long-lived test st
 | --- | --- | --- | --- |
 | User | `factory` | `lindra-test` | `frogger`, the operator |
 | Node | the node that runs the ticket | OpenClaw node `lindra-test` | none; no ticket and no agent touches it |
-| Host | the developer's node | Linux 790, `minisforum790.tail974337.ts.net` | open for clinical use. The evaluation host is `zotac1070`; see "The production host is open" |
+| Host | the developer's node | Linux 790, `minisforum790.tail974337.ts.net` | open for clinical use. The evaluation host is `zotac1070.tail974337.ts.net`; see "The production host is open" |
 | Port | a free port that `up` picks, on `127.0.0.1` | 8780, on all addresses | 8790 on `127.0.0.1` unless `up --port` and `--bind` say otherwise |
 | Compose project | `lindra-<checkout directory>`, or the name given with `--project` (`lindra-lfr-02` for LFR-02) | `lindra-test` | `lindra-prod` |
 | Compose files | `compose.yaml` | `compose.yaml` and `compose.test.yaml` | `compose.yaml` and `compose.prod.yaml` |
@@ -16,7 +16,7 @@ Lindra runs in three tiers: a throwaway stack per ticket, one long-lived test st
 | Commands | `scripts/env.py up`, `check`, `reset`, `down` | `scripts/env.py ... --tier test`, plus `ensure-test` and `install-timer` | `scripts/env.py ... --tier production` |
 | Data rule | the fictional cast and nothing else | the fictional cast and nothing else | the fictional cast and nothing else, until the separate approval of ADR 0006 exists |
 | Text model and speech recognition | stand-ins | stand-ins | stand-ins; the real backends arrive with a later ticket |
-| Installed | not applicable | 2026-11-10 by ticket 03: host `minisforum790.tail974337.ts.net`, port 8780, compose project `lindra-test` | not yet. Ticket 04 names `zotac1070` as the evaluation host; the install is the operator's, as `frogger` |
+| Installed | not applicable | 2026-11-10 by ticket 03: host `minisforum790.tail974337.ts.net`, port 8780, compose project `lindra-test` | not yet. Ticket 04 names `zotac1070.tail974337.ts.net` as the evaluation host; the install is the operator's, as `frogger` |
 
 The test port 8780 is the preferred port. If it is taken, the ADR and this table change together.
 
@@ -116,7 +116,7 @@ The host for real clinical use is an open decision. It depends on the legal and 
 | Item | Value |
 | --- | --- |
 | Production host | open |
-| Evaluation host | `zotac1070`, named by the operator on 2026-11-10 (ticket 04). It is the evaluation host, not a cleared clinical host, while ADR 0007's decision is open. |
+| Evaluation host | `zotac1070.tail974337.ts.net`, named by the operator on 2026-11-10 (ticket 04). It is the evaluation host, not a cleared clinical host, while ADR 0007's decision is open. |
 | Real patient data | not allowed |
 
-`zotac1070` is not connected to the OpenClaw environment, so no factory node, ticket or agent reaches it. The operator installs and checks the stack there as `frogger`.
+`zotac1070.tail974337.ts.net` is not connected to the OpenClaw environment, so no factory node, ticket or agent reaches it. The operator installs and checks the stack there as `frogger`.
