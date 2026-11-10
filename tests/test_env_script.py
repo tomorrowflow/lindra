@@ -67,7 +67,7 @@ class Stack:
         path = url.split("/", 3)[3] if url.count("/") >= 3 else ""
         headers = {"Authorization": f"Bearer {token}"} if token else {}
         response = client.request(method, "/" + path, headers=headers)
-        return response.status_code, response.json()
+        return response.status_code, response.json() if response.content else None
 
 
 @pytest.fixture
@@ -270,7 +270,24 @@ def test_reset_seeds_the_cast_and_reports_it(env, stack, capsys):
 
     out = capsys.readouterr().out
     assert "FIK-2026-001" in out and "FIK-2026-002" in out and "FIK-2026-003" in out
-    assert "not stored" in out
+    assert "stored in case storage" in out
+
+
+def test_reset_puts_the_three_cases_in_the_stack_and_check_confirms_them(env, stack, capsys):
+    run_main(env, "up", "--project", "p")
+    case_list = stack.http("GET", "http://x/api/cases", stack.token)[1]["cases"]
+    deleted = case_list[0]
+    stack.http("DELETE", f"http://x/api/cases/{deleted['id']}", stack.token)
+    assert run_main(env, "check", "--project", "p") == 1
+    assert "not in case storage" in capsys.readouterr().out
+
+    assert run_main(env, "reset", "--project", "p") == 0
+
+    assert run_main(env, "check", "--project", "p") == 0
+    numbers = [
+        c["case_number"] for c in stack.http("GET", "http://x/api/cases", stack.token)[1]["cases"]
+    ]
+    assert numbers == ["FIK-2026-001", "FIK-2026-002", "FIK-2026-003"]
 
 
 def test_reset_twice_converges_to_the_same_state(env, stack, capsys):

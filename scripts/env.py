@@ -267,7 +267,7 @@ def authenticated_checks(url: str, token: str, record) -> None:
         f"hook ran, {seed.get('totals', {}).get('cases', 0)} cases, digest "
         f"{str(seed.get('digest', ''))[:12]}"
         if seed.get("ran")
-        else "seed hook has not run; run `scripts/env.py reset`",
+        else "the fictional cast is not in case storage; run `scripts/env.py reset`",
     )
     record("commit", True, f"{body.get('tier')} tier at {body.get('commit')}")
 
@@ -326,7 +326,7 @@ def seed_cast(url: str, token: str, verb: str) -> int:
     print(
         f"  {totals['cases']} cases, {totals['encounters']} encounters, "
         f"{totals['changed_background']} with changed background; "
-        "validated and reported, not stored until case storage exists"
+        "stored in case storage"
     )
     return 0
 

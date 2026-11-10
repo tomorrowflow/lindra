@@ -11,8 +11,9 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
-from lindra import auth, seed
+from lindra import auth, case_api, seed
 from lindra.config import Settings
+from lindra.store import DATABASE_FILE, Store
 
 PACKAGE_DIR = Path(__file__).resolve().parent
 TEMPLATES = Jinja2Templates(directory=PACKAGE_DIR / "templates")
@@ -23,6 +24,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or Settings.from_env()
     app = FastAPI(title="Lindra", docs_url=None, redoc_url=None, openapi_url=None)
     app.mount("/static", StaticFiles(directory=PACKAGE_DIR / "static"), name="static")
+    store = Store(settings.data_dir / DATABASE_FILE)
+    app.include_router(case_api.build_router(store))
 
     # Middleware added later wraps the earlier ones, so the session is loaded
     # before the guard looks at it.
@@ -54,14 +57,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "commit": settings.commit,
             "text_backend": settings.text_backend,
             "speech_backend": settings.speech_backend,
-            "seed": seed.read_report(settings.data_dir),
+            "seed": seed.read_report(store, settings.data_dir),
         }
 
     # The seed hook `scripts/env.py reset` calls: the fictional cast, nothing else.
     @app.post("/api/seed")
     def seed_cast() -> dict[str, Any]:
         try:
-            return seed.run(settings.data_dir)
+            return seed.run(store, settings.data_dir)
         except seed.InvalidCast as error:
             raise HTTPException(status_code=500, detail=str(error)) from error
 

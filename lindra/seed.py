@@ -1,37 +1,61 @@
 """The seed hook `scripts/env.py reset` calls (ADR 0007).
 
-It seeds the fictional cast and nothing else. Until case storage exists
-(ticket 05) it validates the cast and reports it without storing it; the report
-goes to a marker file on the data volume so `check` can confirm the hook ran,
-also after a restart. Ticket 05 stores the cases at the marked place in `run`.
+It seeds the fictional cast and nothing else. It validates the cast, then
+replaces the cast's cases in case storage: each fictional case is deleted by its
+case number and stored again with its assessment and visits. Cases the physician
+created under other numbers stay. The report goes to a marker file on the data
+volume so `check` can confirm the hook ran, also after a restart, and counts
+only while every cast case is still in storage.
 """
 
 from __future__ import annotations
 
 import json
 import os
+from datetime import datetime, time
 from pathlib import Path
 from typing import Any
 
 from lindra import cast
+from lindra.store import Store
 
 REPORT_FILE = "seed-report.json"
+# The cast gives each encounter a date; the seeded encounters happen at this time.
+SEEDED_TIME = time(9, 0)
 
 
 class InvalidCast(RuntimeError):
     """The cast breaks a rule of ADR 0006 or ADR 0010; nothing is seeded."""
 
 
-def run(data_dir: Path) -> dict[str, Any]:
-    """Validate the cast, record the report and return it. Safe to repeat."""
+def run(store: Store, data_dir: Path) -> dict[str, Any]:
+    """Validate the cast, store its cases, record the report and return it. Safe to repeat."""
     fictional = cast.load_cast()
     problems = cast.validate_cast(fictional)
     if problems:
         raise InvalidCast("; ".join(problems))
-    # Ticket 05 replaces the cast in case storage here. Until then nothing is stored.
+    store_cast(store, fictional)
     report = build_report(fictional)
     write_report(data_dir, report)
     return report
+
+
+def store_cast(store: Store, fictional: cast.Cast) -> None:
+    """Replace the cast's cases in one transaction: all of them or none."""
+    with store.write() as tx:
+        for case in fictional.cases:
+            tx.delete_case_number(case.case_number)
+            case_id = tx.add_case(
+                case.case_number,
+                case.patient_name,
+                case.label,
+                case.period_start,
+                case.period_end,
+            )
+            for encounter in case.encounters:
+                tx.add_encounter(
+                    case_id, encounter.kind, datetime.combine(encounter.date, SEEDED_TIME)
+                )
 
 
 def build_report(fictional: cast.Cast) -> dict[str, Any]:
@@ -56,7 +80,7 @@ def build_report(fictional: cast.Cast) -> dict[str, Any]:
         )
     return {
         "ran": True,
-        "stored": False,
+        "stored": True,
         "digest": cast.cast_digest(fictional),
         "cases": cases,
         "totals": {
@@ -79,16 +103,21 @@ def write_report(data_dir: Path, report: dict[str, Any]) -> None:
     os.replace(scratch, target)
 
 
-def read_report(data_dir: Path) -> dict[str, Any]:
-    """The last report, or `{"ran": False}` when the hook has not run on this volume.
+def read_report(store: Store, data_dir: Path) -> dict[str, Any]:
+    """The last report, or `{"ran": False}` when the cast is not seeded on this volume.
 
     A report of an older cast counts as not run, so a redeploy that changed the cast
-    makes `up` seed again and `check` fail until it does.
+    makes `up` seed again and `check` fail until it does. So does a cast case that is
+    no longer in storage, for example one the physician deleted.
     """
     try:
         report = json.loads((data_dir / REPORT_FILE).read_text(encoding="utf-8"))
     except FileNotFoundError:
         return {"ran": False}
-    if report.get("digest") != cast.cast_digest(cast.load_cast()):
+    fictional = cast.load_cast()
+    if report.get("digest") != cast.cast_digest(fictional):
         return {"ran": False}
+    with store.read() as tx:
+        if not tx.has_case_numbers([case.case_number for case in fictional.cases]):
+            return {"ran": False}
     return report
