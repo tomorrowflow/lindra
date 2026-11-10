@@ -3,11 +3,12 @@
 This is the only dataset the environments seed. Every case number, name, note and
 draft below is invented; no real, pseudonymised or production-copied data belongs
 here, and neither do the ward's forms or the operator's documents. The seed hook
-(`lindra/seed.py`) stores the cast's cases; the notes and drafts join storage with
-the tickets that introduce them.
+(`lindra/seed.py`) stores the cast's cases with their notes; the drafts stay here as
+what the fixture text model returns.
 
-Each encounter carries what the fixture text model returns for it (the expected
-draft and the clarification items) and the fixture audio the speech stand-in
+Each encounter carries that expected draft (paragraphs, each with the passages of
+the notes it came from and, in two assessment sections, the subsection heading the
+form has), the clarification items and the fixture audio the speech stand-in
 transcribes.
 """
 

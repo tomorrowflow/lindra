@@ -43,6 +43,8 @@ PAIRS = [
     ("Teal as text or icon on the page", "Teal (brand kit)", "Paper (brand kit)"),
     ("Teal as text on a writing surface", "Teal (brand kit)", "White"),
     ("Selected sidebar row", "Teal, text on Sage tint", "Sage tint, selected row"),
+    ("Body text on the Sage tint (proposal pane)", "Ink (brand kit)", "Sage tint, selected row"),
+    ("Secondary text on the Sage tint", "Ink, secondary text", "Sage tint, selected row"),
     ("Body text on the darker paper step", "Ink (brand kit)", "Paper, darker step"),
     ("Disabled button label", "Ink, secondary text", "Paper, darker step"),
     ("Delete button label", "White", "Error (theme kit red)"),

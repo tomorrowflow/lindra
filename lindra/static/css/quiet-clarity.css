@@ -636,7 +636,8 @@ p {
 }
 
 .step-list {
-  flex-basis: 100%;
+  flex: none;
+  width: calc(100% - 12px);
   margin: 4px 0 8px 12px;
   padding: 0 0 0 8px;
   list-style: none;
@@ -858,7 +859,8 @@ p {
 
 .strip-button {
   flex: none;
-  width: 184px;
+  width: 200px;
+  white-space: nowrap;
 }
 
 .strip-note {
@@ -892,6 +894,12 @@ p {
 .marker-button .more,
 .state-line .more {
   margin-left: auto;
+}
+
+/* Inside the marker "Mehr" is a span, so it takes no touch height of its own. */
+.marker-button .more {
+  min-height: 0;
+  padding: 0;
 }
 
 .marker + .badge-explanation,
@@ -1018,6 +1026,12 @@ textarea.pane-text {
 
 textarea.pane-text:focus {
   outline: none;
+}
+
+/* The placeholder carries a sentence the physician reads, so it uses the secondary text. */
+textarea.pane-text::placeholder {
+  color: var(--text-secondary);
+  opacity: 1;
 }
 
 .pane:focus-within {

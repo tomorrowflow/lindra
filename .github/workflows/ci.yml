@@ -33,3 +33,10 @@ jobs:
 
       - name: Test
         run: .venv/bin/python -m pytest -q
+
+      # The browser flow on an iPad-sized portrait and a desktop viewport. The script
+      # exits non-zero on any finding; its pictures go to the runner's temp directory.
+      - name: Browser flow
+        run: |
+          .venv/bin/python -m playwright install --with-deps chromium
+          .venv/bin/python scripts/screenshots.py "$RUNNER_TEMP/screenshots"

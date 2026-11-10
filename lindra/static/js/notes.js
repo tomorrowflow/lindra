@@ -15,7 +15,8 @@ function updateBadge(state) {
 
 // The icon markup is the page's own: the sidebar holds an icon of every kind in a template.
 function badgeIcon(name) {
-  return document.querySelector(`#badge-icons [data-icon="${name}"]`).innerHTML;
+  const icons = document.querySelector("#badge-icons").content;
+  return icons.querySelector(`[data-icon="${name}"]`).innerHTML;
 }
 
 autosave({

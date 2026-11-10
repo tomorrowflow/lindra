@@ -1,10 +1,10 @@
 """The fictional cast and the two stand-ins that are keyed to it (ADR 0003, 0006, 0010).
 
 The cast is seed data. These tests state what the cast must contain; the seed hook
-refuses a cast that breaks any of it. No HTTP route reaches the stand-ins yet, so
-these unit tests call them directly. This is the one exception to the HTTP-first
-rule in AGENTS.md; the ticket that wires a stand-in into a route (05 for the cast,
-08 for the text model, 10 for speech) tests it through the API.
+refuses a cast that breaks any of it. The text model stand-in is also driven through
+the HTTP API in `tests/test_review_api.py`. No route reaches the speech stand-in yet
+(ticket 10 wires it), so its unit tests here call it directly, the one remaining
+exception to the HTTP-first rule in AGENTS.md.
 """
 
 import dataclasses

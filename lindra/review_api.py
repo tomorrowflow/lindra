@@ -89,8 +89,8 @@ def handover_json(current: review.EncounterReview) -> dict[str, Any]:
 def build_router(store: Store, model: TextModel, generations: review.Generations) -> APIRouter:
     router = APIRouter(prefix="/api/cases/{case_id}/encounters/{encounter_id}")
 
-    def answer(case_id: int, encounter_id: int, current: review.EncounterReview) -> Response:
-        return JSONResponse(review_json(current, generations.state(encounter_id)))
+    def answer(current: review.EncounterReview) -> Response:
+        return JSONResponse(review_json(current, generations.state(current.encounter.id)))
 
     def refused(error: review.Refused) -> JSONResponse:
         return JSONResponse({"detail": str(error)}, status_code=409)
@@ -101,7 +101,7 @@ def build_router(store: Store, model: TextModel, generations: review.Generations
     @router.get("/draft")
     def get_draft(case_id: int, encounter_id: int) -> Response:
         try:
-            return answer(case_id, encounter_id, review.open_review(store, case_id, encounter_id))
+            return answer(review.open_review(store, case_id, encounter_id))
         except cases.NotFound as error:
             return not_found(error)
 
@@ -124,12 +124,12 @@ def build_router(store: Store, model: TextModel, generations: review.Generations
             return refused(error)
         except GenerationFailed as error:
             return JSONResponse({"detail": error.reason}, status_code=502)
-        return answer(case_id, encounter_id, current)
+        return answer(current)
 
     @router.post("/proposal/accept")
     def accept(case_id: int, encounter_id: int) -> Response:
         try:
-            return answer(case_id, encounter_id, review.accept(store, case_id, encounter_id))
+            return answer(review.accept(store, case_id, encounter_id))
         except cases.NotFound as error:
             return not_found(error)
         except review.Refused as error:
@@ -138,7 +138,7 @@ def build_router(store: Store, model: TextModel, generations: review.Generations
     @router.delete("/proposal")
     def discard(case_id: int, encounter_id: int) -> Response:
         try:
-            return answer(case_id, encounter_id, review.discard(store, case_id, encounter_id))
+            return answer(review.discard(store, case_id, encounter_id))
         except cases.NotFound as error:
             return not_found(error)
 
@@ -146,7 +146,7 @@ def build_router(store: Store, model: TextModel, generations: review.Generations
     def save_section(case_id: int, encounter_id: int, number: int, raw: RawBody) -> Response:
         try:
             current = review.save_section(store, case_id, encounter_id, number, raw or {})
-            return answer(case_id, encounter_id, current)
+            return answer(current)
         except cases.NotFound as error:
             return not_found(error)
         except cases.Invalid as error:
@@ -159,7 +159,7 @@ def build_router(store: Store, model: TextModel, generations: review.Generations
     def mark_copied(case_id: int, encounter_id: int, number: int) -> Response:
         try:
             current = review.mark_copied(store, case_id, encounter_id, number)
-            return answer(case_id, encounter_id, current)
+            return answer(current)
         except cases.NotFound as error:
             return not_found(error)
         except review.Refused as error:
