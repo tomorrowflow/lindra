@@ -8,7 +8,7 @@ Lindra runs in three tiers: a throwaway stack per ticket, one long-lived test st
 | --- | --- | --- | --- |
 | User | `factory` | `lindra-test` | `frogger`, the operator |
 | Node | the node that runs the ticket | OpenClaw node `lindra-test` | none; no ticket and no agent touches it |
-| Host | the developer's node | Linux 790, if the suitability check passes (free port 8780, rootless Docker, no production service) | open, see "The production host is open" |
+| Host | the developer's node | Linux 790, `minisforum790.tail974337.ts.net` | open, see "The production host is open" |
 | Port | a free port that `up` picks, on `127.0.0.1` | 8780, on all addresses | 8790 on `127.0.0.1` unless `up --port` and `--bind` say otherwise |
 | Compose project | `lindra-<checkout directory>`, or the name given with `--project` (`lindra-lfr-02` for LFR-02) | `lindra-test` | `lindra-prod` |
 | Compose files | `compose.yaml` | `compose.yaml` and `compose.test.yaml` | `compose.yaml` and `compose.prod.yaml` |
@@ -16,7 +16,7 @@ Lindra runs in three tiers: a throwaway stack per ticket, one long-lived test st
 | Commands | `scripts/env.py up`, `check`, `reset`, `down` | `scripts/env.py ... --tier test`, plus `ensure-test` and `install-timer` | `scripts/env.py ... --tier production` |
 | Data rule | the fictional cast and nothing else | the fictional cast and nothing else | the fictional cast and nothing else, until the separate approval of ADR 0006 exists |
 | Text model and speech recognition | stand-ins | stand-ins | stand-ins; the real backends arrive with a later ticket |
-| Installed | not applicable | not yet; ticket 03 installs it and records host, port, project and date here | not yet; ticket 04 records the host the operator names |
+| Installed | not applicable | 2026-11-10 by ticket 03: host `minisforum790.tail974337.ts.net`, port 8780, compose project `lindra-test` | not yet; ticket 04 records the host the operator names |
 
 The test port 8780 is the preferred port. If it is taken, the ADR and this table change together.
 
@@ -76,7 +76,15 @@ Use this on the node that runs the ticket. It never touches the test tier or pro
 
 ## Test procedure
 
-The test tier is installed by ticket 03, as node `lindra-test` on Linux 790 after the operator's suitability check.
+The test tier was installed by ticket 03 on 2026-11-10, as node `lindra-test` on Linux 790 after the operator's suitability check.
+
+| Item | Value |
+| --- | --- |
+| Host | Linux 790, `minisforum790.tail974337.ts.net` |
+| URL | `http://minisforum790.tail974337.ts.net:8780` (the value of `LINDRA_TEST_URL`) |
+| Port | 8780 |
+| Compose project | `lindra-test` |
+| Installed | 2026-11-10 |
 
 1. In the dedicated checkout on `main`, run `scripts/env.py up --tier test`, then `check --tier test`, then `install-timer`.
 2. From then on the timer runs `ensure-test` every 5 minutes. A new commit on `origin/main` is deployed without anyone touching the stack. Read the result with `journalctl --user -u lindra-test-env.service` on the test node.
