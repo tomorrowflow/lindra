@@ -28,10 +28,7 @@
     </header>
 
     <main class="step">
-      <div class="step-body">
-        <h1 class="step-title">Kein Fall ausgewählt</h1>
-        <p class="text-secondary">Wählen Sie in der Seitenleiste einen Fall.</p>
-      </div>
+      {% block step %}{% endblock %}
 
       {# The action bar keeps its buttons at the same size and place on every step (ADR 0008). #}
       <footer class="action-bar">
@@ -55,12 +52,30 @@
   <aside class="drawer-side">
     <label for="sidebar-toggle" class="drawer-overlay" aria-label="Seitenleiste schließen"></label>
     <nav class="sidebar" aria-label="Fälle">
-      <h2 class="sidebar-title">Fälle</h2>
+      <div class="sidebar-head">
+        <h2 class="sidebar-title">Fälle</h2>
+        <a class="btn btn-ghost" href="/faelle/neu">
+          {{ icon("plus") }}
+          <span>Neuer Fall</span>
+        </a>
+      </div>
       <ul class="menu sidebar-menu">
-        <li class="menu-title">Fall auswählen</li>
+        {% for item in cases %}
+        <li>
+          <a class="case-link{% if item.id == selected_id %} menu-active{% endif %}" href="/faelle/{{ item.id }}"{% if item.id == selected_id %} aria-current="page"{% endif %}>
+            <span class="case-number">{{ item.case_number }}</span>
+            <span class="case-name">{{ item.patient_name }}</span>
+            <span class="case-period">{{ german_period(item.period_start, item.period_end) }}</span>
+          </a>
+        </li>
+        {% else %}
         <li class="sidebar-empty text-secondary">Noch keine Fälle angelegt</li>
+        {% endfor %}
       </ul>
     </nav>
   </aside>
 </div>
+
+{% block dialog %}{% endblock %}
+<script src="/static/js/dialogs.js" defer></script>
 {% endblock %}

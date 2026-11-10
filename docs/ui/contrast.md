@@ -42,6 +42,7 @@ The theme kit also proposes its own paper, ink and primary values. The tokens ke
 | Selected sidebar row | Teal, text on Sage tint `#1B4542` | Sage tint, selected row `#E3E9E2` | 8.61 to 1 | passes |
 | Body text on the darker paper step | Ink (brand kit) `#243331` | Paper, darker step `#EAE6DD` | 10.59 to 1 | passes |
 | Disabled button label | Ink, secondary text `#4F5F5D` | Paper, darker step `#EAE6DD` | 5.39 to 1 | passes |
+| Delete button label | White `#FFFFFF` | Error (theme kit red) `#B43F46` | 5.61 to 1 | passes |
 | Error text on the page | Error (theme kit red) `#B43F46` | Paper (brand kit) `#F7F5F0` | 5.15 to 1 | passes |
 | Error text on a writing surface | Error (theme kit red) `#B43F46` | White `#FFFFFF` | 5.61 to 1 | passes |
 | Error text in an alert | Error (theme kit red) `#B43F46` | Error tint, alert surface `#FBEEEC` | 4.96 to 1 | passes |

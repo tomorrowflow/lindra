@@ -45,6 +45,7 @@ PAIRS = [
     ("Selected sidebar row", "Teal, text on Sage tint", "Sage tint, selected row"),
     ("Body text on the darker paper step", "Ink (brand kit)", "Paper, darker step"),
     ("Disabled button label", "Ink, secondary text", "Paper, darker step"),
+    ("Delete button label", "White", "Error (theme kit red)"),
     ("Error text on the page", "Error (theme kit red)", "Paper (brand kit)"),
     ("Error text on a writing surface", "Error (theme kit red)", "White"),
     ("Error text in an alert", "Error (theme kit red)", "Error tint, alert surface"),

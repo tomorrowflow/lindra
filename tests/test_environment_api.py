@@ -1,8 +1,8 @@
 """What the environment script sees: the environment report and the seed hook.
 
 `scripts/env.py check` reads `/api/environment`; `scripts/env.py reset` calls
-`POST /api/seed`. Until case storage exists (ticket 05) the hook validates and
-reports the fictional cast without storing it.
+`POST /api/seed`. The hook validates the fictional cast, stores its cases (the case
+tests are in `tests/test_cases_api.py`) and reports it.
 """
 
 import pytest
@@ -47,13 +47,13 @@ def test_seed_needs_the_token(anonymous):
     assert anonymous.post("/api/seed").status_code == 401
 
 
-def test_seed_reports_the_three_cases_without_storing_them(api_client):
+def test_seed_stores_the_three_cases_and_reports_them(api_client):
     response = api_client.post("/api/seed")
 
     assert response.status_code == 200
     report = response.json()
     assert report["ran"] is True
-    assert report["stored"] is False
+    assert report["stored"] is True
     assert [c["case_number"] for c in report["cases"]] == [
         case.case_number for case in cast.load_cast().cases
     ]
