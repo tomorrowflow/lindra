@@ -1044,17 +1044,35 @@ def dictation_screens(page: Page, base_url: str, out: Path, name: str) -> list[s
     if api_encounter(base_url, page) != before:
         findings.append(f"{name}: recording and transcribing changed the encounter")
 
-    # Correct the transcript; a refused accept keeps it, the next one appends it.
+    # Correct the transcript. A refusal (422) says the notes are unchanged and keeps the text
+    # editable; a server error (500) says it is unclear and locks the text; neither loses it.
     page.fill("[data-transcript]", corrected)
-    page.route(accept_route, lambda route: route.fulfill(status=500, body="{}"))
+    page.route(
+        accept_route,
+        lambda route: route.fulfill(
+            status=422,
+            content_type="application/json",
+            body='{"errors": {"transcript": "Kein Text zum Übernehmen"}}',
+        ),
+    )
     page.click("[data-accept]")
     page.wait_for_selector("[data-accept-error]:not([hidden])")
+    refused = page.inner_text("[data-accept-error]")
+    if "Kein Text zum Übernehmen" not in refused or "Die Notizen sind unverändert" not in refused:
+        findings.append(f"{name}: a refused accept reads {refused!r}")
+    if page.is_editable("[data-transcript]") is False:
+        findings.append(f"{name}: a refused accept locked the text")
+    page.unroute(accept_route)
+    page.route(accept_route, lambda route: route.fulfill(status=500, body="{}"))
+    page.click("[data-accept]")
+    page.wait_for_function("document.querySelector('[data-transcript]').readOnly")
     if page.input_value("[data-transcript]") != corrected or page.is_disabled("[data-accept]"):
-        findings.append(f"{name}: a refused accept lost the corrected text or its button")
+        findings.append(f"{name}: a server error lost the corrected text or its button")
     if api_encounter(base_url, page) != before:
         findings.append(f"{name}: a refused accept changed the notes")
-    if "Die Notizen sind unverändert" in page.inner_text("[data-accept-error]"):
-        findings.append(f"{name}: a server error claims the notes are unchanged")
+    unsure = page.inner_text("[data-accept-error]")
+    if "unklar" not in unsure or "Die Notizen sind unverändert" in unsure:
+        findings.append(f"{name}: a server error reads {unsure!r}")
     page.unroute(accept_route)
 
     # The answer is lost after the service appended: the overlay does not claim the notes are

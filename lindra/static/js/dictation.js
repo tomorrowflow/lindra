@@ -31,8 +31,9 @@ if (dialog && control) {
   let dictationId = null; // names the transcript under review
 
   // The service did not answer, or failed after it may have saved: the append may have happened.
+  // The text is locked meanwhile: the service keeps the first text it received for this id.
   const UNSURE =
-    "Der Dienst hat nicht geantwortet. Ob der Text schon in den Notizen steht, ist unklar. Versuchen Sie es erneut, ein schon übernommener Text wird nicht doppelt eingefügt.";
+    "Ob der Text schon in den Notizen steht, ist unklar. Versuchen Sie es erneut. Ein schon übernommener Text wird nicht doppelt eingefügt. Bis dahin lässt sich der Text nicht ändern.";
 
   function newId() {
     if (crypto.randomUUID) return crypto.randomUUID();
@@ -69,6 +70,7 @@ if (dialog && control) {
     recording = null;
     retry = null;
     field.value = "";
+    field.readOnly = false;
     ended = true;
     dialog.close();
     control.focus();
@@ -162,6 +164,7 @@ if (dialog && control) {
     // One id per transcript, kept for every attempt to accept it: the service adds the passage
     // once however often the same id arrives.
     dictationId = newId();
+    field.readOnly = false;
     field.value = result.transcript;
     outdates.hidden = !result.outdates_proposal;
     acceptError.hidden = true;
@@ -169,7 +172,8 @@ if (dialog && control) {
     show("reviewing");
   }
 
-  function rejected(message) {
+  function rejected(message, locked = false) {
+    field.readOnly = locked;
     acceptError.querySelector("span").textContent = message;
     acceptError.hidden = false;
     acceptError.scrollIntoView({ block: "nearest" });
@@ -194,11 +198,11 @@ if (dialog && control) {
         credentials: "same-origin",
       });
     } catch {
-      rejected(UNSURE);
+      rejected(UNSURE, true);
       return;
     }
     if (response.status >= 500) {
-      rejected(UNSURE);
+      rejected(UNSURE, true);
       return;
     }
     if (!response.ok) {

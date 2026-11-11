@@ -349,6 +349,18 @@ def test_a_dictation_id_belongs_to_its_encounter(client):
     assert "Für die Visite." not in admission.notes()["notes"]
 
 
+def test_deleting_a_case_forgets_its_dictations(client):
+    old = Encounter(client)
+    dictation_id = new_dictation_id()
+    accept_dictation(old, "Im alten Fall.", dictation_id)
+
+    # Seeding again deletes the case; its encounter ids may be given out to the new cast.
+    new = Encounter(client)
+    accept_dictation(new, "Im neuen Fall.", dictation_id)
+
+    assert "Im neuen Fall." in new.notes()["notes"]
+
+
 def test_a_refused_transcript_does_not_use_up_its_dictation_id(assessment):
     typed = "x" * 99_990
     assessment.save_notes(typed)
