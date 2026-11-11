@@ -411,14 +411,14 @@ def test_accepting_increments_the_acceptance_counter_each_time(assessment):
 
 
 def test_accepting_adopts_the_clarification_list_of_the_proposal(client):
-    encounter = Encounter(client, "FIK-2026-002")
+    encounter = Encounter(client, "FIK-2026-003")
     proposal = encounter.generate().json()["proposal"]
     assert encounter.draft()["clarifications"] == []
 
     shown = encounter.accept().json()
 
     assert shown["clarifications"] == proposal["clarifications"]
-    assert shown["clarifications"][0]["section"] == SCHMERZ
+    assert shown["clarifications"][0]["section"] == SOZIAL
 
 
 def test_a_manual_edit_never_resolves_a_clarification_item(client):

@@ -238,19 +238,24 @@ def generate(
             encounter.background_revision if encounter.kind == cases.VISIT else None,
         )
         with store.write() as tx:
-            load(tx, case_id, encounter_id)
-            tx.set_proposal(
-                encounter_id,
-                dump(drafts.proposal_to_json(proposal)),
-                proposal.notes_revision,
-                proposal.background_revision,
-            )
-            return load(tx, case_id, encounter_id)
+            return hold(tx, case_id, encounter_id, proposal)
     except GenerationFailed as error:
         failure = error.reason
         raise
     finally:
         generations.end(encounter_id, failure)
+
+
+def hold(tx: Tx, case_id: int, encounter_id: int, proposal: drafts.Proposal) -> EncounterReview:
+    """Store a proposal next to the draft; a pending one is replaced."""
+    load(tx, case_id, encounter_id)
+    tx.set_proposal(
+        encounter_id,
+        dump(drafts.proposal_to_json(proposal)),
+        proposal.notes_revision,
+        proposal.background_revision,
+    )
+    return load(tx, case_id, encounter_id)
 
 
 def background_encounters(earlier: list[AcceptedDraft]) -> list[BackgroundEncounter]:
@@ -302,20 +307,24 @@ def accept(store: Store, case_id: int, encounter_id: int) -> EncounterReview:
     """Accept the pending proposal as a whole; refused while it is outdated, because its notes
     or, for a visit, its background moved on."""
     with store.write() as tx:
-        review = load(tx, case_id, encounter_id)
-        if review.proposal is None:
-            raise Refused(NO_PROPOSAL)
-        if review.outdated:
-            raise Refused(review.outdated_reason)
-        merged = drafts.accept(review.draft, review.proposal)
-        tx.accept_proposal(
-            encounter_id,
-            dump(drafts.draft_to_json(merged)),
-            review.proposal.notes_revision,
-            dump(drafts.clarifications_to_json(review.proposal.clarifications)),
-            review.proposal.background_revision,
-        )
-        return load(tx, case_id, encounter_id)
+        return accept_in(tx, case_id, encounter_id)
+
+
+def accept_in(tx: Tx, case_id: int, encounter_id: int) -> EncounterReview:
+    review = load(tx, case_id, encounter_id)
+    if review.proposal is None:
+        raise Refused(NO_PROPOSAL)
+    if review.outdated:
+        raise Refused(review.outdated_reason)
+    merged = drafts.accept(review.draft, review.proposal)
+    tx.accept_proposal(
+        encounter_id,
+        dump(drafts.draft_to_json(merged)),
+        review.proposal.notes_revision,
+        dump(drafts.clarifications_to_json(review.proposal.clarifications)),
+        review.proposal.background_revision,
+    )
+    return load(tx, case_id, encounter_id)
 
 
 def discard(store: Store, case_id: int, encounter_id: int) -> EncounterReview:

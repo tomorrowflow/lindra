@@ -48,7 +48,7 @@
       <h3 class="para-heading">{{ paragraph.heading }}</h3>
       {% endif %}
       <p>{{ paragraph.text }}</p>
-      {{ origin(paragraph) }}
+      {{ origin(paragraph, rev) }}
       {% else %}
       <p class="pane-empty">Der Vorschlag lässt diesen Abschnitt leer.</p>
       {% endfor %}

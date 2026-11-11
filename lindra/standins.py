@@ -12,7 +12,7 @@ from __future__ import annotations
 import hashlib
 from typing import Any
 
-from lindra.cast import Cast, Paragraph, fixture_audio
+from lindra.cast import Cast, Encounter, Paragraph, fixture_audio
 from lindra.textmodel import NOTES_SOURCE, GenerationFailed, GenerationRequest
 
 
@@ -53,16 +53,23 @@ class FixtureTextModel:
             for other in case.encounters
             if (other.kind, other.date) == (given.kind, given.occurred_at.date())
         }
-        sections = []
-        for title, paragraphs in encounter.draft.items():
-            written = [_paragraph(p, sources) for p in paragraphs]
-            sections.append({"title": title, "paragraphs": [w for w in written if w]})
-        return {
-            "sections": sections,
-            "clarifications": [
-                {"section": c.section, "text": c.text} for c in encounter.clarifications
-            ],
-        }
+        return expected_result(encounter, sources)
+
+
+def expected_result(encounter: Encounter, sources: dict[str, str]) -> dict[str, Any]:
+    """What a model returns for a cast encounter, given the reference source of each earlier
+    encounter (by cast key) it was sent. The seed hook uses it to store the drafts the cast's
+    timeline says were accepted."""
+    sections = []
+    for title, paragraphs in encounter.draft.items():
+        written = [_paragraph(p, sources) for p in paragraphs]
+        sections.append({"title": title, "paragraphs": [w for w in written if w]})
+    return {
+        "sections": sections,
+        "clarifications": [
+            {"section": c.section, "text": c.text} for c in encounter.clarifications
+        ],
+    }
 
 
 def _paragraph(paragraph: Paragraph, sources: dict[str, str]) -> dict[str, Any] | None:

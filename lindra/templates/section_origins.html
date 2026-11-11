@@ -1,7 +1,7 @@
 {#
   Where each paragraph of the current draft comes from, under the text the physician edits.
   The page includes it and the script fetches it again from /herkunft after a hand edit, so a
-  rewritten paragraph loses its "aus Notizen" without a reload.
+  rewritten paragraph loses its "aus Notizen" or "aus früherem Kontakt" without a reload.
 #}
 {% from "references.html" import origin %}
 {% set section = rev.sections[index] %}
@@ -12,7 +12,7 @@
     {% for paragraph in section.paragraphs if paragraph.text.strip() %}
     <li class="origin-row">
       <span class="origin-excerpt">{{ paragraph | excerpt }}</span>
-      {{ origin(paragraph) }}
+      {{ origin(paragraph, rev) }}
     </li>
     {% endfor %}
   </ul>

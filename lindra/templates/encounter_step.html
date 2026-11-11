@@ -29,6 +29,17 @@
     </div>
     <p class="strip-note" data-generation-reason>{% if generation.state == "failed" %}{{ generation.reason }}{% endif %}</p>
   </div>
+  {# A visit's draft made on a background that was accepted again since (ADR 0010). The text stays. #}
+  {% if rev.background_changed %}
+  <div class="marker" data-background-changed>
+    <button class="marker-button" type="button" aria-expanded="false" aria-controls="background-explanation">
+      {{ icon("layers") }}
+      <span>{{ background_changed_text }}</span>
+      <span class="more">Mehr</span>
+    </button>
+    <p class="badge-explanation" id="background-explanation" hidden>Ein früherer Kontakt wurde übernommen, nachdem dieser Entwurf entstanden ist. Der Text bleibt, wie er ist, und Lindra erzeugt nichts von selbst neu. «Neu erzeugen» legt einen Vorschlag auf dem aktuellen Hintergrund an.</p>
+  </div>
+  {% endif %}
   {% if rev.possibly_outdated %}
   <div class="marker">
     <button class="marker-button" type="button" aria-expanded="false" aria-controls="stale-explanation">

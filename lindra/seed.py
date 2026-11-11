@@ -17,8 +17,8 @@ from datetime import datetime, time
 from pathlib import Path
 from typing import Any
 
-from lindra import cast
-from lindra.store import Store
+from lindra import background, cast, drafts, review, standins
+from lindra.store import Store, Tx
 
 REPORT_FILE = "seed-report.json"
 # The cast gives each encounter a date; the seeded encounters happen at this time.
@@ -42,7 +42,12 @@ def run(store: Store, data_dir: Path) -> dict[str, Any]:
 
 
 def store_cast(store: Store, fictional: cast.Cast) -> None:
-    """Replace the cast's cases in one transaction: all of them or none."""
+    """Replace the cast's cases in one transaction: all of them or none.
+
+    A case whose timeline has a change of background (`cast.changed_background`) is stored as
+    that timeline left it, through the same operations the physician uses, so its visit shows
+    "Hintergrund seit Erstellung geändert". The other cases come as notes only: the physician
+    generates their drafts herself, and the evaluation measures that."""
     with store.write() as tx:
         for case in fictional.cases:
             tx.delete_case_number(case.case_number)
@@ -53,11 +58,49 @@ def store_cast(store: Store, fictional: cast.Cast) -> None:
                 case.period_start,
                 case.period_end,
             )
+            ids: dict[str, int] = {}
             for encounter in case.encounters:
                 encounter_id = tx.add_encounter(
                     case_id, encounter.kind, datetime.combine(encounter.date, SEEDED_TIME)
                 )
                 tx.set_notes(case_id, encounter_id, encounter.notes)
+                ids[encounter.key] = encounter_id
+            if cast.changed_background(case):
+                replay_timeline(tx, case_id, case, ids)
+
+
+def replay_timeline(tx: Tx, case_id: int, case: cast.Case, ids: dict[str, int]) -> None:
+    """Apply the case's timeline in order: a "generate" holds the encounter's expected draft
+    as its proposal, an "accept" accepts the pending proposal (generating it first when the
+    timeline names none, as for the assessment)."""
+    by_key = {e.key: e for e in case.encounters}
+    keys = {encounter_id: key for key, encounter_id in ids.items()}
+    for what, key in case.timeline:
+        encounter_id = ids[key]
+        if what == "generate" or tx.get_encounter(case_id, encounter_id).review.proposal == "":
+            hold_expected(tx, case_id, by_key[key], encounter_id, keys)
+        if what == "accept":
+            review.accept_in(tx, case_id, encounter_id)
+
+
+def hold_expected(
+    tx: Tx, case_id: int, encounter: cast.Encounter, encounter_id: int, keys: dict[int, str]
+) -> None:
+    """Hold the draft the fixture model returns for this encounter as its proposal. The
+    background it draws on is what was accepted in the case by now."""
+    earlier = {
+        keys[accepted.encounter.id]: background.source_key(accepted.encounter.id)
+        for accepted in tx.accepted_background(case_id, encounter_id)
+    }
+    generated = drafts.parse_generated(standins.expected_result(encounter, earlier), encounter.kind)
+    current = tx.get_encounter(case_id, encounter_id).encounter
+    proposal = drafts.Proposal(
+        current.notes_revision,
+        generated.sections,
+        generated.clarifications,
+        current.background_revision if encounter.kind == "visit" else None,
+    )
+    review.hold(tx, case_id, encounter_id, proposal)
 
 
 def build_report(fictional: cast.Cast) -> dict[str, Any]:

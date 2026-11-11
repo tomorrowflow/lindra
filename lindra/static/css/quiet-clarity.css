@@ -1120,6 +1120,39 @@ textarea.pane-text::placeholder {
   line-height: 1.5;
 }
 
+/* "aus früherem Kontakt" (ADR 0010): an earlier encounter, not today's notes. Sage ground,
+   a dashed rule and the encounter named over the quote keep history apart from today's
+   observations, which keep the solid teal rule. Only pairs the contrast check lists. */
+.origin-earlier > .origin-toggle {
+  background-color: var(--sage-tint);
+  color: var(--teal-on-tint);
+}
+
+.origin-earlier > .origin-toggle:hover {
+  background-color: var(--color-base-300);
+}
+
+.origin-figure {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+}
+
+.origin-caption {
+  color: var(--text-secondary);
+  font-size: 0.9375rem;
+  font-weight: 500;
+}
+
+.origin-earlier .origin-quote {
+  border-left: 2px dashed var(--text-secondary);
+  background-color: var(--sage-tint);
+}
+
+.marker + .marker {
+  margin-top: 8px;
+}
+
 /* Under the draft text: one row per paragraph, the start of it and where it came from. */
 .origins {
   flex: none;
