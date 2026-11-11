@@ -883,7 +883,6 @@ def fidelity_screens(page: Page, base_url: str, out: Path, name: str) -> list[st
         findings.append(f"{name}: the draft pane does not list three references")
     if page.locator("#section-origins .origin-hand").count() != 0:
         findings.append(f"{name}: a generated paragraph reads von Hand")
-    list_before = None
     go_to_step(page, portrait, 9)
     list_before = page.inner_text(".clarifications")
     go_to_step(page, portrait, 4)

@@ -34,7 +34,7 @@
   <section class="pane" aria-labelledby="pane-draft">
     <h2 class="pane-title" id="pane-draft">Aktueller Entwurf</h2>
     <label class="visually-hidden" for="section-text">Text des Abschnitts {{ title }}</label>
-    <textarea class="textarea pane-text" id="section-text" lang="de" data-section data-save-url="/api/cases/{{ case.id }}/encounters/{{ encounter.id }}/draft/sections/{{ number }}" data-head-url="/faelle/{{ case.id }}/kontakte/{{ encounter.id }}/abschnitte/{{ number }}/kopf" placeholder="Noch kein Entwurf. Erzeugen Sie einen aus den Notizen oder schreiben Sie diesen Abschnitt selbst.">{# An HTML parser drops one line break right after the tag. #}{% if draft_text[:1] in ("\n", "\r") %}{{ "\n" }}{% endif %}{{ draft_text }}</textarea>
+    <textarea class="textarea pane-text" id="section-text" lang="de" data-section data-save-url="/api/cases/{{ case.id }}/encounters/{{ encounter.id }}/draft/sections/{{ number }}" data-head-url="/faelle/{{ case.id }}/kontakte/{{ encounter.id }}/abschnitte/{{ number }}/kopf" data-origins-url="/faelle/{{ case.id }}/kontakte/{{ encounter.id }}/abschnitte/{{ number }}/herkunft" placeholder="Noch kein Entwurf. Erzeugen Sie einen aus den Notizen oder schreiben Sie diesen Abschnitt selbst.">{# An HTML parser drops one line break right after the tag. #}{% if draft_text[:1] in ("\n", "\r") %}{{ "\n" }}{% endif %}{{ draft_text }}</textarea>
     {% include "section_origins.html" %}
   </section>
 

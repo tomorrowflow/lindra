@@ -24,10 +24,9 @@ async function refresh(url, selector) {
 }
 
 function refreshHead() {
-  const base = area.dataset.headUrl.replace(/\/kopf$/, "");
   return Promise.all([
     refresh(area.dataset.headUrl, "#section-head"),
-    refresh(`${base}/herkunft`, "#section-origins"),
+    refresh(area.dataset.originsUrl, "#section-origins"),
   ]);
 }
 

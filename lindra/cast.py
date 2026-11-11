@@ -46,6 +46,17 @@ SECTIONS = {"assessment": ASSESSMENT_SECTIONS, "visit": VISIT_SECTIONS}
 # there is no fixed number of them (ADR 0010).
 PAIN_SECTION = "Schmerzanamnese"
 PAIN_HEADING_LIMIT = 80
+
+
+def names_pain_problems(kind: str, section: str) -> bool:
+    """Whether the paragraph headings of this section are the names of pain problems."""
+    return kind == "assessment" and section == PAIN_SECTION
+
+
+def valid_pain_heading(heading: str) -> bool:
+    return len(heading) <= PAIN_HEADING_LIMIT and "\n" not in heading
+
+
 # The heading of what the notes say about the patient's limitations but do not tie to a pain.
 UNASSIGNED_PAIN = "Ohne Zuordnung zu einem Schmerz"
 
@@ -274,10 +285,9 @@ def _validate_paragraphs(
         for quote in paragraph.quotes:
             if quote not in encounter.notes:
                 problems.append(f"{where}: reference {quote!r} is not a passage of the notes")
-        pain = encounter.kind == "assessment" and section == PAIN_SECTION
-        if paragraph.heading and pain:
-            if len(paragraph.heading) > PAIN_HEADING_LIMIT:
-                problems.append(f"{where}: pain heading {paragraph.heading!r} is too long")
+        if paragraph.heading and names_pain_problems(encounter.kind, section):
+            if not valid_pain_heading(paragraph.heading):
+                problems.append(f"{where}: pain heading {paragraph.heading!r} is not valid")
         elif paragraph.heading and paragraph.heading not in allowed:
             problems.append(f"{where}: {section} has no subsection heading {paragraph.heading}")
     return problems

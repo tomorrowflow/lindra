@@ -12,7 +12,13 @@ from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from typing import Any
 
-from lindra.cast import PAIN_HEADING_LIMIT, PAIN_SECTION, SECTIONS, SUBHEADINGS, Clarification
+from lindra.cast import (
+    SECTIONS,
+    SUBHEADINGS,
+    Clarification,
+    names_pain_problems,
+    valid_pain_heading,
+)
 from lindra.textmodel import NOTES_SOURCE, GenerationFailed
 
 OUTDATED_REASON = "Veraltet: Notizen seit diesem Vorschlag geändert"
@@ -111,7 +117,7 @@ def _parse_section(raw: dict[str, Any], kind: str) -> Section:
     if not isinstance(paragraphs, list):
         raise GenerationFailed(UNSTRUCTURED)
     allowed = SUBHEADINGS.get(title, ()) if kind == "assessment" else ()
-    pain = kind == "assessment" and title == PAIN_SECTION
+    pain = names_pain_problems(kind, title)
     return Section(title, tuple(_parse_paragraph(p, allowed, pain) for p in paragraphs))
 
 
@@ -128,7 +134,7 @@ def _parse_paragraph(raw: Any, allowed_headings: Sequence[str], any_heading: boo
     if not isinstance(heading, str):
         raise GenerationFailed(UNSTRUCTURED)
     if heading and any_heading:
-        if len(heading) > PAIN_HEADING_LIMIT or "\n" in heading:
+        if not valid_pain_heading(heading):
             raise GenerationFailed(UNSTRUCTURED)
     elif heading and heading not in allowed_headings:
         raise GenerationFailed(UNSTRUCTURED)
