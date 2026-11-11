@@ -30,7 +30,7 @@ CI (`.github/workflows/ci.yml`) runs install, lint, format check, vendor check, 
 
 - Tests drive the HTTP API with the fixture stand-ins and assert what the physician would observe: status codes, page text, JSON bodies, what is saved. No assertions on sessions, templates, database rows or adapter internals. `tests/test_api.py` is the pattern.
 - Every page and API route is guarded by `lindra/auth.py` by default; only `/health`, `/anmelden` and `/static/` are open. Do not add a second authentication mechanism.
-- Speech recognition goes through `lindra/speech.py`; the fixture recogniser in `lindra/standins.py` maps fixture audio to canned transcripts and refuses other audio. Audio is held in memory for one request and never written. No cloud, browser or operating-system dictation path exists (ADR 0003, ADR 0004).
+- Speech recognition goes through `lindra/speech.py`; the fixture recogniser in `lindra/standins.py` maps fixture audio to canned transcripts and refuses other audio. Audio is held in memory for one request and never written. Accepting a transcript carries the dictation's id (made by the browser when the transcript arrives) and is idempotent: the service appends once per id and encounter, so a retry after a lost answer adds nothing. No cloud, browser or operating-system dictation path exists (ADR 0003, ADR 0004).
 - Settings are read once at the boundary (`lindra/config.py`); the rest of the code receives values.
 - User-facing text is German. Follow `CONTEXT.md` for the words to use and the words to avoid.
 

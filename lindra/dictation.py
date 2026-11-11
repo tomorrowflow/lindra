@@ -10,6 +10,7 @@ pending proposal becomes outdated by the one rule that already exists for that.
 from __future__ import annotations
 
 import logging
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
@@ -27,6 +28,8 @@ NO_RECORDING = "Keine Aufnahme übermittelt"
 NO_SPEECH = "In der Aufnahme war nichts zu verstehen."
 TRANSCRIPT_MISSING = "Kein Text zum Übernehmen"
 TRANSCRIPT_NOT_TEXT = "Das Diktat als Text übermitteln"
+DICTATION_ID = re.compile(r"[A-Za-z0-9-]{8,64}")
+DICTATION_ID_MISSING = "Kennung des Diktats fehlt"
 
 
 class NoRecording(Exception):
@@ -76,6 +79,14 @@ def parse_transcript(raw: Mapping[str, Any]) -> str:
     return transcript.strip()
 
 
+def parse_dictation_id(raw: Mapping[str, Any]) -> str:
+    """The id the browser gave this dictation when its transcript arrived."""
+    dictation_id = raw.get("dictation_id")
+    if not isinstance(dictation_id, str) or not DICTATION_ID.fullmatch(dictation_id):
+        raise cases.Invalid({"dictation_id": DICTATION_ID_MISSING})
+    return dictation_id
+
+
 def recognise(speech: SpeechRecognizer, audio: bytes) -> str:
     """Call the adapter; whatever goes wrong inside it is a failed transcription."""
     try:
@@ -112,7 +123,10 @@ def accept(
     """Append the corrected transcript to the notes of this encounter and advance their revision.
 
     The notes are read and written in one transaction, so a note saved a moment earlier is
-    never replaced by the append.
+    never replaced by the append. The dictation's id is remembered in the same transaction: a
+    browser that never saw the answer sends the request again, and a dictation that is
+    appended already changes nothing the second time. A refused transcript rolls the id back
+    with everything else, so it can be sent again, corrected.
     """
     with store.write() as tx:
         if tx.get_case(case_id) is None:
@@ -120,8 +134,9 @@ def accept(
         opened = tx.get_encounter(case_id, encounter_id)
         if opened is None:
             raise cases.NotFound(cases.ENCOUNTER_NOT_FOUND)
-        notes = append(opened.notes, parse_transcript(raw), at)
-        tx.set_notes(case_id, encounter_id, notes)
+        transcript = parse_transcript(raw)
+        if tx.record_dictation(encounter_id, parse_dictation_id(raw)):
+            tx.set_notes(case_id, encounter_id, append(opened.notes, transcript, at))
         saved = tx.get_encounter(case_id, encounter_id)
     assert saved is not None
     return saved

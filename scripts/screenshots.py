@@ -1053,10 +1053,39 @@ def dictation_screens(page: Page, base_url: str, out: Path, name: str) -> list[s
         findings.append(f"{name}: a refused accept lost the corrected text or its button")
     if api_encounter(base_url, page) != before:
         findings.append(f"{name}: a refused accept changed the notes")
+    if "Die Notizen sind unverändert" in page.inner_text("[data-accept-error]"):
+        findings.append(f"{name}: a server error claims the notes are unchanged")
+    page.unroute(accept_route)
+
+    # The answer is lost after the service appended: the overlay does not claim the notes are
+    # unchanged, and the retry adds nothing a second time.
+    def lose_answer(route):
+        route.fetch()
+        route.abort()
+
+    page.route(accept_route, lose_answer)
+    page.click("[data-accept]")
+    page.wait_for_selector("[data-accept-error]:not([hidden])")
+    if "unklar" not in page.inner_text("[data-accept-error]"):
+        findings.append(f"{name}: a lost answer is not reported as unclear")
+    if "nicht doppelt" not in page.inner_text("[data-accept-error]"):
+        findings.append(f"{name}: the lost-answer message does not say a retry is safe")
+    if page.input_value("[data-transcript]") != corrected or page.is_disabled("[data-accept]"):
+        findings.append(f"{name}: a lost answer lost the corrected text or its button")
+    message = boxes(page, "[data-accept-error]")[0]
+    body = boxes(page, "[data-state=reviewing] .dialog-body")[0]
+    if message["y"] < body["y"] or message["y"] + message["h"] > body["y"] + body["h"] + 1:
+        findings.append(f"{name}: the lost-answer message is cut off: {message} in {body}")
+    appended = api_encounter(base_url, page)
+    if appended["notes"].count(corrected) != 1:
+        findings.append(f"{name}: the lost-answer accept did not append once")
+    page.screenshot(path=out / f"dictation-unsure-{name}.png")
     page.unroute(accept_route)
     with page.expect_navigation():
         page.click("[data-accept]")
     page.wait_for_load_state()
+    if api_encounter(base_url, page) != appended:
+        findings.append(f"{name}: the retry after a lost answer changed the notes again")
     if page.url != notes_url:
         findings.append(f"{name}: accepting did not show the notes step: {page.url}")
     after = api_encounter(base_url, page)

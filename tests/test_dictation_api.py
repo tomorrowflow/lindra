@@ -7,6 +7,8 @@ pending proposal and the files on the data volume. They prove the workflow, not 
 quality (ADR 0003).
 """
 
+import uuid
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -64,9 +66,15 @@ def transcribe(encounter, audio=FIXTURE_AUDIO, content_type=AUDIO):
     )
 
 
-def accept_dictation(encounter, transcript):
+def new_dictation_id():
+    """What the browser makes when a transcript arrives: one id per dictation."""
+    return str(uuid.uuid4())
+
+
+def accept_dictation(encounter, transcript, dictation_id=None):
     return encounter.client.post(
-        f"{encounter.base}/dictation/accept", json={"transcript": transcript}
+        f"{encounter.base}/dictation/accept",
+        json={"dictation_id": dictation_id or new_dictation_id(), "transcript": transcript},
     )
 
 
@@ -258,12 +266,103 @@ def test_a_blank_transcript_is_refused_and_the_notes_stay(assessment, body):
     assessment.save_notes("Eigene Notiz.")
     revision = assessment.notes()["notes_revision"]
 
-    response = assessment.client.post(f"{assessment.base}/dictation/accept", json=body)
+    response = assessment.client.post(
+        f"{assessment.base}/dictation/accept", json={"dictation_id": new_dictation_id(), **body}
+    )
 
     assert response.status_code == 422
     assert "transcript" in response.json()["errors"]
     assert assessment.notes()["notes"] == "Eigene Notiz."
     assert assessment.notes()["notes_revision"] == revision
+
+
+@pytest.mark.parametrize("dictation_id", [None, "", "  ", 7, "x" * 65, "mit Leerzeichen", "a/b"])
+def test_an_accept_without_a_usable_dictation_id_is_refused_and_the_notes_stay(
+    assessment, dictation_id
+):
+    revision = assessment.notes()["notes_revision"]
+    body = {"transcript": "Neu.", "dictation_id": dictation_id}
+
+    response = assessment.client.post(f"{assessment.base}/dictation/accept", json=body)
+
+    assert response.status_code == 422
+    assert "dictation_id" in response.json()["errors"]
+    assert assessment.notes()["notes_revision"] == revision
+
+
+# ---- a retry after a lost answer adds the passage once ----
+
+
+def test_accepting_the_same_dictation_again_adds_the_passage_once(assessment):
+    dictation_id = new_dictation_id()
+    first = accept_dictation(assessment, "Nur einmal.", dictation_id)
+    after_first = assessment.notes()
+
+    again = accept_dictation(assessment, "Nur einmal.", dictation_id)
+
+    assert again.status_code == 200
+    assert again.json()["notes"] == first.json()["notes"]
+    assert assessment.notes() == after_first
+    assert assessment.notes()["notes"].count("Nur einmal.") == 1
+
+
+def test_the_retry_changes_nothing_the_physician_typed_since(assessment):
+    dictation_id = new_dictation_id()
+    accept_dictation(assessment, "Erstes.", dictation_id)
+    typed = assessment.notes()["notes"] + "Danach getippt."
+    assessment.save_notes(typed)
+    revision = assessment.notes()["notes_revision"]
+
+    accept_dictation(assessment, "Erstes.", dictation_id)
+
+    assert assessment.notes()["notes"] == typed
+    assert assessment.notes()["notes_revision"] == revision
+
+
+def test_the_retry_leaves_the_proposal_as_the_first_accept_left_it(assessment):
+    assessment.generate()
+    dictation_id = new_dictation_id()
+    accept_dictation(assessment, "Neu.", dictation_id)
+    assessment.discard()
+    assessment.generate()
+
+    accept_dictation(assessment, "Neu.", dictation_id)
+
+    assert assessment.draft()["proposal"]["outdated"] is False
+
+
+def test_a_second_dictation_with_its_own_id_is_added_even_with_the_same_text(assessment):
+    accept_dictation(assessment, "Gleicher Text.")
+    accept_dictation(assessment, "Gleicher Text.")
+
+    assert assessment.notes()["notes"].count("Gleicher Text.") == 2
+
+
+def test_a_dictation_id_belongs_to_its_encounter(client):
+    admission, visit = both_encounters(client)
+    dictation_id = new_dictation_id()
+
+    accept_dictation(admission, "Für das Assessment.", dictation_id)
+    accept_dictation(visit, "Für die Visite.", dictation_id)
+
+    assert "Für die Visite." in visit.notes()["notes"]
+    assert "Für die Visite." not in admission.notes()["notes"]
+
+
+def test_a_refused_transcript_does_not_use_up_its_dictation_id(assessment):
+    typed = "x" * 99_990
+    assessment.save_notes(typed)
+    dictation_id = new_dictation_id()
+    assert (
+        accept_dictation(assessment, "Das passt nicht mehr hinein.", dictation_id).status_code
+        == 422
+    )
+    assessment.save_notes("Kurz.")
+
+    response = accept_dictation(assessment, "Das passt jetzt.", dictation_id)
+
+    assert response.status_code == 200
+    assert "Das passt jetzt." in assessment.notes()["notes"]
 
 
 def test_a_transcript_that_does_not_fit_is_refused_and_the_typed_notes_stay(assessment):
@@ -280,7 +379,8 @@ def test_accepting_into_an_encounter_that_does_not_exist_is_not_found(client):
     seeded = Encounter(client)
 
     gone = client.post(
-        seeded.base.rsplit("/", 1)[0] + "/999999/dictation/accept", json={"transcript": "x"}
+        seeded.base.rsplit("/", 1)[0] + "/999999/dictation/accept",
+        json={"dictation_id": new_dictation_id(), "transcript": "x"},
     )
 
     assert gone.status_code == 404

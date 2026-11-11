@@ -1253,7 +1253,8 @@ textarea.pane-text::placeholder {
 
 .dictation-text {
   flex: 1;
-  min-height: 160px;
+  /* Low enough that the notice and an error under the text fit without scrolling. */
+  min-height: 96px;
   width: 100%;
   padding: 12px 16px;
   resize: none;

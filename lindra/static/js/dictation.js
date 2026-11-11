@@ -28,6 +28,17 @@ if (dialog && control) {
   let retry = null;
   let ended = true; // false from the tap on the control until a button ends the dictation
   let current = null; // the panel showing
+  let dictationId = null; // names the transcript under review
+
+  // The service did not answer, or failed after it may have saved: the append may have happened.
+  const UNSURE =
+    "Der Dienst hat nicht geantwortet. Ob der Text schon in den Notizen steht, ist unklar. Versuchen Sie es erneut, ein schon übernommener Text wird nicht doppelt eingefügt.";
+
+  function newId() {
+    if (crypto.randomUUID) return crypto.randomUUID();
+    const bytes = crypto.getRandomValues(new Uint8Array(16));
+    return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+  }
 
   function show(state) {
     current = state;
@@ -148,6 +159,9 @@ if (dialog && control) {
     }
     const result = await response.json();
     recording = null;
+    // One id per transcript, kept for every attempt to accept it: the service adds the passage
+    // once however often the same id arrives.
+    dictationId = newId();
     field.value = result.transcript;
     outdates.hidden = !result.outdates_proposal;
     acceptError.hidden = true;
@@ -158,6 +172,7 @@ if (dialog && control) {
   function rejected(message) {
     acceptError.querySelector("span").textContent = message;
     acceptError.hidden = false;
+    acceptError.scrollIntoView({ block: "nearest" });
     accept.disabled = !field.value.trim();
   }
 
@@ -175,11 +190,15 @@ if (dialog && control) {
       response = await fetch(dialog.dataset.acceptUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ transcript: field.value }),
+        body: JSON.stringify({ dictation_id: dictationId, transcript: field.value }),
         credentials: "same-origin",
       });
     } catch {
-      rejected("Keine Verbindung zum Dienst. Der Text bleibt hier, die Notizen sind unverändert.");
+      rejected(UNSURE);
+      return;
+    }
+    if (response.status >= 500) {
+      rejected(UNSURE);
       return;
     }
     if (!response.ok) {
