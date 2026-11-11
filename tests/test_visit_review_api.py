@@ -246,7 +246,32 @@ def test_a_plan_or_goal_is_never_taken_from_the_background_into_a_visit(tmp_path
     assert plan["text"] == "Tägliche Gehstrecke um 100 m steigern."
     assert "500 m" not in plan["text"]
     asked = [c["text"] for c in proposal["clarifications"] if c["section"] == VORGEHEN]
-    assert any("nur auf frühere Kontakte" in text for text in asked)
+    assert any("nicht allein auf die Notizen" in text for text in asked)
+
+
+class CarriesThePlanOverBesideANotesReference(CarriesTheAssessmentPlanOver):
+    """The same, but the paragraph also quotes an unrelated passage of today's notes."""
+
+    def generate(self, request):
+        raw = super().generate(request)
+        if request.background:
+            plan = raw["sections"][3]["paragraphs"][-1]
+            quote = "Schmerz im Verlauf unverändert, NRS 5 bis 6"
+            plan["references"].insert(0, {"source": "notes", "quote": quote})
+        return raw
+
+
+def test_a_plan_from_the_background_does_not_pass_beside_an_unrelated_notes_reference(tmp_path):
+    client = client_with(tmp_path, CarriesThePlanOverBesideANotesReference())
+    contacts = build(client, "FIK-2026-001")
+    contacts["assessment"].accepted()
+
+    proposal = contacts["visit-1"].generate().json()["proposal"]
+
+    plan = proposal["sections"][3]
+    assert plan["text"] == "Tägliche Gehstrecke um 100 m steigern."
+    asked = [c["text"] for c in proposal["clarifications"] if c["section"] == VORGEHEN]
+    assert any("nicht allein auf die Notizen" in text for text in asked)
 
 
 # ---- what the model is sent: its own notes plus the background ----

@@ -144,6 +144,47 @@ def test_a_decision_that_quotes_today_s_notes_stays_even_with_a_historical_quote
     assert kept(check(VORGEHEN, both, sources=sources), VORGEHEN) == ["Gehstrecke steigern."]
 
 
+PLAN = "Ziel: Gehstrecke von 500 m auf 2 km."
+PLAN_SOURCES = {
+    "notes": NOTES,
+    ASSESSMENT: f"Behandlungsplan und vereinbarte Ziele\n{PLAN}",
+}
+
+
+def test_a_decision_from_the_background_does_not_pass_beside_an_unrelated_notes_reference():
+    carried_over = paragraph(
+        PLAN,
+        ("notes", "Schmerz im Verlauf unverändert, NRS 5 bis 6"),
+        (ASSESSMENT, PLAN),
+    )
+
+    for section in (BEFUNDE, EINSCHAETZUNG, VORGEHEN):
+        result = check(section, carried_over, sources=PLAN_SOURCES)
+
+        assert kept(result, section) == []
+        assert items_for(result, section) == [fidelity.BACKGROUND_ONLY]
+
+
+def test_a_number_only_the_background_holds_cannot_ride_on_a_notes_reference():
+    carried_over = paragraph(
+        "Gehstrecke von 500 m, Schmerz unverändert.",
+        ("notes", "Schmerz im Verlauf unverändert"),
+        (ASSESSMENT, "Gehstrecke von 500 m"),
+    )
+
+    assert kept(check(VORGEHEN, carried_over, sources=PLAN_SOURCES), VORGEHEN) == []
+
+
+def test_the_first_section_may_still_draw_on_both_sources_together():
+    both = paragraph(
+        f"Schmerz unverändert. Zuvor: {PLAN}",
+        ("notes", "Schmerz im Verlauf unverändert"),
+        (ASSESSMENT, PLAN),
+    )
+
+    assert len(kept(check(VERLAUF, both, sources=PLAN_SOURCES))) == 1
+
+
 def test_the_first_section_may_rest_on_the_background_alone():
     history = paragraph(f"Zuvor: {HISTORY}", (ASSESSMENT, HISTORY))
 

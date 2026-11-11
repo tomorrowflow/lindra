@@ -60,9 +60,10 @@ TOO_BROAD = (
 )
 EMPTY_SECTION = "Die Notizen enthalten keine Angaben für diesen Abschnitt."
 BACKGROUND_ONLY = (
-    "Eine Angabe stützt sich nur auf frühere Kontakte. Was eine Visite heute findet, "
-    "einschätzt und vereinbart, stammt aus ihren Notizen, deshalb steht sie nicht im Entwurf. "
-    "Ergänzen Sie sie in den Notizen, wenn sie heute gilt."
+    "Eine Angabe stützt sich auf frühere Kontakte und nicht allein auf die Notizen dieser "
+    "Visite. Was eine Visite heute findet, einschätzt und vereinbart, stammt aus ihren "
+    "Notizen, deshalb steht sie nicht im Entwurf. Ergänzen Sie sie in den Notizen, wenn sie "
+    "heute gilt."
 )
 NEGATION = (
     "Eine Angabe verneinte oder bejahte etwas anders als die zitierte Stelle der Notizen. Sie "
@@ -403,8 +404,8 @@ def check_result(
     the encounter's notes and, for a visit, the key of each background encounter with its
     accepted draft. A paragraph that fails goes on the clarification list under its section; a
     section left with no paragraph and no item gets one. The model's own items come first,
-    then ours in section order. A paragraph in a `today_only` section that quotes no notes
-    passage, only earlier encounters, is dropped as well.
+    then ours in section order. A paragraph in a `today_only` section has to hold on its
+    notes quotes alone; one that needs its background quotes is dropped as well.
     """
     items = list(generated.clarifications)
     conflicts = _conflicts(items) + [c for text in sources.values() for c in _disagreements(text)]
@@ -415,7 +416,7 @@ def check_result(
         for paragraph in section.paragraphs:
             problem = _problem(paragraph, sources, conflicts)
             if problem is None and section.title in today_only:
-                if not any(r.source == NOTES_SOURCE for r in paragraph.references):
+                if not _rests_on_notes(paragraph, sources, conflicts):
                     problem = BACKGROUND_ONLY
             if problem is None:
                 kept.append(paragraph)
@@ -429,6 +430,22 @@ def check_result(
         if not section.paragraphs and section.title not in flagged:
             items.append(Clarification(section.title, EMPTY_SECTION))
     return replace(generated, sections=tuple(sections), clarifications=tuple(items))
+
+
+def _rests_on_notes(
+    paragraph: drafts.Paragraph,
+    sources: Mapping[str, str],
+    conflicts: Sequence[frozenset[str]],
+) -> bool:
+    """Whether the paragraph passes the support check on its notes references alone.
+
+    A reference to the notes beside a background quote is not enough: a plan carried over
+    from the assessment would pass on an unrelated notes quote, since the check reads all
+    quotes together. Without its background quotes the paragraph has to hold on its own."""
+    notes_only = tuple(r for r in paragraph.references if r.source == NOTES_SOURCE)
+    if not notes_only:
+        return False
+    return _problem(replace(paragraph, references=notes_only), sources, conflicts) is None
 
 
 def _problem(
