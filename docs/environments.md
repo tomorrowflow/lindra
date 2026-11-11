@@ -78,7 +78,7 @@ Use this on the node that runs the ticket. It never touches the test tier or pro
 
 ## Preview procedure
 
-The operator checks some changes before merge, for example dictation on an iPad. For that the Workboard runs a preview stack of the card's branch while the card is in review. It uses the throwaway tier with a fixed project name, a port from a reserved range and a token the operator knows.
+The operator checks some changes before merge, for example dictation on an iPad. For that the Workboard runs a preview stack of the card's branch while the card is in review. It is a throwaway stack with a fixed project name, a port from a reserved range and a token the operator knows. The script does not check the name or the port range; the Workboard keeps to them.
 
 | Item | Value |
 | --- | --- |

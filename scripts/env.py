@@ -167,15 +167,19 @@ class InvalidPreviewToken(ValueError):
     """`LINDRA_PREVIEW_TOKEN` holds characters the env file cannot carry."""
 
 
-def new_token(target: Target) -> str:
-    """The operator's preview token for a throwaway stack, else a generated one.
+def preview_token(target: Target) -> str:
+    """The operator's token from `LINDRA_PREVIEW_TOKEN`, read for a throwaway stack only."""
+    if target.tier != "throwaway":
+        return ""
+    return os.environ.get(PREVIEW_TOKEN_VARIABLE, "").strip()
+
+
+def new_token(preset: str) -> str:
+    """The preset token, or a generated one when there is none.
 
     The token goes into a compose env file, where whitespace, `$` and `#` change
     its meaning, so only URL-safe characters are accepted.
     """
-    preset = (
-        os.environ.get(PREVIEW_TOKEN_VARIABLE, "").strip() if target.tier == "throwaway" else ""
-    )
     if not preset:
         return secrets.token_urlsafe(32)
     if not re.fullmatch(r"[A-Za-z0-9._~-]+", preset):
@@ -186,19 +190,18 @@ def new_token(target: Target) -> str:
 
 
 def ensure_env_file(
-    target: Target, port: int | None = None, bind: str | None = None
+    target: Target, port: int | None = None, bind: str | None = None, preset_token: str = ""
 ) -> dict[str, str]:
     """Create the private env file with a token when it is missing.
 
     An existing file keeps its token, port and bind address; `port` and `bind` (from
-    `up --port` and `--bind`) replace the stored values when given. A new throwaway
-    file takes the token from `LINDRA_PREVIEW_TOKEN` when that is set, and a generated
-    one otherwise. The other tiers always generate theirs.
+    `up --port` and `--bind`) replace the stored values when given. A new file takes
+    `preset_token` (`up` passes `LINDRA_PREVIEW_TOKEN` for a throwaway stack) and a
+    generated token when that is empty.
     """
     stored = read_env(target.env_file)
-    token = stored.get("LINDRA_TOKEN") or new_token(target)
     values = {
-        "LINDRA_TOKEN": token,
+        "LINDRA_TOKEN": stored.get("LINDRA_TOKEN") or new_token(preset_token),
         "LINDRA_PORT": str(port or stored.get("LINDRA_PORT") or target.port or free_port()),
         "LINDRA_BIND": format_bind(bind or stored.get("LINDRA_BIND") or target.bind),
         "LINDRA_TIER": target.tier,
@@ -320,7 +323,7 @@ def deployed_commit() -> str | None:
 def cmd_up(args: argparse.Namespace) -> int:
     target = resolve_target(args.tier, args.project)
     try:
-        values = ensure_env_file(target, args.port, args.bind)
+        values = ensure_env_file(target, args.port, args.bind, preview_token(target))
     except InvalidPreviewToken as error:
         print(f"up: {error}")
         return 2
