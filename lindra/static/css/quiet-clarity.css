@@ -636,7 +636,8 @@ p {
 }
 
 .step-list {
-  flex-basis: 100%;
+  flex: none;
+  width: calc(100% - 12px);
   margin: 4px 0 8px 12px;
   padding: 0 0 0 8px;
   list-style: none;
@@ -833,6 +834,340 @@ p {
   .field-row {
     grid-template-columns: 1fr;
   }
+}
+
+/* ---- Review steps: generation strip, section head, panes, final step (ADR 0008) ---- */
+
+.header-main {
+  flex: 1;
+  min-width: 0;
+}
+
+/* The forms around the discard and accept buttons take no box of their own. */
+.bar-form {
+  display: contents;
+}
+
+/* The generation strip: the generate button and its retry button keep their place;
+   the line beside them is the failure reason. */
+.strip {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+}
+
+.strip-button {
+  flex: none;
+  width: 200px;
+  white-space: nowrap;
+}
+
+.strip-note {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.9375rem;
+  color: var(--text-secondary);
+}
+
+.strip[data-generation="failed"] .strip-note {
+  color: var(--color-error);
+}
+
+/* One marker for the whole draft; it never says which sections are affected. */
+.marker-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid rgb(134 88 16 / 30%);
+  border-radius: var(--radius-field);
+  background-color: var(--warning-tint);
+  color: var(--color-warning);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.marker-button .more,
+.state-line .more {
+  margin-left: auto;
+}
+
+/* Inside the marker "Mehr" is a span, so it takes no touch height of its own. */
+.marker-button .more {
+  min-height: 0;
+  padding: 0;
+}
+
+.marker + .badge-explanation,
+.marker .badge-explanation {
+  margin-top: 4px;
+}
+
+.more {
+  min-height: 44px;
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.section-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+}
+
+.section-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--radius-field);
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 0.9375rem;
+  cursor: pointer;
+}
+
+.section-badge:hover {
+  background-color: var(--color-base-300);
+}
+
+.section-badge[aria-expanded="true"] {
+  background-color: var(--sage-tint);
+  color: var(--teal-on-tint);
+}
+
+.badge-word {
+  font-weight: 500;
+}
+
+.state-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  color: var(--text-secondary);
+}
+
+.state-text {
+  min-width: 0;
+}
+
+/* Two large panes: the draft left, the proposal right; stacked in portrait. */
+.panes {
+  flex: 1;
+  min-height: 320px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+@media (orientation: portrait) {
+  .panes {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(240px, 1fr) minmax(240px, 1fr);
+    min-height: 520px;
+  }
+}
+
+.pane {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  min-height: 0;
+  padding: 16px;
+  background-color: var(--color-base-100);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-box);
+}
+
+.pane-proposal {
+  background-color: var(--sage-tint);
+}
+
+.pane-title {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.pane-text {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  font-size: 1.0625rem;
+  line-height: 1.6;
+}
+
+textarea.pane-text {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  resize: none;
+  color: inherit;
+}
+
+textarea.pane-text:focus {
+  outline: none;
+}
+
+/* The placeholder carries a sentence the physician reads, so it uses the secondary text. */
+textarea.pane-text::placeholder {
+  color: var(--text-secondary);
+  opacity: 1;
+}
+
+.pane:focus-within {
+  border-color: var(--color-primary);
+}
+
+.proposal-text p + p {
+  margin-top: 12px;
+}
+
+.para-heading {
+  margin: 12px 0 4px;
+  font-size: 1rem;
+  font-weight: 500;
+}
+
+.para-heading:first-child {
+  margin-top: 0;
+}
+
+.pane-empty {
+  color: var(--text-secondary);
+}
+
+.clarifications {
+  padding: 12px 16px;
+  border: 1px dashed rgb(134 88 16 / 50%);
+  border-radius: var(--radius-box);
+  background-color: var(--color-base-100);
+}
+
+.clarifications-title,
+.decision-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 4px;
+  font-size: 1rem;
+  font-weight: 500;
+}
+
+.clarifications-title {
+  color: var(--color-warning);
+}
+
+.clarifications ul,
+.decision ul {
+  margin: 0;
+  padding-left: 20px;
+  list-style: disc;
+}
+
+.lead {
+  max-width: 640px;
+  font-size: 1.0625rem;
+}
+
+.decision {
+  max-width: 640px;
+  padding: 12px 16px;
+  background-color: var(--color-base-100);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-box);
+}
+
+/* The reason acceptance is disabled sits right above the action bar, inside the layout. */
+.step-note {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  margin: 0;
+  padding: 8px 24px;
+  background-color: var(--warning-tint);
+  color: var(--color-warning);
+  font-weight: 500;
+}
+
+.step-note-more {
+  font-weight: 400;
+}
+
+.handover-list {
+  max-width: 720px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--hairline);
+}
+
+.handover-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.handover-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.handover-title {
+  margin: 0 0 4px;
+  font-size: 1rem;
+  font-weight: 500;
+}
+
+.handover-text {
+  margin: 0;
+  font: inherit;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.handover-copy {
+  flex: none;
+  width: 136px;
+}
+
+/* A sidebar step with badges: the label takes the room, the icons sit in one column. */
+.step-label {
+  flex: 1;
+  min-width: 0;
+}
+
+.step-badge {
+  display: inline-flex;
+  color: var(--text-secondary);
+}
+
+.step-link.current .step-badge {
+  color: var(--teal-on-tint);
 }
 
 /* ---- Login ---- */

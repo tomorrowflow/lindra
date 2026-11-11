@@ -16,7 +16,8 @@ from fastapi.responses import RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
-from lindra import cases, formatting, periods
+from lindra import cases, formatting, periods, review
+from lindra.review_pages import step_context
 from lindra.store import Case, Store
 
 Clock = Callable[[], datetime]
@@ -58,7 +59,9 @@ def visit_defaults(case: Case, now: datetime) -> tuple[dict[str, str], str]:
     return form, "Vorbelegt mit jetzt. Die Uhrzeit lässt sich ändern."
 
 
-def build_router(store: Store, templates: Jinja2Templates, clock: Clock) -> APIRouter:
+def build_router(
+    store: Store, templates: Jinja2Templates, clock: Clock, generations: review.Generations
+) -> APIRouter:
     router = APIRouter()
 
     def page(
@@ -156,14 +159,9 @@ def build_router(store: Store, templates: Jinja2Templates, clock: Clock) -> APIR
             opened = cases.get_encounter(store, case_id, encounter_id)
         except cases.NotFound as error:
             return page(request, "case.html", status_code=404, case=case, notice=str(error))
-        return page(
-            request,
-            "notes.html",
-            case=case,
-            encounter=opened.encounter,
-            notes=opened.notes,
-            selected_encounter_id=opened.encounter.id,
-        )
+        current = review.describe(opened)
+        context = step_context(case, current, generations, 1)
+        return page(request, "notes.html", case=case, notes=opened.notes, **context)
 
     @router.get("/faelle/{case_id}/zeitraum")
     def period_form(request: Request, case_id: int) -> Response:

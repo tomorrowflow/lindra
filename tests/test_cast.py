@@ -1,18 +1,19 @@
 """The fictional cast and the two stand-ins that are keyed to it (ADR 0003, 0006, 0010).
 
 The cast is seed data. These tests state what the cast must contain; the seed hook
-refuses a cast that breaks any of it. No HTTP route reaches the stand-ins yet, so
-these unit tests call them directly. This is the one exception to the HTTP-first
-rule in AGENTS.md; the ticket that wires a stand-in into a route (05 for the cast,
-08 for the text model, 10 for speech) tests it through the API.
+refuses a cast that breaks any of it. The text model stand-in is also driven through
+the HTTP API in `tests/test_review_api.py`. No route reaches the speech stand-in yet
+(ticket 10 wires it), so its unit tests here call it directly, the one remaining
+exception to the HTTP-first rule in AGENTS.md.
 """
 
 import dataclasses
-from datetime import date
+from datetime import date, datetime, time
 
 import pytest
 
 from lindra import cast, standins
+from lindra.textmodel import GenerationFailed, GenerationRequest
 
 
 @pytest.fixture
@@ -84,7 +85,9 @@ def test_second_case_has_an_assessment_change_accepted_after_a_visit_draft(ficti
 
 def test_third_case_leaves_gaps_and_names_them(fictional_cast):
     case = fictional_cast.cases[2]
-    empty = [(e.key, s) for e in case.encounters for s, text in e.draft.items() if not text]
+    empty = [
+        (e.key, s) for e in case.encounters for s, paragraphs in e.draft.items() if not paragraphs
+    ]
     items = [(e.key, c.section) for e in case.encounters for c in e.clarifications]
 
     assert empty
@@ -131,7 +134,7 @@ def test_validation_names_each_broken_rule(fictional_cast):
 def test_validation_refuses_an_empty_section_without_a_clarification_item(fictional_cast):
     case = fictional_cast.cases[0]
     assessment = case.encounters[0]
-    draft = {**assessment.draft, cast.ASSESSMENT_SECTIONS[0]: ""}
+    draft = {**assessment.draft, cast.ASSESSMENT_SECTIONS[0]: ()}
     gap = dataclasses.replace(assessment, draft=draft)
     broken_case = dataclasses.replace(case, encounters=(gap, *case.encounters[1:]))
     broken = dataclasses.replace(fictional_cast, cases=(broken_case, *fictional_cast.cases[1:]))
@@ -143,7 +146,9 @@ def test_validation_refuses_a_third_case_without_gaps(fictional_cast):
     third = fictional_cast.cases[2]
     filled = tuple(
         dataclasses.replace(
-            e, draft={s: text or "Ein Satz." for s, text in e.draft.items()}, clarifications=()
+            e,
+            draft={s: p or (cast.Paragraph("Ein Satz.", ("Befund",)),) for s, p in e.draft.items()},
+            clarifications=(),
         )
         for e in third.encounters
     )
@@ -168,22 +173,74 @@ def test_validation_refuses_a_case_number_that_looks_real(fictional_cast):
     assert any("FIK-" in p for p in cast.validate_cast(broken))
 
 
+def request_for(case, encounter):
+    return GenerationRequest(
+        case.case_number,
+        encounter.kind,
+        datetime.combine(encounter.date, time(9, 0)),
+        encounter.notes,
+    )
+
+
+def test_every_paragraph_of_every_draft_quotes_the_notes_it_came_from(fictional_cast):
+    for case in fictional_cast.cases:
+        for encounter in case.encounters:
+            for paragraphs in encounter.draft.values():
+                for paragraph in paragraphs:
+                    assert paragraph.quotes
+                    assert all(quote in encounter.notes for quote in paragraph.quotes)
+
+
+def test_the_two_sections_with_subsections_keep_distinct_headings(fictional_cast):
+    for case in fictional_cast.cases:
+        assessment = case.encounters[0]
+        for section, allowed in cast.SUBHEADINGS.items():
+            headings = {p.heading for p in assessment.draft[section]}
+            assert headings <= set(allowed)
+        other = [p for s, ps in assessment.draft.items() for p in ps if s not in cast.SUBHEADINGS]
+        assert not any(p.heading for p in other)
+    second = fictional_cast.cases[1].encounters[0]
+    assert len({p.heading for p in second.draft["Therapeutische Anamnese"]}) == 3
+
+
+def test_validation_refuses_a_quote_that_is_not_in_the_notes(fictional_cast):
+    case = fictional_cast.cases[0]
+    assessment = case.encounters[0]
+    invented = cast.Paragraph("Ein Satz.", ("steht nicht in den Notizen",))
+    draft = {**assessment.draft, cast.ASSESSMENT_SECTIONS[0]: (invented,)}
+    broken_case = dataclasses.replace(
+        case, encounters=(dataclasses.replace(assessment, draft=draft), *case.encounters[1:])
+    )
+    broken = dataclasses.replace(fictional_cast, cases=(broken_case, *fictional_cast.cases[1:]))
+
+    assert any("not a passage of the notes" in p for p in cast.validate_cast(broken))
+
+
 def test_text_model_stand_in_returns_the_expected_draft_for_a_cast_encounter(fictional_cast):
     model = standins.FixtureTextModel(fictional_cast)
     case = fictional_cast.cases[1]
-    visit = next(e for e in case.encounters if e.kind == "visit")
+    assessment = case.encounters[0]
 
-    result = model.generate(case.case_number, visit.key)
+    result = model.generate(request_for(case, assessment))
 
-    assert result.sections == visit.draft
-    assert result.clarifications == visit.clarifications
+    assert [s["title"] for s in result["sections"]] == list(cast.ASSESSMENT_SECTIONS)
+    pain = next(s for s in result["sections"] if s["title"] == "Schmerzanamnese")
+    assert len(pain["paragraphs"]) == 4
+    assert pain["paragraphs"][0]["references"] == [
+        {"source": "notes", "quote": "Migräne seit der Jugend, 3 Attacken pro Monat"}
+    ]
+    assert result["clarifications"] == [
+        {"section": c.section, "text": c.text} for c in assessment.clarifications
+    ]
 
 
 def test_text_model_stand_in_refuses_input_outside_the_cast(fictional_cast):
     model = standins.FixtureTextModel(fictional_cast)
+    case = fictional_cast.cases[0]
+    unknown = dataclasses.replace(request_for(case, case.encounters[0]), case_number="FIK-9999-999")
 
-    with pytest.raises(standins.NotInTheCast):
-        model.generate("FIK-9999-999", "assessment")
+    with pytest.raises(GenerationFailed):
+        model.generate(unknown)
 
 
 def test_speech_stand_in_returns_the_canned_transcript_for_fixture_audio(fictional_cast):

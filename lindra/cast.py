@@ -3,11 +3,12 @@
 This is the only dataset the environments seed. Every case number, name, note and
 draft below is invented; no real, pseudonymised or production-copied data belongs
 here, and neither do the ward's forms or the operator's documents. The seed hook
-(`lindra/seed.py`) stores the cast's cases; the notes and drafts join storage with
-the tickets that introduce them.
+(`lindra/seed.py`) stores the cast's cases with their notes; the drafts stay here as
+what the fixture text model returns.
 
-Each encounter carries what the fixture text model returns for it (the expected
-draft and the clarification items) and the fixture audio the speech stand-in
+Each encounter carries that expected draft (paragraphs, each with the passages of
+the notes it came from and, in two assessment sections, the subsection heading the
+form has), the clarification items and the fixture audio the speech stand-in
 transcribes.
 """
 
@@ -40,11 +41,41 @@ VISIT_SECTIONS = (
 )
 SECTIONS = {"assessment": ASSESSMENT_SECTIONS, "visit": VISIT_SECTIONS}
 
+# The distinct subsection headings the ward's form has inside two sections (ADR 0010).
+SUBHEADINGS = {
+    "Therapeutische Anamnese": (
+        "Aktuelle Medikation",
+        "Frühere Medikation",
+        "Aktuelle nichtmedikamentöse Behandlungen",
+        "Frühere nichtmedikamentöse Behandlungen",
+    ),
+    "Untersuchungsbefunde": (
+        "Körperliche und internistische Untersuchung",
+        "Weitere Diagnostik",
+        "Psychopathologischer Befund",
+        "Orthopädischer Befund",
+        "Neurologischer Befund",
+    ),
+}
+
 
 @dataclass(frozen=True)
 class Clarification:
     section: str
     text: str
+
+
+@dataclass(frozen=True)
+class Paragraph:
+    """One paragraph of an expected draft, with the passages of the notes it was written from."""
+
+    text: str
+    quotes: tuple[str, ...] = ()
+    heading: str = ""
+
+
+def _p(text: str, *quotes: str, heading: str = "") -> Paragraph:
+    return Paragraph(text, quotes, heading)
 
 
 @dataclass(frozen=True)
@@ -62,7 +93,7 @@ class Encounter:
     date: date
     entered_on: date
     notes: str
-    draft: dict[str, str]
+    draft: dict[str, tuple[Paragraph, ...]]
     clarifications: tuple[Clarification, ...] = ()
     audio: tuple[FixtureClip, ...] = ()
     background: tuple[str, ...] = ()
@@ -153,7 +184,7 @@ def validate_cast(cast: Cast) -> list[str]:
     if not any(changed_background(case) for case in cast.cases):
         problems.append("no case has an assessment change accepted after a visit draft")
     if len(cast.cases) == 3 and not any(
-        not text for e in cast.cases[2].encounters for text in e.draft.values()
+        not paragraphs for e in cast.cases[2].encounters for paragraphs in e.draft.values()
     ):
         problems.append("the third case leaves no gap")
     return problems
@@ -204,9 +235,10 @@ def _validate_encounter(
     flagged = {c.section for c in encounter.clarifications}
     for section in flagged - set(sections):
         problems.append(f"{where}: clarification item names unknown section {section}")
-    for section, text in encounter.draft.items():
-        if not text and section not in flagged:
+    for section, paragraphs in encounter.draft.items():
+        if not paragraphs and section not in flagged:
             problems.append(f"{where}: empty section {section} has no clarification item")
+        problems += _validate_paragraphs(where, encounter, section, paragraphs)
     for clip in encounter.audio:
         if not clip.transcript.strip():
             problems.append(f"{where}: clip {clip.key} has no canned transcript")
@@ -218,6 +250,24 @@ def _validate_encounter(
         problems.append(f"{where}: a visit's background includes the admission assessment")
     if encounter.kind == "assessment" and encounter.background:
         problems.append(f"{where}: the admission assessment has no background")
+    return problems
+
+
+def _validate_paragraphs(
+    where: str, encounter: Encounter, section: str, paragraphs: tuple[Paragraph, ...]
+) -> list[str]:
+    problems: list[str] = []
+    allowed = SUBHEADINGS.get(section, ()) if encounter.kind == "assessment" else ()
+    for paragraph in paragraphs:
+        if not paragraph.text.strip():
+            problems.append(f"{where}: {section} has an empty paragraph")
+        if not paragraph.quotes:
+            problems.append(f"{where}: a paragraph of {section} has no input reference")
+        for quote in paragraph.quotes:
+            if quote not in encounter.notes:
+                problems.append(f"{where}: reference {quote!r} is not a passage of the notes")
+        if paragraph.heading and paragraph.heading not in allowed:
+            problems.append(f"{where}: {section} has no subsection heading {paragraph.heading}")
     return problems
 
 
@@ -261,28 +311,63 @@ _CASE_BACK = Case(
             ),
             draft={
                 "Sozialanamnese": (
-                    "Lebt mit dem Ehemann in einer Etagenwohnung, zwei erwachsene Kinder. Arbeitet "
-                    "halbtags im Büro, aktuell krankgeschrieben."
+                    _p(
+                        "Lebt mit dem Ehemann in einer Etagenwohnung, zwei erwachsene Kinder. "
+                        "Arbeitet halbtags im Büro, aktuell krankgeschrieben.",
+                        "Patientin lebt mit Ehemann in einer Etagenwohnung, zwei erwachsene "
+                        "Kinder, arbeitet halbtags im Büro, aktuell krankgeschrieben.",
+                    ),
                 ),
                 "Frühere Anamnese und Vormedikation": (
-                    "Bandscheibenvorfall L4/5 vor drei Jahren, konservativ behandelt."
+                    _p(
+                        "Bandscheibenvorfall L4/5 vor drei Jahren, konservativ behandelt.",
+                        "Vor 3 Jahren Bandscheibenvorfall L4/5 konservativ behandelt.",
+                    ),
                 ),
                 "Therapeutische Anamnese": (
-                    "Ibuprofen 400 mg bei Bedarf, bis zu zwei Tabletten täglich, Wirkung gering. "
-                    "Physiotherapie 2024 mit kurzer Besserung, Wärmeanwendungen."
+                    _p(
+                        "Ibuprofen 400 mg bei Bedarf, bis zu zwei Tabletten täglich, Wirkung "
+                        "gering.",
+                        "Ibuprofen 400 mg bei Bedarf, bis zu 2 Tabletten täglich, Wirkung gering.",
+                        heading="Aktuelle Medikation",
+                    ),
+                    _p(
+                        "Physiotherapie 2024 mit kurzer Besserung, Wärmeanwendungen.",
+                        "Physiotherapie 2024 mit kurzer Besserung, Wärmeanwendungen.",
+                        heading="Frühere nichtmedikamentöse Behandlungen",
+                    ),
                 ),
                 "Schmerzanamnese": (
-                    "Tiefer Rückenschmerz seit 14 Monaten, belastungsabhängig, NRS im Mittel 6."
+                    _p(
+                        "Tiefer Rückenschmerz seit 14 Monaten, belastungsabhängig, "
+                        "NRS im Mittel 6.",
+                        "Seit 14 Monaten tiefer Rückenschmerz, belastungsabhängig, "
+                        "NRS 6 im Mittel.",
+                    ),
                 ),
                 "Internistische, vegetative, psychiatrische und Suchtmittelanamnese": (
-                    "Keine internistischen Vorerkrankungen. Kein Nikotin, kein Alkohol."
+                    _p(
+                        "Keine internistischen Vorerkrankungen. Kein Nikotin, kein Alkohol.",
+                        "Keine Vorerkrankungen internistisch, kein Nikotin, kein Alkohol.",
+                    ),
                 ),
                 "Untersuchungsbefunde": (
-                    "Druckschmerz paravertebral L4 bis S1, Lasègue negativ, Reflexe seitengleich."
+                    _p(
+                        "Druckschmerz paravertebral L4 bis S1, Lasègue negativ, Reflexe "
+                        "seitengleich.",
+                        "Druckschmerz paravertebral L4 bis S1, Lasègue negativ, Reflexe "
+                        "seitengleich.",
+                        heading="Körperliche und internistische Untersuchung",
+                    ),
                 ),
                 "Behandlungsplan und vereinbarte Ziele": (
-                    "Stationäre multimodale Schmerztherapie, weil die ambulanten Möglichkeiten "
-                    "über zwölf Monate ausgeschöpft sind. Ziel: Gehstrecke von 500 m auf 2 km."
+                    _p(
+                        "Stationäre multimodale Schmerztherapie, weil die ambulanten Möglichkeiten "
+                        "über zwölf Monate ausgeschöpft sind. Ziel: Gehstrecke von 500 m auf 2 km.",
+                        "Stationäre Aufnahme zur multimodalen Schmerztherapie, weil ambulant über "
+                        "12 Monate ausgeschöpft.",
+                        "Ziel: Gehstrecke von 500 m auf 2 km steigern.",
+                    ),
                 ),
             },
             audio=(
@@ -308,12 +393,31 @@ _CASE_BACK = Case(
             ),
             draft={
                 "Verlauf seit letzter Visite": (
-                    "Schmerz unverändert, NRS 5 bis 6. Seit dem 7.10. kein Ibuprofen mehr. "
-                    "Teilnahme an der Bewegungstherapie gut."
+                    _p(
+                        "Schmerz unverändert, NRS 5 bis 6. Seit dem 7.10. kein Ibuprofen mehr. "
+                        "Teilnahme an der Bewegungstherapie gut.",
+                        "Schmerz im Verlauf unverändert, NRS 5 bis 6. Nimmt kein Ibuprofen mehr "
+                        "seit dem 7.10. Teilnahme an der Bewegungstherapie gut.",
+                    ),
                 ),
-                "Aktuelle Befunde": "Druckschmerz L4 bis S1 etwas geringer.",
-                "Ärztliche Einschätzung": "Die Bewegungstherapie wird fortgeführt.",
-                "Vereinbartes Vorgehen und Ziele": "Tägliche Gehstrecke um 100 m steigern.",
+                "Aktuelle Befunde": (
+                    _p(
+                        "Druckschmerz L4 bis S1 etwas geringer.",
+                        "Befund: Druckschmerz L4 bis S1 etwas geringer.",
+                    ),
+                ),
+                "Ärztliche Einschätzung": (
+                    _p(
+                        "Die Bewegungstherapie wird fortgeführt.",
+                        "Einschätzung nach Gespräch: Bewegungstherapie wird fortgeführt.",
+                    ),
+                ),
+                "Vereinbartes Vorgehen und Ziele": (
+                    _p(
+                        "Tägliche Gehstrecke um 100 m steigern.",
+                        "Vereinbart: tägliche Gehstrecke um 100 m steigern.",
+                    ),
+                ),
             },
             background=("assessment",),
             audio=(
@@ -357,34 +461,86 @@ _CASE_MULTIPLE = Case(
             ),
             draft={
                 "Sozialanamnese": (
-                    "Wohnt allein, seit 2023 Frührentner, zuvor Lagerarbeiter. Die Schwester "
-                    "wohnt in der Nähe."
+                    _p(
+                        "Wohnt allein, seit 2023 Frührentner, zuvor Lagerarbeiter. Die Schwester "
+                        "wohnt in der Nähe.",
+                        "Patient wohnt allein, Frührentner seit 2023 (ehemals Lagerarbeiter), "
+                        "Schwester wohnt in der Nähe.",
+                    ),
                 ),
                 "Frühere Anamnese und Vormedikation": (
-                    "Migräne seit der Jugend. Diabetes mellitus Typ 2. Topiramat zur Prophylaxe "
-                    "2022 wegen Nebenwirkungen beendet."
+                    _p(
+                        "Migräne seit der Jugend. Diabetes mellitus Typ 2. Topiramat zur "
+                        "Prophylaxe 2022 wegen Nebenwirkungen beendet.",
+                        "Migräne seit der Jugend",
+                        "Diabetes mellitus Typ 2",
+                        "Prophylaxe mit Topiramat 2022 wegen Nebenwirkungen beendet",
+                    ),
                 ),
                 "Therapeutische Anamnese": (
-                    "Sumatriptan 50 mg bei Migräne wirksam. Diclofenac 75 mg bei Bedarf, "
-                    "Physiotherapie 2025 und Infiltration 2025 am linken Knie ohne "
-                    "Dauerwirkung. Pregabalin 75 mg zweimal täglich, Wirkung teilweise. "
-                    "Metformin."
+                    _p(
+                        "Sumatriptan 50 mg bei Migräne wirksam. Diclofenac 75 mg bei Bedarf. "
+                        "Pregabalin 75 mg zweimal täglich, Wirkung teilweise. Metformin.",
+                        "Sumatriptan 50 mg wirksam",
+                        "Diclofenac 75 mg bei Bedarf",
+                        "Pregabalin 75 mg zweimal täglich, Wirkung teilweise",
+                        "Metformin",
+                        heading="Aktuelle Medikation",
+                    ),
+                    _p(
+                        "Infiltration 2025 am linken Knie ohne Dauerwirkung.",
+                        "Infiltration 2025 ohne Dauerwirkung",
+                        heading="Frühere Medikation",
+                    ),
+                    _p(
+                        "Physiotherapie 2025.",
+                        "Physiotherapie 2025",
+                        heading="Frühere nichtmedikamentöse Behandlungen",
+                    ),
                 ),
                 "Schmerzanamnese": (
-                    "Migräne, drei Attacken pro Monat. Linkes Knie bei Gonarthrose seit fünf "
-                    "Jahren, belastungsabhängig. Brennende Schmerzen beider Füße seit zwei "
-                    "Jahren bei Polyneuropathie. Schlaf auf vier bis fünf Stunden verkürzt, "
-                    "Einkäufe nur mit Hilfe."
+                    _p(
+                        "Migräne, drei Attacken pro Monat.",
+                        "Migräne seit der Jugend, 3 Attacken pro Monat",
+                    ),
+                    _p(
+                        "Linkes Knie bei Gonarthrose seit fünf Jahren, belastungsabhängig.",
+                        "Linkes Knie, Gonarthrose, seit 5 Jahren belastungsabhängig",
+                    ),
+                    _p(
+                        "Brennende Schmerzen beider Füße seit zwei Jahren bei Polyneuropathie.",
+                        "Brennende Schmerzen beider Füße seit 2 Jahren bei Polyneuropathie",
+                    ),
+                    _p(
+                        "Schlaf auf vier bis fünf Stunden verkürzt, Einkäufe nur mit Hilfe.",
+                        "Schlaf auf 4 bis 5 Stunden verkürzt, Alltag eingeschränkt, Einkäufe nur "
+                        "mit Hilfe",
+                    ),
                 ),
                 "Internistische, vegetative, psychiatrische und Suchtmittelanamnese": (
-                    "Diabetes mellitus Typ 2. Kein Nikotin, gelegentlich Bier."
+                    _p(
+                        "Diabetes mellitus Typ 2. Kein Nikotin, gelegentlich Bier.",
+                        "Diabetes mellitus Typ 2",
+                        "Kein Nikotin, gelegentlich Bier",
+                    ),
                 ),
                 "Untersuchungsbefunde": (
-                    "Linkes Knie: geringer Erguss, Streckung frei, Beugung 110 Grad. Füße: "
-                    "strumpfförmige Hypästhesie."
+                    _p(
+                        "Linkes Knie: geringer Erguss, Streckung frei, Beugung 110 Grad.",
+                        "Knie links Erguss gering, Streckung frei, Beugung 110 Grad",
+                        heading="Orthopädischer Befund",
+                    ),
+                    _p(
+                        "Füße: strumpfförmige Hypästhesie.",
+                        "Füße Hypästhesie strumpfförmig",
+                        heading="Neurologischer Befund",
+                    ),
                 ),
                 "Behandlungsplan und vereinbarte Ziele": (
-                    "Ziele: Schlaf verbessern, Gehstrecke steigern, Einkäufe selbständig."
+                    _p(
+                        "Ziele: Schlaf verbessern, Gehstrecke steigern, Einkäufe selbständig.",
+                        "Ziele: Schlaf verbessern, Gehstrecke steigern, Einkäufe selbständig.",
+                    ),
                 ),
             },
             clarifications=(
@@ -416,12 +572,25 @@ _CASE_MULTIPLE = Case(
             ),
             draft={
                 "Verlauf seit letzter Visite": (
-                    "Eine Migräneattacke in dieser Woche, Sumatriptan wirksam. Knie "
-                    "unverändert, Schlaf fünf Stunden."
+                    _p(
+                        "Eine Migräneattacke in dieser Woche, Sumatriptan wirksam. Knie "
+                        "unverändert, Schlaf fünf Stunden.",
+                        "Migräne in dieser Woche 1 Attacke, Sumatriptan wirksam. Knie "
+                        "unverändert, Schlaf 5 Stunden.",
+                    ),
                 ),
-                "Aktuelle Befunde": "Beugung links 115 Grad.",
-                "Ärztliche Einschätzung": "Der Knieschmerz ist der Hauptschmerz.",
-                "Vereinbartes Vorgehen und Ziele": "Kniegymnastik täglich.",
+                "Aktuelle Befunde": (
+                    _p("Beugung links 115 Grad.", "Heute Beugung links 115 Grad."),
+                ),
+                "Ärztliche Einschätzung": (
+                    _p(
+                        "Der Knieschmerz ist der Hauptschmerz.",
+                        "Einschätzung nach Gespräch: Knieschmerz ist der Hauptschmerz.",
+                    ),
+                ),
+                "Vereinbartes Vorgehen und Ziele": (
+                    _p("Kniegymnastik täglich.", "Vereinbart: Kniegymnastik täglich."),
+                ),
             },
             background=("assessment",),
         ),
@@ -437,12 +606,18 @@ _CASE_MULTIPLE = Case(
             ),
             draft={
                 "Verlauf seit letzter Visite": (
-                    "Pregabalin auf Wunsch des Patienten abends vorgezogen. Schlaf vier Stunden. "
-                    "Fußschmerz brennend, NRS 7."
+                    _p(
+                        "Pregabalin auf Wunsch des Patienten abends vorgezogen. Schlaf vier "
+                        "Stunden. Fußschmerz brennend, NRS 7.",
+                        "Pregabalin auf Wunsch des Patienten abends vorgezogen, Schlaf 4 "
+                        "Stunden. Fußschmerz brennend, NRS 7.",
+                    ),
                 ),
-                "Aktuelle Befunde": "",
-                "Ärztliche Einschätzung": "",
-                "Vereinbartes Vorgehen und Ziele": "Schlafprotokoll führen.",
+                "Aktuelle Befunde": (),
+                "Ärztliche Einschätzung": (),
+                "Vereinbartes Vorgehen und Ziele": (
+                    _p("Schlafprotokoll führen.", "Vereinbart: Schlafprotokoll führen."),
+                ),
             },
             clarifications=(
                 Clarification("Aktuelle Befunde", "Für diese Visite ist kein Befund notiert."),
@@ -492,20 +667,39 @@ _CASE_GAPS = Case(
                 "bislang nicht dokumentiert."
             ),
             draft={
-                "Sozialanamnese": "",
+                "Sozialanamnese": (),
                 "Frühere Anamnese und Vormedikation": (
-                    "Ibuprofen vor der aktuellen Medikation, Dauer unklar."
+                    _p(
+                        "Ibuprofen vor der aktuellen Medikation, Dauer unklar.",
+                        "Vorher Ibuprofen, Dauer unklar.",
+                    ),
                 ),
-                "Therapeutische Anamnese": "Tramadol retard zweimal täglich, Dosis unklar.",
+                "Therapeutische Anamnese": (
+                    _p(
+                        "Tramadol retard zweimal täglich, Dosis unklar.",
+                        "Tramadol retard 50 mg zweimal täglich, an anderer Stelle steht 100 mg "
+                        "zweimal täglich.",
+                        heading="Aktuelle Medikation",
+                    ),
+                ),
                 "Schmerzanamnese": (
-                    "Chronischer Schulter-Nacken-Schmerz rechts, Beginn unklar. Verschlechterung "
-                    "nach einem Sturz im Frühjahr."
+                    _p(
+                        "Chronischer Schulter-Nacken-Schmerz rechts, Beginn unklar. "
+                        "Verschlechterung nach einem Sturz im Frühjahr.",
+                        "Chronischer Schulter-Nacken-Schmerz rechts seit dem Sommer, vielleicht "
+                        "schon länger.",
+                        "Seit einem Sturz im Frühjahr schlechter.",
+                    ),
                 ),
-                "Internistische, vegetative, psychiatrische und Suchtmittelanamnese": "",
+                "Internistische, vegetative, psychiatrische und Suchtmittelanamnese": (),
                 "Untersuchungsbefunde": (
-                    "Hartspann im rechten Trapezius, Rotation endgradig schmerzhaft."
+                    _p(
+                        "Hartspann im rechten Trapezius, Rotation endgradig schmerzhaft.",
+                        "Befund: Hartspann Trapezius rechts, Rotation endgradig schmerzhaft.",
+                        heading="Körperliche und internistische Untersuchung",
+                    ),
                 ),
-                "Behandlungsplan und vereinbarte Ziele": "",
+                "Behandlungsplan und vereinbarte Ziele": (),
             },
             clarifications=(
                 Clarification("Sozialanamnese", "Die Notizen enthalten keine Sozialanamnese."),
@@ -551,11 +745,15 @@ _CASE_GAPS = Case(
             ),
             draft={
                 "Verlauf seit letzter Visite": (
-                    "Nackenschmerz etwas besser. Tramadol unverändert."
+                    _p(
+                        "Nackenschmerz etwas besser. Tramadol unverändert.",
+                        "Schmerz im Nacken etwas besser",
+                        "Tramadol unverändert",
+                    ),
                 ),
-                "Aktuelle Befunde": "",
-                "Ärztliche Einschätzung": "",
-                "Vereinbartes Vorgehen und Ziele": "",
+                "Aktuelle Befunde": (),
+                "Ärztliche Einschätzung": (),
+                "Vereinbartes Vorgehen und Ziele": (),
             },
             clarifications=(
                 Clarification("Aktuelle Befunde", "Für diese Visite ist kein Befund notiert."),

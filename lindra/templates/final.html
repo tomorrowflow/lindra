@@ -1,0 +1,112 @@
+{#
+  The last step. While a proposal is pending it is "Übernehmen": the whole proposal is
+  accepted or discarded with one action, and the step names what is replaced and what stays.
+  Without a pending proposal it is "Übergabe": one copy control per section of the current
+  draft. The pending proposal is never copied.
+#}
+{% extends "encounter_step.html" %}
+{% from "icons.html" import icon %}
+{% set accepting = rev.proposal is not none %}
+{% block title %}{{ "Übernehmen" if accepting else "Übergabe" }} · {{ case.case_number }} · Lindra{% endblock %}
+{% block body_class %}final-step{% endblock %}
+
+{% block header %}
+<header class="case-header">
+  <div>
+    <p class="case-ref">{{ case.case_number }} · {{ case.patient_name }}</p>
+    <h1 class="step-title">{{ "Vorschlag übernehmen" if accepting else "Übergabe" }}</h1>
+    <p class="case-subtitle">{{ encounter_labels[encounter.kind] }}, {{ encounter.occurred_at | german_datetime }}</p>
+  </div>
+</header>
+{% endblock %}
+
+{% block content %}
+{% if notice %}
+<div class="alert alert-error" role="alert">
+  {{ icon("circle-alert") }}
+  <span>{{ notice }}</span>
+</div>
+{% endif %}
+
+{% if accepting %}
+{% set plan = rev.plan %}
+<p class="lead">Ein Vorschlag für den ganzen Entwurf. Sie übernehmen ihn mit einer Handlung oder verwerfen ihn.</p>
+<section class="decision" aria-labelledby="replaced-title">
+  <h2 class="decision-title" id="replaced-title">{{ icon("file-diff") }}<span>Wird ersetzt</span></h2>
+  {% if plan.replaced %}
+  <ul>{% for title in plan.replaced %}<li>{{ title }}</li>{% endfor %}</ul>
+  {% else %}
+  <p class="text-secondary">Kein Abschnitt.</p>
+  {% endif %}
+</section>
+<section class="decision" aria-labelledby="retained-title">
+  <h2 class="decision-title" id="retained-title">{{ icon("pencil") }}<span>Bleibt, weil manuell bearbeitet</span></h2>
+  {% if plan.retained %}
+  <ul>{% for title in plan.retained %}<li>{{ title }}</li>{% endfor %}</ul>
+  <p class="text-secondary">Diese Abschnitte tragen danach den Hinweis «Nicht aktualisiert». Die Fassung des Vorschlags bleibt bis zur Entscheidung auf ihrer Seite zu sehen.</p>
+  {% else %}
+  <p class="text-secondary">Kein Abschnitt.</p>
+  {% endif %}
+</section>
+{% if rev.proposal.clarifications %}
+<section class="clarifications" aria-labelledby="proposal-clarifications">
+  <h2 class="clarifications-title" id="proposal-clarifications">{{ icon("circle-help") }}<span>Zu klären, laut Vorschlag</span></h2>
+  <ul>
+    {% for item in rev.proposal.clarifications %}<li><strong>{{ item.section }}.</strong> {{ item.text }}</li>{% endfor %}
+  </ul>
+</section>
+{% endif %}
+
+{% elif not rev.draft %}
+<p class="lead" data-nothing-to-copy>Es gibt noch nichts zu kopieren. Erzeugen Sie einen Entwurf und übernehmen Sie ihn, oder schreiben Sie einen Abschnitt selbst.</p>
+
+{% else %}
+<ul class="handover-list">
+  {% for section in rev.draft.sections %}
+  {% set text = section_text(section) %}
+  <li class="handover-row" data-section="{{ loop.index }}">
+    <div class="handover-main">
+      <h2 class="handover-title">{{ section.title }}</h2>
+      {% if text.strip() %}
+      <pre class="handover-text">{{ text }}</pre>
+      {% else %}
+      <p class="text-secondary">Leer, nichts zu kopieren.</p>
+      {% endif %}
+    </div>
+    <button class="btn handover-copy" type="button" data-copy data-copy-text="{{ text }}" data-copied-url="/api/cases/{{ case.id }}/encounters/{{ encounter.id }}/draft/sections/{{ loop.index }}/copied" aria-label="{{ section.title }} kopieren"{% if not text.strip() %} disabled{% endif %}>
+      {{ icon("copy") }}
+      <span>Kopieren</span>
+    </button>
+  </li>
+  {% endfor %}
+</ul>
+{% endif %}
+{% endblock %}
+
+{# The reason acceptance is not possible, spelled out next to the button and not only on tap. #}
+{% block note %}
+{% if accepting and rev.outdated %}
+<p class="step-note" id="outdated-reason" role="note" data-outdated-reason>
+  {{ icon("clock") }}
+  <span>{{ outdated_reason }}</span>
+  <span class="step-note-more">Verwerfen Sie den Vorschlag oder erzeugen Sie einen neuen.</span>
+</p>
+{% endif %}
+{% endblock %}
+
+{% block forward %}
+{% if accepting %}
+<form class="bar-form" method="post" action="/faelle/{{ case.id }}/kontakte/{{ encounter.id }}/abschluss/uebernehmen">
+  <button class="btn btn-primary action-button" type="submit"{% if rev.outdated %} disabled aria-describedby="outdated-reason"{% endif %}>
+    {{ icon("check") }}
+    <span>Übernehmen</span>
+  </button>
+</form>
+{% else %}
+{{ super() }}
+{% endif %}
+{% endblock %}
+
+{% block step_scripts %}
+{% if not accepting %}<script type="module" src="/static/js/copy.js"></script>{% endif %}
+{% endblock %}

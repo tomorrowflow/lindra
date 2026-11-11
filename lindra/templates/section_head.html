@@ -1,0 +1,28 @@
+{#
+  The title of a section step with its badges and the one-line state with "Mehr". The page
+  includes it and the script refreshes it from /kopf after a hand edit, so the badges follow
+  the saved text without a reload. Explanations open on tap (static/js/badges.js).
+#}
+{% from "icons.html" import icon %}
+{% set title = rev.titles[index] %}
+{% set number = index + 1 %}
+{% set line = section_state(rev, index) %}
+<div class="section-head" id="section-head">
+  <div class="section-title-row">
+    <h1 class="step-title">{{ title }}</h1>
+    {% for badge in section_badges(rev, index) %}
+    <button class="section-badge" type="button" aria-label="{{ badge.label }}" aria-expanded="false" aria-controls="section-badge-{{ number }}-{{ loop.index }}">
+      {{ icon(badge.icon) }}{% if badge.word %}<span class="badge-word">{{ badge.word }}</span>{% endif %}
+    </button>
+    {% endfor %}
+  </div>
+  {% for badge in section_badges(rev, index) %}
+  <p class="badge-explanation" id="section-badge-{{ number }}-{{ loop.index }}" hidden>{{ badge.explanation }}</p>
+  {% endfor %}
+  <div class="state-line">
+    {{ icon(line.icon) }}
+    <span class="state-text">{{ line.label }}</span>
+    <button class="more" type="button" aria-expanded="false" aria-controls="state-explanation-{{ number }}">Mehr</button>
+  </div>
+  <p class="badge-explanation" id="state-explanation-{{ number }}" hidden>{{ line.explanation }}</p>
+</div>

@@ -34,6 +34,7 @@
       {% block step %}{% endblock %}
 
       {# The action bar keeps its buttons at the same size and place on every step (ADR 0008). #}
+      {% block action_bar %}
       <footer class="action-bar">
         <button class="btn action-button" type="button" disabled>
           {{ icon("chevron-left") }}
@@ -45,10 +46,19 @@
         </button>
         <div class="action-spacer"></div>
         <button class="btn action-button" type="button" disabled>
+          {{ icon("x") }}
+          <span>Verwerfen</span>
+        </button>
+        <button class="btn action-button" type="button" disabled>
+          {{ icon("copy") }}
+          <span>Kopieren</span>
+        </button>
+        <button class="btn action-button" type="button" disabled>
           {{ icon("mic") }}
           <span>Diktat</span>
         </button>
       </footer>
+      {% endblock %}
     </main>
   </div>
 
@@ -96,12 +106,17 @@
           {{ badge(item, "side") }}
           {% if selected %}
           <ul class="step-list" aria-label="Schritte">
+            {% for step in steps %}
             <li>
-              <a class="step-link current" href="/faelle/{{ case.id }}/kontakte/{{ item.id }}/notizen" aria-current="page">
-                <span class="step-number">1</span>
-                <span>Notizen</span>
+              <a class="step-link{% if step.number == active %} current{% endif %}" href="{{ step.url }}"{% if step.number == active %} aria-current="page"{% endif %}>
+                <span class="step-number">{{ step.number }}</span>
+                <span class="step-label">{{ step.label }}</span>
+                {% for badge in step.badges %}
+                <span class="step-badge" title="{{ badge.label }}">{{ icon(badge.icon) }}<span class="visually-hidden">{{ badge.label }}</span></span>
+                {% endfor %}
               </a>
             </li>
+            {% endfor %}
           </ul>
           {% endif %}
         </li>
