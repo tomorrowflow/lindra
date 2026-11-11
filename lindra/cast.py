@@ -41,6 +41,14 @@ VISIT_SECTIONS = (
 )
 SECTIONS = {"assessment": ASSESSMENT_SECTIONS, "visit": VISIT_SECTIONS}
 
+# Inside the Schmerzanamnese every pain problem is its own block, headed by the name the
+# physician gave it. The headings are the physician's words, so they are not a fixed list, and
+# there is no fixed number of them (ADR 0010).
+PAIN_SECTION = "Schmerzanamnese"
+PAIN_HEADING_LIMIT = 80
+# The heading of what the notes say about the patient's limitations but do not tie to a pain.
+UNASSIGNED_PAIN = "Ohne Zuordnung zu einem Schmerz"
+
 # The distinct subsection headings the ward's form has inside two sections (ADR 0010).
 SUBHEADINGS = {
     "Therapeutische Anamnese": (
@@ -266,7 +274,11 @@ def _validate_paragraphs(
         for quote in paragraph.quotes:
             if quote not in encounter.notes:
                 problems.append(f"{where}: reference {quote!r} is not a passage of the notes")
-        if paragraph.heading and paragraph.heading not in allowed:
+        pain = encounter.kind == "assessment" and section == PAIN_SECTION
+        if paragraph.heading and pain:
+            if len(paragraph.heading) > PAIN_HEADING_LIMIT:
+                problems.append(f"{where}: pain heading {paragraph.heading!r} is too long")
+        elif paragraph.heading and paragraph.heading not in allowed:
             problems.append(f"{where}: {section} has no subsection heading {paragraph.heading}")
     return problems
 
@@ -300,8 +312,11 @@ _CASE_BACK = Case(
             notes=(
                 "Patientin lebt mit Ehemann in einer Etagenwohnung, zwei erwachsene Kinder, "
                 "arbeitet halbtags im Büro, aktuell krankgeschrieben. Vor 3 Jahren "
-                "Bandscheibenvorfall L4/5 konservativ behandelt. Seit 14 Monaten tiefer "
-                "Rückenschmerz, belastungsabhängig, NRS 6 im Mittel. Ibuprofen 400 mg bei "
+                "Bandscheibenvorfall L4/5 konservativ behandelt. MRT 03/2024 laut Arztbrief: "
+                "keine Wurzelkompression. Seit 14 Monaten tiefer "
+                "Rückenschmerz, belastungsabhängig, NRS 6 im Mittel. Die Patientin berichtet, "
+                "der Schmerz strahle nicht ins Bein aus. PainDETECT, deutsche Version, am "
+                "02.10.2026: 14 Punkte. Ibuprofen 400 mg bei "
                 "Bedarf, bis zu 2 Tabletten täglich, Wirkung gering. Physiotherapie 2024 mit "
                 "kurzer Besserung, Wärmeanwendungen. Keine Vorerkrankungen internistisch, "
                 "kein Nikotin, kein Alkohol. Untersuchung: Druckschmerz paravertebral L4 bis S1, "
@@ -323,6 +338,10 @@ _CASE_BACK = Case(
                         "Bandscheibenvorfall L4/5 vor drei Jahren, konservativ behandelt.",
                         "Vor 3 Jahren Bandscheibenvorfall L4/5 konservativ behandelt.",
                     ),
+                    _p(
+                        "Vorbefund laut Arztbrief, MRT 03/2024: keine Wurzelkompression.",
+                        "MRT 03/2024 laut Arztbrief: keine Wurzelkompression.",
+                    ),
                 ),
                 "Therapeutische Anamnese": (
                     _p(
@@ -339,10 +358,20 @@ _CASE_BACK = Case(
                 ),
                 "Schmerzanamnese": (
                     _p(
-                        "Tiefer Rückenschmerz seit 14 Monaten, belastungsabhängig, "
-                        "NRS im Mittel 6.",
+                        "Seit 14 Monaten, belastungsabhängig, NRS im Mittel 6.",
                         "Seit 14 Monaten tiefer Rückenschmerz, belastungsabhängig, "
                         "NRS 6 im Mittel.",
+                        heading="Tiefer Rückenschmerz",
+                    ),
+                    _p(
+                        "Nach Angabe der Patientin keine Ausstrahlung ins Bein.",
+                        "Die Patientin berichtet, der Schmerz strahle nicht ins Bein aus.",
+                        heading="Tiefer Rückenschmerz",
+                    ),
+                    _p(
+                        "PainDETECT, deutsche Version, vom 02.10.2026: 14 Punkte.",
+                        "PainDETECT, deutsche Version, am 02.10.2026: 14 Punkte.",
+                        heading=UNASSIGNED_PAIN,
                     ),
                 ),
                 "Internistische, vegetative, psychiatrische und Suchtmittelanamnese": (
@@ -500,21 +529,26 @@ _CASE_MULTIPLE = Case(
                 ),
                 "Schmerzanamnese": (
                     _p(
-                        "Migräne, drei Attacken pro Monat.",
+                        "Seit der Jugend, drei Attacken pro Monat.",
                         "Migräne seit der Jugend, 3 Attacken pro Monat",
+                        heading="Migräne",
                     ),
                     _p(
-                        "Linkes Knie bei Gonarthrose seit fünf Jahren, belastungsabhängig.",
+                        "Gonarthrose, seit fünf Jahren belastungsabhängig.",
                         "Linkes Knie, Gonarthrose, seit 5 Jahren belastungsabhängig",
+                        heading="Linkes Knie",
                     ),
                     _p(
-                        "Brennende Schmerzen beider Füße seit zwei Jahren bei Polyneuropathie.",
+                        "Brennende Schmerzen seit zwei Jahren bei Polyneuropathie.",
                         "Brennende Schmerzen beider Füße seit 2 Jahren bei Polyneuropathie",
+                        heading="Beide Füße",
                     ),
                     _p(
-                        "Schlaf auf vier bis fünf Stunden verkürzt, Einkäufe nur mit Hilfe.",
+                        "Schlaf auf vier bis fünf Stunden verkürzt, Alltag eingeschränkt, "
+                        "Einkäufe nur mit Hilfe.",
                         "Schlaf auf 4 bis 5 Stunden verkürzt, Alltag eingeschränkt, Einkäufe nur "
                         "mit Hilfe",
+                        heading=UNASSIGNED_PAIN,
                     ),
                 ),
                 "Internistische, vegetative, psychiatrische und Suchtmittelanamnese": (
@@ -548,6 +582,10 @@ _CASE_MULTIPLE = Case(
                     "Schmerzanamnese",
                     "Welcher der drei Schmerzen steht im Vordergrund, und welche Zahl gilt je "
                     "Schmerz auf der numerischen Skala?",
+                ),
+                Clarification(
+                    "Schmerzanamnese",
+                    "Schlaf, Alltag und Einkäufe sind keinem der drei Schmerzen zugeordnet.",
                 ),
             ),
             audio=(
@@ -689,6 +727,7 @@ _CASE_GAPS = Case(
                         "Chronischer Schulter-Nacken-Schmerz rechts seit dem Sommer, vielleicht "
                         "schon länger.",
                         "Seit einem Sturz im Frühjahr schlechter.",
+                        heading="Schulter und Nacken rechts",
                     ),
                 ),
                 "Internistische, vegetative, psychiatrische und Suchtmittelanamnese": (),
