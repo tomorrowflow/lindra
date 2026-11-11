@@ -289,11 +289,11 @@ def test_a_heading_is_held_to_the_same_rules_as_the_text():
 def test_a_report_of_the_patient_is_worded_so_only_when_the_notes_say_so():
     notes = "Die Patientin berichtet, der Schmerz strahle nicht aus."
     said = paragraph(
-        "Nach Angabe der Patientin keine Ausstrahlung.",
+        "Nach Angabe der Patientin strahlt der Schmerz nicht aus.",
         "Die Patientin berichtet, der Schmerz strahle nicht aus",
     )
     unsaid = paragraph(
-        "Nach Angabe der Patientin keine Ausstrahlung.", "der Schmerz strahle nicht aus"
+        "Nach Angabe der Patientin strahlt der Schmerz nicht aus.", "der Schmerz strahle nicht aus"
     )
 
     assert kept(fidelity.check_result(generated(SCHMERZ, said), {"notes": notes}), SCHMERZ)
@@ -501,6 +501,92 @@ def test_inflections_compounds_and_function_words_do_not_drop_a_paragraph(text):
     assert kept(back(text, *quotes), SCHMERZ) == [text]
 
 
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Schulterarthrose rechts.",
+        "Kniegelenkarthrose links.",
+        "Schmerzchronifizierung seit Jahren.",
+        "Rückenschmerz bei PNP.",
+        "HWS-Syndrom links.",
+        "Ménièresche Schwindelattacken.",
+    ],
+)
+def test_a_longer_compound_or_an_abbreviation_the_quote_does_not_hold_is_dropped(text):
+    notes = "Schulter rechts, Knie links, Schmerzen seit Jahren, Rückenschmerz."
+    quotes = ("Schulter rechts, Knie links", "Schmerzen seit Jahren", "Rückenschmerz")
+
+    result = fidelity.check_result(generated(SCHMERZ, paragraph(text, *quotes)), {"notes": notes})
+
+    assert kept(result, SCHMERZ) == []
+
+
+def test_a_part_of_a_compound_the_quote_holds_is_supported():
+    result = back(
+        "Schmerz im Rücken, belastungsabhängig.", "tiefer Rückenschmerz, belastungsabhängig"
+    )
+
+    assert kept(result, SCHMERZ)
+
+
+def test_an_abbreviation_the_quote_holds_is_supported():
+    notes = "Befund MRT der HWS, NRS 6."
+    result = fidelity.check_result(
+        generated(BEFUND, paragraph("MRT der HWS, NRS 6.", "MRT der HWS, NRS 6")), {"notes": notes}
+    )
+
+    assert kept(result, BEFUND) == ["MRT der HWS, NRS 6."]
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Schmerz ohne Ausstrahlung.",
+        "Keine Ausstrahlung des Schmerzes.",
+        "Der Schmerz strahlt nicht aus.",
+    ],
+)
+def test_a_negation_the_quote_does_not_make_drops_the_paragraph(text):
+    notes = "Der Schmerz strahlt ins Bein aus."
+    result = fidelity.check_result(
+        generated(SCHMERZ, paragraph(text, "Der Schmerz strahlt ins Bein aus")), {"notes": notes}
+    )
+
+    assert kept(result, SCHMERZ) == []
+    assert "verneint" in items_for(result, SCHMERZ)[0]
+
+
+def test_a_negation_the_paragraph_leaves_out_drops_it_too():
+    notes = "Der Schmerz strahlt nicht ins Bein aus."
+    result = fidelity.check_result(
+        generated(SCHMERZ, paragraph("Der Schmerz strahlt ins Bein aus.", notes.rstrip("."))),
+        {"notes": notes},
+    )
+
+    assert kept(result, SCHMERZ) == []
+
+
+def test_a_negation_the_quote_makes_stays():
+    notes = "Der Schmerz strahlt nicht ins Bein aus."
+    said = paragraph("Der Schmerz strahlt nicht aus.", notes.rstrip("."))
+
+    assert kept(fidelity.check_result(generated(SCHMERZ, said), {"notes": notes}), SCHMERZ)
+
+
+def test_an_abbreviation_does_not_end_a_sentence_of_the_notes():
+    notes = "Tramadol retard 50 mg zweimal täglich, ggf. 100 mg zweimal täglich."
+    one = alone("Tramadol retard 50 mg zweimal täglich.", notes.rstrip("."), notes=notes)
+
+    assert kept(one, THERAPIE) == []
+
+
+def test_an_alternative_in_the_notes_is_an_uncertainty():
+    notes = "Pregabalin 75 mg abends, alternativ 150 mg."
+    cut = alone("Pregabalin 75 mg abends.", "Pregabalin 75 mg abends", notes=notes)
+
+    assert kept(cut, THERAPIE) == []
+
+
 def test_a_gap_word_that_only_says_something_is_unclear_is_allowed():
     notes = "Tramadol retard 50 mg zweimal täglich, an anderer Stelle steht 100 mg zweimal täglich."
     whole = notes[:-1]
@@ -538,7 +624,8 @@ def test_a_pain_heading_is_grounded_but_the_forms_own_headings_are_not():
 def test_a_provenance_wording_the_quote_licenses_is_not_a_word_to_ground():
     notes = "Die Patientin berichtet, der Schmerz strahle nicht ins Bein aus."
     said = paragraph(
-        "Nach Angabe der Patientin keine Ausstrahlung ins Bein.", notes.removesuffix(".")
+        "Nach Angabe der Patientin strahlt der Schmerz nicht ins Bein aus.",
+        notes.removesuffix("."),
     )
 
     assert kept(fidelity.check_result(generated(SCHMERZ, said), {"notes": notes}), SCHMERZ)

@@ -374,7 +374,7 @@ _CASE_BACK = Case(
                         heading="Tiefer Rückenschmerz",
                     ),
                     _p(
-                        "Nach Angabe der Patientin keine Ausstrahlung ins Bein.",
+                        "Nach Angabe der Patientin strahlt der Schmerz nicht ins Bein aus.",
                         "Die Patientin berichtet, der Schmerz strahle nicht ins Bein aus.",
                         heading="Tiefer Rückenschmerz",
                     ),
@@ -571,7 +571,7 @@ _CASE_MULTIPLE = Case(
                 ),
                 "Untersuchungsbefunde": (
                     _p(
-                        "Linkes Knie: geringer Erguss, Streckung frei, Beugung 110 Grad.",
+                        "Knie links: Erguss gering, Streckung frei, Beugung 110 Grad.",
                         "Knie links Erguss gering, Streckung frei, Beugung 110 Grad",
                         heading="Orthopädischer Befund",
                     ),
@@ -622,7 +622,7 @@ _CASE_MULTIPLE = Case(
             draft={
                 "Verlauf seit letzter Visite": (
                     _p(
-                        "Eine Migräneattacke in dieser Woche, Sumatriptan wirksam. Knie "
+                        "Migräne in dieser Woche 1 Attacke, Sumatriptan wirksam. Knie "
                         "unverändert, Schlaf fünf Stunden.",
                         "Migräne in dieser Woche 1 Attacke, Sumatriptan wirksam. Knie "
                         "unverändert, Schlaf 5 Stunden.",
@@ -734,7 +734,7 @@ _CASE_GAPS = Case(
                 "Schmerzanamnese": (
                     _p(
                         "Chronischer Schulter-Nacken-Schmerz rechts, Beginn unklar. "
-                        "Verschlechterung nach einem Sturz im Frühjahr.",
+                        "Seit einem Sturz im Frühjahr schlechter.",
                         "Chronischer Schulter-Nacken-Schmerz rechts seit dem Sommer, vielleicht "
                         "schon länger.",
                         "Seit einem Sturz im Frühjahr schlechter.",
@@ -796,7 +796,7 @@ _CASE_GAPS = Case(
             draft={
                 "Verlauf seit letzter Visite": (
                     _p(
-                        "Nackenschmerz etwas besser. Tramadol unverändert.",
+                        "Schmerz im Nacken etwas besser. Tramadol unverändert.",
                         "Schmerz im Nacken etwas besser",
                         "Tramadol unverändert",
                     ),

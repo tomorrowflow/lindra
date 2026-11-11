@@ -53,6 +53,10 @@ TOO_BROAD = (
     "nicht im Entwurf. Ergänzen Sie sie in den Notizen, wenn sie gelten soll."
 )
 EMPTY_SECTION = "Die Notizen enthalten keine Angaben für diesen Abschnitt."
+NEGATION = (
+    "Eine Angabe verneinte oder bejahte etwas anders als die zitierte Stelle der Notizen. Sie "
+    "steht nicht im Entwurf. Ergänzen Sie sie in den Notizen, wenn sie gelten soll."
+)
 
 
 def _cut_off(cue: str) -> str:
@@ -252,9 +256,14 @@ _HEDGES = (
     "unsicher",
     "nicht sicher",
     "ungewiss",
+    "ggf",
+    "bzw",
+    "evtl",
+    "alternativ",
+    "teils",
 )
 # Words a paragraph may use to say that something is open, though the quote does not.
-_HEDGE_MARKERS = ("offen", "widersprüchlich", " oder ")
+_HEDGE_MARKER = re.compile(r"\b(?:offen|widersprüchlich|oder)\b")
 
 # Words without a clinical claim, which no quoted passage has to contain: articles,
 # prepositions, conjunctions, pronouns, auxiliary verbs and common adverbs of four letters or
@@ -279,7 +288,21 @@ _GAP_WORDS = frozenset(
     "unklar offen widersprüchlich beginn dosis dauer zeitpunkt angabe angaben notizen".split()
 )
 
-_WORD = re.compile(r"[A-Za-zÄÖÜäöüß]{4,}")
+_LETTERS = r"[^\W\d_]"
+_WORD = re.compile(_LETTERS + r"{4,}")
+# An abbreviation of capitals ("MRT", "HWS", "NRS") has to appear as it is.
+_ABBREVIATION = re.compile(rf"(?<!{_LETTERS})[A-ZÄÖÜ]{{3,}}(?!{_LETTERS})")
+# Words that make a statement a denial. A paragraph and its quote must agree on whether
+# there is one: "strahlt aus" must not become "strahlt nicht aus", or the reverse.
+_NEGATION = re.compile(r"\b(?:nicht|nichts|nie|niemals|weder|ohne|kein\w*)\b")
+# Where one sentence of the notes ends and the next begins. The abbreviations of notes do not
+# end one ("ca.", "ggf.", "z. B.").
+_SENTENCE_BREAK = re.compile(
+    r"(?<=[.!?])"
+    r"(?<!\bca\.)(?<!\bggf\.)(?<!\bbzw\.)(?<!\bevtl\.)(?<!\binkl\.)(?<!\bDr\.)(?<!\bNr\.)"
+    r"(?<!\bz\. B\.)(?<!\bd\. h\.)(?<!\bu\. a\.)(?<!\bv\. a\.)"
+    rf"\s+(?!{_LETTERS}\.)"
+)
 _NUMBER = re.compile(r"\d+(?:[.,]\d+)*")
 # A quantity with a unit. The plural endings of "Monate", "Tabletten" and the like count as
 # the same unit.
@@ -423,10 +446,10 @@ def _problem(
                 "nicht im Entwurf. Legen Sie in den Notizen fest, was gilt."
             )
     quoted_cue = _hedge_in(lower_quoted)
-    if quoted_cue and not (
-        _hedge_in(lower_said) or any(m in f" {lower_said} " for m in _HEDGE_MARKERS)
-    ):
+    if quoted_cue and not (_hedge_in(lower_said) or _HEDGE_MARKER.search(lower_said)):
         return _hidden(quoted_cue)
+    if _negated(text) != _negated(quoted):
+        return NEGATION
     # Every word of the text stands behind a quoted passage. A pain problem's heading is the
     # physician's name for it, so it may come from anywhere in the notes; the form's own
     # headings come from the form.
@@ -448,7 +471,7 @@ def _cut_off_cue(source: str, quote: str, quoted: str) -> str | None:
     start = source.find(quote)
     end = start + len(quote)
     first, last = 0, len(source)
-    for boundary in re.finditer(r"(?<=[.!?])\s+", source):
+    for boundary in _SENTENCE_BREAK.finditer(source):
         if boundary.end() <= start:
             first = boundary.end()
         elif boundary.start() >= end:
@@ -463,7 +486,7 @@ def _disagreements(source: str) -> list[frozenset[str]]:
     """The measures of each sentence of the notes that names two or more of them and says in
     the same sentence that the notes are uncertain or disagree."""
     found = []
-    for sentence in re.split(r"(?<=[.!?])\s+", _squash(source)):
+    for sentence in _SENTENCE_BREAK.split(_squash(source)):
         lower = f" {sentence.lower()} "
         measures = _measures(sentence)
         if len(measures) >= 2 and (_hedge_in(lower) or any(w in lower for w in _DISAGREE)):
@@ -472,8 +495,13 @@ def _disagreements(source: str) -> list[frozenset[str]]:
 
 
 def _ungrounded(text: str, quoted: str) -> str | None:
-    """The first word of the text that no word of the quoted passages stands behind."""
+    """The first word or abbreviation of the text that no word of the quoted passages stands
+    behind."""
     known = [word.lower() for word in _WORD.findall(quoted)]
+    abbreviations = set(_ABBREVIATION.findall(quoted))
+    for match in _ABBREVIATION.finditer(text):
+        if match.group() not in abbreviations:
+            return match.group()
     for match in _WORD.finditer(text):
         word = match.group().lower()
         if word in _FUNCTION_WORDS or word in _GAP_WORDS or _SPELLED_NUMBER.fullmatch(word):
@@ -483,19 +511,24 @@ def _ungrounded(text: str, quoted: str) -> str | None:
     return None
 
 
-def _same_word(a: str, b: str) -> bool:
-    """Whether two words are one word inflected or one compound of the other.
+def _same_word(word: str, other: str) -> bool:
+    """Whether `other`, a word of a quoted passage, stands behind `word`, a word of the text.
 
-    Short words must share their start ("lebt" and "leben"). Longer ones need a stretch in
-    common that is most of the shorter word and at least five letters, so "Schmerz" stands
-    behind "Rückenschmerz" and "Ausstrahlung" behind "strahlt aus", and "Fibromyalgie" behind
-    nothing."""
-    shorter = min(len(a), len(b))
-    if shorter <= 5:
-        prefix = len(os.path.commonprefix([a, b]))
-        return prefix >= max(3, shorter - 1)
-    match = SequenceMatcher(None, a, b, autojunk=False).find_longest_match(0, len(a), 0, len(b))
-    return match.size >= max(5, math.ceil(0.75 * shorter))
+    A short word must share its start with `other` ("lebt" and "leben"). A longer one needs a
+    stretch in common that is most of the word itself and at least five letters, so "Schmerz"
+    stands behind "Rückenschmerz" and "Kinder" behind "Kindern", while "Schulterarthrose" has
+    no word behind it in "Schulter" and "Fibromyalgie" none in "Rückenschmerz". The text may
+    name a part of a compound of the passage, never a longer compound than the passage has."""
+    if len(word) <= 5:
+        return len(os.path.commonprefix([word, other])) >= max(3, len(word) - 1)
+    match = SequenceMatcher(None, word, other, autojunk=False).find_longest_match(
+        0, len(word), 0, len(other)
+    )
+    return match.size >= max(5, math.ceil(0.7 * len(word)))
+
+
+def _negated(text: str) -> bool:
+    return bool(_NEGATION.search(text.lower()))
 
 
 def _conflicts(items: Sequence[Clarification]) -> list[frozenset[str]]:

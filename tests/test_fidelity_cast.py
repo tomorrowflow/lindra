@@ -217,7 +217,9 @@ def test_a_patient_report_a_prior_finding_and_an_own_finding_stay_apart(fictiona
     ]
     own = section(first, "Untersuchungsbefunde")
 
-    assert [p.text for p in patient] == ["Nach Angabe der Patientin keine Ausstrahlung ins Bein."]
+    assert [p.text for p in patient] == [
+        "Nach Angabe der Patientin strahlt der Schmerz nicht ins Bein aus."
+    ]
     assert [p.text for p in prior] == [
         "Vorbefund laut Arztbrief, MRT 03/2024: keine Wurzelkompression."
     ]
