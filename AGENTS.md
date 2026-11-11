@@ -16,11 +16,11 @@ Run Python through the project virtualenv. Nothing needs Node or a network at ru
 | Format | `.venv/bin/python -m ruff format .` (CI runs `--check`) |
 | Contrast check | `.venv/bin/python scripts/contrast_check.py` |
 | Vendor assets | `python3 scripts/fetch_assets.py --check` verifies the pins; without `--check` it refetches |
-| Browser flow and screenshots | `.venv/bin/python -m playwright install chromium` once, then `.venv/bin/python scripts/screenshots.py [output-dir]`; it exits non-zero on any finding and writes the pictures to `LFR-07/` (review steps) and `LFR-08/` (references, pain problems, clarification list) under `docs/screenshots/` by default |
+| Browser flow and screenshots | Locally: `.venv/bin/python -m playwright install chromium` once, then `.venv/bin/python scripts/screenshots.py [output-dir]`. In CI's image: `docker run --rm -v "$PWD:/repo" -w /repo mcr.microsoft.com/playwright/python:v1.63.0-noble bash -c 'python3 -m venv .venv-ci && .venv-ci/bin/python -m pip install -e ".[dev]" && .venv-ci/bin/python scripts/screenshots.py /tmp/screenshots'` (a separate virtualenv, so it does not clobber `.venv`). The script exits non-zero on any finding and writes the pictures to `LFR-07/` (review steps) and `LFR-08/` (references, pain problems, clarification list) under `docs/screenshots/` by default |
 | CI lint | `docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.12 -no-color` |
 | Throwaway stack | `python3 scripts/env.py up --project lindra-<ticket>`, then `check`, `reset` and `down` with the same `--project` |
 
-CI (`.github/workflows/ci.yml`) runs install, lint, format check, vendor check, contrast check, tests and the browser flow on every push and pull request.
+CI (`.github/workflows/ci.yml`) runs install, lint, format check, vendor check, contrast check, tests and the browser flow on every push and pull request, inside `mcr.microsoft.com/playwright/python:v1.63.0-noble`. The image brings Chromium, its system libraries and Python 3.12 (Ubuntu 24.04's), so CI installs nothing with `apt` at run time. The tag's Playwright version equals the `playwright==` pin in `pyproject.toml`; bump both together.
 
 ## Environments
 

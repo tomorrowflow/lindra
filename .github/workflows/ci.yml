@@ -7,12 +7,13 @@ on:
 jobs:
   check:
     runs-on: ubuntu-latest
+    # Chromium, its system libraries and Python 3.12 come with the image, so no step
+    # installs anything from a distribution mirror. The tag's Playwright version must
+    # equal the `playwright==` pin in pyproject.toml; change both together.
+    container:
+      image: mcr.microsoft.com/playwright/python:v1.63.0-noble
     steps:
       - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
 
       - name: Install
         run: |
@@ -37,6 +38,4 @@ jobs:
       # The browser flow on an iPad-sized portrait and a desktop viewport. The script
       # exits non-zero on any finding; its pictures go to the runner's temp directory.
       - name: Browser flow
-        run: |
-          .venv/bin/python -m playwright install --with-deps chromium
-          .venv/bin/python scripts/screenshots.py "$RUNNER_TEMP/screenshots"
+        run: .venv/bin/python scripts/screenshots.py "$RUNNER_TEMP/screenshots"
