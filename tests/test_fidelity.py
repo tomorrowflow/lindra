@@ -11,7 +11,7 @@ the HTTP API in `tests/test_review_api.py` and over the fictional cast in
 import pytest
 
 from lindra import drafts, fidelity
-from lindra.cast import ASSESSMENT_SECTIONS, VISIT_SECTIONS, Clarification
+from lindra.cast import ASSESSMENT_SECTIONS, UNASSIGNED_PAIN, VISIT_SECTIONS, Clarification
 from lindra.drafts import Generated, InputReference, Paragraph, Section
 
 SOZIAL, FRUEHER, THERAPIE, SCHMERZ, INTERNIST, BEFUND, PLAN = ASSESSMENT_SECTIONS
@@ -252,10 +252,8 @@ def test_a_judgement_the_quoted_passage_does_not_make_drops_the_paragraph(term, 
 
 @pytest.mark.parametrize(("term", "text"), JUDGEMENTS)
 def test_the_same_term_stays_when_the_physician_wrote_it(term, text):
-    notes = f"Seit 14 Monaten tiefer Rückenschmerz. {term} so notiert."
-    quote = f"{term} so notiert"
-    # The paragraph's numbers come from the first quote; only the term is under test.
-    ok = paragraph(text, "Seit 14 Monaten tiefer Rückenschmerz", quote)
+    notes = f"Seit 14 Monaten tiefer Rückenschmerz. {text}"
+    ok = paragraph(text, text.removesuffix("."))
 
     result = fidelity.check_result(generated(SCHMERZ, ok), {"notes": notes})
 
@@ -305,7 +303,8 @@ def test_a_report_of_the_patient_is_worded_so_only_when_the_notes_say_so():
 def test_a_prior_finding_is_worded_so_only_when_the_notes_say_so():
     notes = "MRT 03/2024 laut Arztbrief: keine Wurzelkompression. Befund: Druckschmerz L4."
     prior = paragraph(
-        "Vorbefund, MRT 03/2024: keine Wurzelkompression.", "MRT 03/2024 laut Arztbrief"
+        "Vorbefund, MRT 03/2024: keine Wurzelkompression.",
+        "MRT 03/2024 laut Arztbrief: keine Wurzelkompression",
     )
     own = paragraph("Vorbefund: Druckschmerz L4.", "Druckschmerz L4")
 
@@ -345,19 +344,29 @@ def tramadol(text, *quotes):
     return fidelity.check_result(result, {"notes": TRAMADOL_NOTES})
 
 
+# Two sentences that say nothing about a disagreement: only the model's own item flags it.
+SPLIT_NOTES = "Tramadol retard 50 mg zweimal täglich. Tramadol retard 100 mg zweimal täglich."
+
+
+def flagged(text, *quotes):
+    result = generated(THERAPIE, paragraph(text, *quotes), clarifications=[CONFLICT])
+    return fidelity.check_result(result, {"notes": SPLIT_NOTES})
+
+
 def test_a_paragraph_that_names_one_side_of_a_flagged_contradiction_is_dropped():
-    result = tramadol("Tramadol retard 100 mg zweimal täglich.", "steht 100 mg zweimal täglich")
+    result = flagged("Tramadol retard 100 mg zweimal täglich.", "Tramadol retard 100 mg zweimal")
 
     assert kept(result, THERAPIE) == []
     assert "widersprechen" in items_for(result, THERAPIE)[-1]
 
 
 def test_a_paragraph_that_names_both_sides_or_neither_stays():
-    both = tramadol(
+    both = flagged(
         "Tramadol retard zweimal täglich, 50 mg oder 100 mg.",
-        "Tramadol retard 50 mg zweimal täglich, an anderer Stelle steht 100 mg zweimal täglich",
+        "Tramadol retard 50 mg zweimal täglich",
+        "Tramadol retard 100 mg zweimal täglich",
     )
-    neither = tramadol(
+    neither = flagged(
         "Tramadol retard zweimal täglich, Dosis unklar.", "Tramadol retard 50 mg zweimal täglich"
     )
 
@@ -379,10 +388,10 @@ def test_a_dose_the_contradiction_does_not_concern_stays_in_any_section():
 def test_a_flagged_question_without_two_measures_holds_no_paragraph_back():
     asked = Clarification(THERAPIE, "Welche Dosis gilt für Tramadol?")
     result = generated(
-        THERAPIE, paragraph("Tramadol 100 mg.", "steht 100 mg"), clarifications=[asked]
+        THERAPIE, paragraph("Tramadol 100 mg.", "Tramadol retard 100 mg"), clarifications=[asked]
     )
 
-    assert kept(fidelity.check_result(result, {"notes": TRAMADOL_NOTES}), THERAPIE) == [
+    assert kept(fidelity.check_result(result, {"notes": SPLIT_NOTES}), THERAPIE) == [
         "Tramadol 100 mg."
     ]
 
@@ -437,6 +446,179 @@ def test_a_contradiction_flagged_in_one_section_holds_back_the_measure_in_any_se
     )
 
     assert kept(result, FRUEHER) == []
+
+
+# ---- every word has to come from the quoted passage ----
+
+BACK_NOTES = "Seit 14 Monaten tiefer Rückenschmerz, belastungsabhängig. Kinder leben in der Nähe."
+
+
+def back(text, *quotes, heading="", section=SCHMERZ, notes=BACK_NOTES):
+    result = generated(section, paragraph(text, *quotes, heading=heading))
+    return fidelity.check_result(result, {"notes": notes})
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Fibromyalgie.",
+        "Tiefer Rückenschmerz, Fibromyalgie.",
+        "Radikulopathie bei tiefem Rückenschmerz.",
+        "Tiefer Rückenschmerz mit Bandscheibenprotrusion.",
+    ],
+)
+def test_a_word_the_quoted_passage_does_not_contain_drops_the_paragraph(text):
+    result = back(text, "Seit 14 Monaten tiefer Rückenschmerz")
+
+    assert kept(result, SCHMERZ) == []
+    [item] = items_for(result, SCHMERZ)
+    assert "Notizen" in item and "das Wort «" in item
+
+
+def test_the_item_for_an_ungrounded_word_names_the_word():
+    result = back("Fibromyalgie.", "Seit 14 Monaten tiefer Rückenschmerz")
+
+    assert "«Fibromyalgie»" in items_for(result, SCHMERZ)[0]
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Seit 14 Monaten tiefer Rückenschmerz.",
+        "Tiefe Rückenschmerzen seit 14 Monaten, belastungsabhängig.",
+        "Rückenschmerz, belastungsabhängig, seit vierzehn Monaten.",
+        "Die Kinder leben in der Nähe.",
+        "Kindern in der Nähe.",
+        "Schmerz seit 14 Monaten.",
+    ],
+)
+def test_inflections_compounds_and_function_words_do_not_drop_a_paragraph(text):
+    quotes = (
+        "Seit 14 Monaten tiefer Rückenschmerz, belastungsabhängig",
+        "Kinder leben in der Nähe",
+    )
+
+    assert kept(back(text, *quotes), SCHMERZ) == [text]
+
+
+def test_a_gap_word_that_only_says_something_is_unclear_is_allowed():
+    notes = "Tramadol retard 50 mg zweimal täglich, an anderer Stelle steht 100 mg zweimal täglich."
+    whole = notes[:-1]
+    said = paragraph("Tramadol retard zweimal täglich, Dosis unklar.", whole)
+
+    result = fidelity.check_result(generated(THERAPIE, said), {"notes": notes})
+
+    assert kept(result, THERAPIE) == ["Tramadol retard zweimal täglich, Dosis unklar."]
+
+
+def test_a_pain_heading_is_grounded_but_the_forms_own_headings_are_not():
+    own = back(
+        "Seit 14 Monaten.",
+        "Seit 14 Monaten tiefer Rückenschmerz",
+        heading="Fibromyalgie",
+        section=SCHMERZ,
+    )
+    form = back(
+        "Seit 14 Monaten tiefer Rückenschmerz.",
+        "Seit 14 Monaten tiefer Rückenschmerz",
+        heading="Aktuelle Medikation",
+        section=THERAPIE,
+    )
+    unassigned = back(
+        "Seit 14 Monaten tiefer Rückenschmerz.",
+        "Seit 14 Monaten tiefer Rückenschmerz",
+        heading=UNASSIGNED_PAIN,
+    )
+
+    assert kept(own, SCHMERZ) == []
+    assert kept(form, THERAPIE)
+    assert kept(unassigned, SCHMERZ)
+
+
+def test_a_provenance_wording_the_quote_licenses_is_not_a_word_to_ground():
+    notes = "Die Patientin berichtet, der Schmerz strahle nicht ins Bein aus."
+    said = paragraph(
+        "Nach Angabe der Patientin keine Ausstrahlung ins Bein.", notes.removesuffix(".")
+    )
+
+    assert kept(fidelity.check_result(generated(SCHMERZ, said), {"notes": notes}), SCHMERZ)
+
+
+# ---- an uncertainty or contradiction in the notes cannot be cut away ----
+
+TRAMADOL_SENTENCE = TRAMADOL_NOTES.removesuffix(".")
+
+
+def alone(text, *quotes, notes=TRAMADOL_NOTES, section=THERAPIE):
+    """A result without any clarification item of the model's own."""
+    return fidelity.check_result(generated(section, paragraph(text, *quotes)), {"notes": notes})
+
+
+def test_a_paragraph_that_quotes_one_dose_of_a_contradictory_sentence_is_dropped_without_an_item():
+    for text, quote in (
+        ("Tramadol retard 100 mg zweimal täglich.", "steht 100 mg zweimal täglich"),
+        ("Tramadol retard 50 mg zweimal täglich.", "Tramadol retard 50 mg zweimal täglich"),
+    ):
+        result = alone(text, quote)
+
+        assert kept(result, THERAPIE) == []
+        assert "Unsicherheit oder einen Widerspruch" in items_for(result, THERAPIE)[0]
+
+
+def test_a_paragraph_that_quotes_the_whole_sentence_but_names_one_dose_is_dropped():
+    result = alone("Tramadol retard 100 mg zweimal täglich.", TRAMADOL_SENTENCE)
+
+    assert kept(result, THERAPIE) == []
+    assert "50mg" in items_for(result, THERAPIE)[0]
+
+
+def test_a_paragraph_that_quotes_the_whole_sentence_and_names_both_doses_or_none_stays():
+    both = alone("Tramadol retard zweimal täglich, 50 mg oder 100 mg.", TRAMADOL_SENTENCE)
+    none = alone("Tramadol retard zweimal täglich, Dosis unklar.", TRAMADOL_SENTENCE)
+
+    assert kept(both, THERAPIE)
+    assert kept(none, THERAPIE)
+
+
+def test_two_drugs_in_one_sentence_are_not_a_contradiction():
+    notes = "Ibuprofen 400 mg bei Bedarf, Metamizol 500 mg bei Bedarf."
+    one = alone("Ibuprofen 400 mg bei Bedarf.", "Ibuprofen 400 mg bei Bedarf", notes=notes)
+
+    assert kept(one, THERAPIE) == ["Ibuprofen 400 mg bei Bedarf."]
+
+
+def test_a_hedge_the_quote_cuts_off_drops_the_paragraph():
+    notes = "Chronischer Schulterschmerz seit dem Sommer, vielleicht schon länger."
+    cut = alone("Schulterschmerz seit dem Sommer.", "Schulterschmerz seit dem Sommer", notes=notes)
+
+    assert kept(cut, THERAPIE) == []
+    assert "«vielleicht»" in items_for(cut, THERAPIE)[0]
+
+
+def test_a_hedge_the_quote_keeps_has_to_show_in_the_paragraph():
+    notes = "Chronischer Schulterschmerz seit dem Sommer, vielleicht schon länger."
+    whole = notes.removesuffix(".")
+    hidden = alone("Schulterschmerz seit dem Sommer.", whole, notes=notes, section=SCHMERZ)
+    shown = alone(
+        "Schulterschmerz seit dem Sommer, Beginn unklar.", whole, notes=notes, section=SCHMERZ
+    )
+    worded = alone(
+        "Schulterschmerz seit dem Sommer, vielleicht schon länger.",
+        whole,
+        notes=notes,
+        section=SCHMERZ,
+    )
+
+    assert kept(hidden, SCHMERZ) == []
+    assert kept(shown, SCHMERZ)
+    assert kept(worded, SCHMERZ)
+
+
+def test_a_sentence_without_an_uncertainty_can_be_quoted_in_part():
+    notes = "Seit 14 Monaten tiefer Rückenschmerz, belastungsabhängig."
+    part = alone("Tiefer Rückenschmerz.", "tiefer Rückenschmerz", notes=notes, section=SCHMERZ)
+
+    assert kept(part, SCHMERZ) == ["Tiefer Rückenschmerz."]
 
 
 # ---- the check is pure and leaves a good result as it is ----

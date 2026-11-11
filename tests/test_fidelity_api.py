@@ -162,6 +162,9 @@ TEMPTED = [
     ("a ranking", SCHMERZ, "Der Rückenschmerz ist der Hauptschmerz.", "Seit 14 Monaten tiefer"),
     ("a ranking", SCHMERZ, "Der Rückenschmerz steht im Vordergrund.", "Seit 14 Monaten tiefer"),
     ("a diagnosis", SCHMERZ, "Verdacht auf eine Radikulopathie.", "Seit 14 Monaten tiefer"),
+    ("a diagnosis name", SCHMERZ, "Fibromyalgie.", "Seit 14 Monaten tiefer Rückenschmerz"),
+    ("a diagnosis name", SCHMERZ, "Rückenschmerz bei Spondylarthrose.", "Seit 14 Monaten tiefer"),
+    ("an indication", THERAPIE, "Ibuprofen bei Arthrose.", "Ibuprofen 400 mg bei Bedarf"),
     ("a cause", FRUEHER, "Der Bandscheibenvorfall ist die Ursache der Schmerzen.", "Vor 3 Jahren"),
     ("a conversion", THERAPIE, "Ibuprofen 0,4 g bei Bedarf.", "Ibuprofen 400 mg bei Bedarf"),
     ("a dose", THERAPIE, "Ibuprofen 600 mg bei Bedarf.", "Ibuprofen 400 mg bei Bedarf"),
@@ -398,3 +401,49 @@ def test_a_model_that_fills_the_third_cases_gaps_loses_what_it_filled_in(tmp_pat
     assert text_of(proposal, SOZIAL) == ""
     assert text_of(proposal, PLAN) == ""
     assert "Dosis unklar" in text_of(proposal, THERAPIE)
+
+
+TRAMADOL_SENTENCE = (
+    "Tramadol retard 50 mg zweimal täglich, an anderer Stelle steht 100 mg zweimal täglich"
+)
+
+
+@pytest.mark.parametrize(
+    "quote",
+    [TRAMADOL_SENTENCE, "steht 100 mg zweimal täglich", "Tramadol retard 50 mg zweimal täglich"],
+    ids=["the whole sentence", "the 100 mg half", "the 50 mg half"],
+)
+def test_a_model_that_picks_one_dose_without_flagging_the_contradiction_loses_it(tmp_path, quote):
+    dose = "100 mg" if "100" in quote else "50 mg"
+
+    def picks(raw):
+        raw["clarifications"] = [c for c in raw["clarifications"] if "Tramadol" not in c["text"]]
+        therapy = next(s for s in raw["sections"] if s["title"] == THERAPIE)
+        therapy["paragraphs"] = [paragraph(f"Tramadol retard {dose} zweimal täglich.", quote)]
+
+    encounter, proposal = proposal_of(tmp_path, picks, CASE_THREE)
+
+    assert text_of(proposal, THERAPIE) == ""
+    [item] = items_for(proposal, THERAPIE)
+    assert "Notizen" in item
+    shown = encounter.accept().json()
+    assert "Tramadol" not in "\n".join(s["text"] for s in shown["sections"])
+
+
+def test_a_model_that_drops_the_doubt_about_the_start_loses_the_paragraph(tmp_path):
+    def certain(raw):
+        raw["clarifications"] = [c for c in raw["clarifications"] if c["section"] != SCHMERZ]
+        pain = next(s for s in raw["sections"] if s["title"] == SCHMERZ)
+        pain["paragraphs"] = [
+            paragraph(
+                "Chronischer Schulter-Nacken-Schmerz rechts seit dem Sommer.",
+                "Chronischer Schulter-Nacken-Schmerz rechts seit dem Sommer, vielleicht schon "
+                "länger",
+                heading="Schulter und Nacken rechts",
+            )
+        ]
+
+    _, proposal = proposal_of(tmp_path, certain, CASE_THREE)
+
+    assert text_of(proposal, SCHMERZ) == ""
+    assert "«vielleicht»" in items_for(proposal, SCHMERZ)[0]

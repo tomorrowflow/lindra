@@ -11,26 +11,38 @@ decides which of its paragraphs the physician's notes support. A paragraph stays
   passage says it, and
 - it names no provenance (the patient's report, a prior finding, the physician's own finding)
   that a quoted passage does not name, and
-- it does not settle a contradiction the model put on the clarification list by naming only
-  one of the measures the notes set against each other.
+- it does not settle a contradiction, whether the model put it on the clarification list or
+  the notes show it in one sentence, by naming only one of the measures set against each
+  other,
+- it does not cut a quote out of a sentence whose rest says the notes are uncertain ("an
+  anderer Stelle", "vielleicht", "unklar"), and it does not drop an uncertainty its quote
+  carries, and
+- every word of it that is not a function word comes from the passages it quotes, so a
+  diagnosis, a cause or any other fact the quote does not hold cannot enter by a name the
+  term lists never heard of.
 
 Whatever the check drops goes on the clarification list as a gap, and a section left without
 a paragraph and without an item gets one. The draft therefore holds only what the notes
-carry, and a missing fact stays visible as missing.
+carry, and a missing fact stays visible as missing. Dropping too much is the safe way to
+fail: the physician sees a gap and an item, never an invented fact.
 
-The term lists are a lexicon, not a proof: they catch the wordings of the kinds above that
-the intended purpose forbids, they cannot know every wording, and they say nothing about
-whether a quoted passage supports its paragraph. A reference shows origin, not correctness.
+The term lists are a lexicon. They name the wordings of the forbidden kinds, and the word
+check covers the rest. Neither says whether a quoted passage supports its paragraph, and a
+word may stand behind a word of the passage that means something else. A reference shows
+origin, not correctness.
 """
 
 from __future__ import annotations
 
+import math
+import os.path
 import re
 from collections.abc import Mapping, Sequence
 from dataclasses import replace
+from difflib import SequenceMatcher
 
 from lindra import drafts
-from lindra.cast import Clarification
+from lindra.cast import SUBHEADINGS, UNASSIGNED_PAIN, Clarification
 
 NO_REFERENCE = (
     "Eine Angabe verweist auf keine Stelle der Notizen und steht nicht im Entwurf. "
@@ -41,6 +53,21 @@ TOO_BROAD = (
     "nicht im Entwurf. Ergänzen Sie sie in den Notizen, wenn sie gelten soll."
 )
 EMPTY_SECTION = "Die Notizen enthalten keine Angaben für diesen Abschnitt."
+
+
+def _cut_off(cue: str) -> str:
+    return (
+        "Eine Angabe zitierte nur einen Teil eines Satzes der Notizen. Der Rest nennt eine "
+        f"Unsicherheit oder einen Widerspruch («{cue}»). Sie steht nicht im Entwurf. Legen Sie "
+        "in den Notizen fest, was gilt."
+    )
+
+
+def _hidden(cue: str) -> str:
+    return (
+        f"Eine Angabe ließ eine Unsicherheit der Notizen («{cue}») aus. Sie steht nicht im "
+        "Entwurf. Legen Sie in den Notizen fest, was gilt."
+    )
 
 
 def _not_in_the_notes(what: str) -> str:
@@ -210,6 +237,49 @@ _PROVENANCE = (
     ),
 )
 
+# Wordings with which the notes say that something is uncertain or that two statements
+# disagree. A quote must not cut one off from the statement it qualifies, and a paragraph that
+# quotes one must not drop it.
+_HEDGES = (
+    "an anderer stelle",
+    "andernorts",
+    "widerspr",
+    "dagegen",
+    "vielleicht",
+    "unklar",
+    "eventuell",
+    "möglicherweise",
+    "unsicher",
+    "nicht sicher",
+    "ungewiss",
+)
+# Words a paragraph may use to say that something is open, though the quote does not.
+_HEDGE_MARKERS = ("offen", "widersprüchlich", " oder ")
+
+# Words without a clinical claim, which no quoted passage has to contain: articles,
+# prepositions, conjunctions, pronouns, auxiliary verbs and common adverbs of four letters or
+# more. Every other word of a paragraph has to come from a passage it quotes.
+_FUNCTION_WORDS = frozenset(
+    """
+    aber alle allem allen aller alles also andere anderen anderer anderes auch bald bereits
+    bislang bisher dabei dafür dagegen daher damit danach dann dass davon davor dazu deren
+    dessen diese diesem diesen dieser dieses doch dort durch ebenso eher eine einem einen einer
+    eines einige erst etwa euch ganz gegen gern gibt habe haben habt hast hatte hatten hier
+    ihre ihrem ihren ihrer ihres immer indem jedoch jetzt kann keine keinem keinen keiner
+    können konnte machen manche mehr mein meist muss müssen nach nicht nichts noch nur oder
+    ohne sehr sein seine seinem seinen seiner seit seitdem selbst sich sind sollen sollte
+    somit sondern sonst soweit sowie statt über unter viel viele vielen vom vor weiter
+    weiterhin waren wäre wären weder wenn werden wird wohl wurde wurden zudem zuvor zwar
+    zwischen zusätzlich
+    """.split()
+)
+# Words that name an attribute only to say it is unclear ("Dosis unklar") or that point at
+# the notes.
+_GAP_WORDS = frozenset(
+    "unklar offen widersprüchlich beginn dosis dauer zeitpunkt angabe angaben notizen".split()
+)
+
+_WORD = re.compile(r"[A-Za-zÄÖÜäöüß]{4,}")
 _NUMBER = re.compile(r"\d+(?:[.,]\d+)*")
 # A quantity with a unit. The plural endings of "Monate", "Tabletten" and the like count as
 # the same unit.
@@ -255,9 +325,13 @@ _NUMBER_WORDS = {
     "hundert": 100,
 }
 # "zweimal" and "dreifach" are the number too.
-_NUMBER_WORD = re.compile(
-    r"(?<!\w)(" + "|".join(sorted(_NUMBER_WORDS, key=len, reverse=True)) + r")(?:mal|fach)?(?!\w)"
-)
+_SPELLED = "|".join(sorted(_NUMBER_WORDS, key=len, reverse=True))
+_NUMBER_WORD = re.compile(r"(?<!\w)(" + _SPELLED + r")(?:mal|fach)?(?!\w)")
+_SPELLED_NUMBER = re.compile(r"(?:" + _SPELLED + r")(?:mal|fach)?")
+# The form's own headings come from the form, not from the notes.
+_FORM_HEADINGS = frozenset(h for headings in SUBHEADINGS.values() for h in headings) | {
+    UNASSIGNED_PAIN
+}
 
 
 def check_result(generated: drafts.Generated, sources: Mapping[str, str]) -> drafts.Generated:
@@ -269,7 +343,7 @@ def check_result(generated: drafts.Generated, sources: Mapping[str, str]) -> dra
     items come first, then ours in section order.
     """
     items = list(generated.clarifications)
-    conflicts = _conflicts(items)
+    conflicts = _conflicts(items) + [c for text in sources.values() for c in _disagreements(text)]
     sections: list[drafts.Section] = []
     dropped: list[Clarification] = []
     for section in generated.sections:
@@ -297,7 +371,7 @@ def _problem(
 ) -> str | None:
     """The clarification text for a paragraph the notes do not support, or None when it stays.
 
-    `conflicts` are the contradictions the model flagged anywhere in its result."""
+    `conflicts` are the measures the notes or the model set against each other."""
     if not paragraph.references:
         return NO_REFERENCE
     quotes = []
@@ -316,13 +390,20 @@ def _problem(
         found = _find(term, lower_said)
         if found is not None and _find(term, lower_quoted) is None:
             return _not_in_the_notes(f"«{said[found : found + len(term)]}»")
+    # What a quoted passage licenses as provenance is not a word to ground in the passage.
+    text = _squash(paragraph.text)
     for wordings, passages in _PROVENANCE:
         for wording in wordings:
             found = _find(wording, lower_said)
-            if found is not None and not any(_find(p, lower_quoted) is not None for p in passages):
+            if found is None:
+                continue
+            if not any(_find(p, lower_quoted) is not None for p in passages):
                 return _not_in_the_notes(
                     f"die Herkunftsangabe «{said[found : found + len(wording)]}»"
                 )
+            at = _find(wording, text.lower())
+            if at is not None:
+                text = text[:at] + " " * len(wording) + text[at + len(wording) :]
     unknown = sorted(_numbers(said) - _numbers(quoted))
     if unknown:
         return _not_in_the_notes(f"die Zahl {unknown[0]}")
@@ -330,6 +411,10 @@ def _problem(
     unsaid = sorted(stated - _measures(quoted))
     if unsaid:
         return _not_in_the_notes(f"die Angabe {unsaid[0]}")
+    for reference in paragraph.references:
+        cue = _cut_off_cue(_squash(sources[reference.source]), _squash(reference.quote), quoted)
+        if cue:
+            return _cut_off(cue)
     for conflict in conflicts:
         if stated & conflict and not conflict <= stated:
             return (
@@ -337,7 +422,80 @@ def _problem(
                 f"{_join(sorted(conflict))}, die sich in den Notizen widersprechen. Sie steht "
                 "nicht im Entwurf. Legen Sie in den Notizen fest, was gilt."
             )
+    quoted_cue = _hedge_in(lower_quoted)
+    if quoted_cue and not (
+        _hedge_in(lower_said) or any(m in f" {lower_said} " for m in _HEDGE_MARKERS)
+    ):
+        return _hidden(quoted_cue)
+    # Every word of the text stands behind a quoted passage. A pain problem's heading is the
+    # physician's name for it, so it may come from anywhere in the notes; the form's own
+    # headings come from the form.
+    word = _ungrounded(text, quoted)
+    if not word and paragraph.heading not in _FORM_HEADINGS:
+        word = _ungrounded(paragraph.heading, " ".join(sources.values()))
+    if word:
+        return _not_in_the_notes(f"das Wort «{word}»")
     return None
+
+
+def _hedge_in(lower_text: str) -> str | None:
+    """The first wording of an uncertainty or disagreement in the lower-cased text."""
+    return next((cue for cue in _HEDGES if cue in lower_text), None)
+
+
+def _cut_off_cue(source: str, quote: str, quoted: str) -> str | None:
+    """A wording of uncertainty in the quote's sentence that the paragraph's quotes leave out."""
+    start = source.find(quote)
+    end = start + len(quote)
+    first, last = 0, len(source)
+    for boundary in re.finditer(r"(?<=[.!?])\s+", source):
+        if boundary.end() <= start:
+            first = boundary.end()
+        elif boundary.start() >= end:
+            last = boundary.start()
+            break
+    outside = f"{source[first:start]} {source[end:last]}".lower()
+    cue = _hedge_in(outside)
+    return cue if cue and cue not in quoted.lower() else None
+
+
+def _disagreements(source: str) -> list[frozenset[str]]:
+    """The measures of each sentence of the notes that names two or more of them and says in
+    the same sentence that the notes are uncertain or disagree."""
+    found = []
+    for sentence in re.split(r"(?<=[.!?])\s+", _squash(source)):
+        lower = f" {sentence.lower()} "
+        measures = _measures(sentence)
+        if len(measures) >= 2 and (_hedge_in(lower) or any(w in lower for w in _DISAGREE)):
+            found.append(frozenset(measures))
+    return found
+
+
+def _ungrounded(text: str, quoted: str) -> str | None:
+    """The first word of the text that no word of the quoted passages stands behind."""
+    known = [word.lower() for word in _WORD.findall(quoted)]
+    for match in _WORD.finditer(text):
+        word = match.group().lower()
+        if word in _FUNCTION_WORDS or word in _GAP_WORDS or _SPELLED_NUMBER.fullmatch(word):
+            continue
+        if not any(_same_word(word, other) for other in known):
+            return match.group()
+    return None
+
+
+def _same_word(a: str, b: str) -> bool:
+    """Whether two words are one word inflected or one compound of the other.
+
+    Short words must share their start ("lebt" and "leben"). Longer ones need a stretch in
+    common that is most of the shorter word and at least five letters, so "Schmerz" stands
+    behind "Rückenschmerz" and "Ausstrahlung" behind "strahlt aus", and "Fibromyalgie" behind
+    nothing."""
+    shorter = min(len(a), len(b))
+    if shorter <= 5:
+        prefix = len(os.path.commonprefix([a, b]))
+        return prefix >= max(3, shorter - 1)
+    match = SequenceMatcher(None, a, b, autojunk=False).find_longest_match(0, len(a), 0, len(b))
+    return match.size >= max(5, math.ceil(0.75 * shorter))
 
 
 def _conflicts(items: Sequence[Clarification]) -> list[frozenset[str]]:

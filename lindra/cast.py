@@ -401,8 +401,8 @@ _CASE_BACK = Case(
                 ),
                 "Behandlungsplan und vereinbarte Ziele": (
                     _p(
-                        "Stationäre multimodale Schmerztherapie, weil die ambulanten Möglichkeiten "
-                        "über zwölf Monate ausgeschöpft sind. Ziel: Gehstrecke von 500 m auf 2 km.",
+                        "Stationäre multimodale Schmerztherapie, weil ambulant über zwölf Monate "
+                        "ausgeschöpft. Ziel: Gehstrecke von 500 m auf 2 km.",
                         "Stationäre Aufnahme zur multimodalen Schmerztherapie, weil ambulant über "
                         "12 Monate ausgeschöpft.",
                         "Ziel: Gehstrecke von 500 m auf 2 km steigern.",
@@ -518,7 +518,7 @@ _CASE_MULTIPLE = Case(
                 ),
                 "Therapeutische Anamnese": (
                     _p(
-                        "Sumatriptan 50 mg bei Migräne wirksam. Diclofenac 75 mg bei Bedarf. "
+                        "Sumatriptan 50 mg wirksam. Diclofenac 75 mg bei Bedarf. "
                         "Pregabalin 75 mg zweimal täglich, Wirkung teilweise. Metformin.",
                         "Sumatriptan 50 mg wirksam",
                         "Diclofenac 75 mg bei Bedarf",
@@ -528,6 +528,7 @@ _CASE_MULTIPLE = Case(
                     ),
                     _p(
                         "Infiltration 2025 am linken Knie ohne Dauerwirkung.",
+                        "Linkes Knie",
                         "Infiltration 2025 ohne Dauerwirkung",
                         heading="Frühere Medikation",
                     ),
@@ -718,7 +719,7 @@ _CASE_GAPS = Case(
                 "Sozialanamnese": (),
                 "Frühere Anamnese und Vormedikation": (
                     _p(
-                        "Ibuprofen vor der aktuellen Medikation, Dauer unklar.",
+                        "Vorher Ibuprofen, Dauer unklar.",
                         "Vorher Ibuprofen, Dauer unklar.",
                     ),
                 ),
