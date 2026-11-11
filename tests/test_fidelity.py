@@ -365,7 +365,7 @@ def test_a_paragraph_that_names_both_sides_or_neither_stays():
     assert kept(neither, THERAPIE)
 
 
-def test_a_dose_in_another_section_is_not_held_to_a_contradiction_of_this_one():
+def test_a_dose_the_contradiction_does_not_concern_stays_in_any_section():
     notes = TRAMADOL_NOTES + " Ibuprofen 400 mg."
     other = paragraph("Ibuprofen 400 mg.", "Ibuprofen 400 mg")
 
@@ -385,6 +385,58 @@ def test_a_flagged_question_without_two_measures_holds_no_paragraph_back():
     assert kept(fidelity.check_result(result, {"notes": TRAMADOL_NOTES}), THERAPIE) == [
         "Tramadol 100 mg."
     ]
+
+
+# ---- a reference is a passage, and the units are part of the numbers ----
+
+
+def test_a_quote_that_is_most_of_the_notes_is_not_a_passage_and_drops_the_paragraph():
+    notes = "Satz eins. " * 60 + "Hauptschmerz ist das Knie."
+    sweeping = paragraph("Das Knie ist der Hauptschmerz.", notes)
+
+    result = fidelity.check_result(generated(SCHMERZ, sweeping), {"notes": notes})
+
+    assert kept(result, SCHMERZ) == []
+
+
+def test_a_unit_the_quote_does_not_give_drops_the_paragraph():
+    wrong = paragraph("Ibuprofen 400 g bei Bedarf.", "Ibuprofen 400 mg bei Bedarf")
+
+    assert kept(checked(THERAPIE, wrong), THERAPIE) == []
+
+
+def test_a_unit_in_another_inflection_is_the_same_unit():
+    notes = "Seit 3 Monaten Schmerzen."
+    said = paragraph("Seit 3 Monate Schmerzen.", "Seit 3 Monaten Schmerzen")
+
+    assert kept(fidelity.check_result(generated(SCHMERZ, said), {"notes": notes}), SCHMERZ)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Die Aufnahme erfolgt wegen des Sturzes.",
+        "Aufgrund des Sturzes ist die Aufnahme nötig.",
+        "Schlafstörung als Folge.",
+        "Die Begründung ist der Sturz.",
+        "Das Mittel ist wirkungslos.",
+    ],
+)
+def test_causal_and_justifying_wordings_need_the_physicians_words(text):
+    result = checked(PLAN, paragraph(text, "Ibuprofen 400 mg bei Bedarf"))
+
+    assert kept(result, PLAN) == []
+
+
+def test_a_contradiction_flagged_in_one_section_holds_back_the_measure_in_any_section():
+    notes = TRAMADOL_NOTES
+    elsewhere = paragraph("Tramadol 100 mg.", "steht 100 mg zweimal täglich")
+
+    result = fidelity.check_result(
+        generated(FRUEHER, elsewhere, clarifications=[CONFLICT]), {"notes": notes}
+    )
+
+    assert kept(result, FRUEHER) == []
 
 
 # ---- the check is pure and leaves a good result as it is ----

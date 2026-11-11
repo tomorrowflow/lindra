@@ -380,6 +380,11 @@ def test_a_model_that_fills_the_third_cases_gaps_loses_what_it_filled_in(tmp_pat
         (SOZIAL, "Lebt allein.", "Lebt allein"),
         (THERAPIE, "Tramadol retard 100 mg zweimal täglich.", "steht 100 mg zweimal täglich"),
         (PLAN, "Die stationäre Aufnahme ist wegen der Chronifizierung notwendig.", "Sturz"),
+        (
+            PLAN,
+            "Die Aufnahme erfolgt wegen des Sturzes im Frühjahr.",
+            "Seit einem Sturz im Frühjahr schlechter.",
+        ),
     ]
 
     def fill(raw):

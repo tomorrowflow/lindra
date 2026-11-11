@@ -36,6 +36,10 @@ NO_REFERENCE = (
     "Eine Angabe verweist auf keine Stelle der Notizen und steht nicht im Entwurf. "
     "Ergänzen Sie sie in den Notizen, wenn sie gelten soll."
 )
+TOO_BROAD = (
+    "Eine Angabe zitiert eine zu lange Stelle der Notizen, um sich auf sie zu stützen, und steht "
+    "nicht im Entwurf. Ergänzen Sie sie in den Notizen, wenn sie gelten soll."
+)
 EMPTY_SECTION = "Die Notizen enthalten keine Angaben für diesen Abschnitt."
 
 
@@ -60,6 +64,8 @@ _JUDGEMENTS = (
     "primär",
     "wichtigste",
     "schwerste",
+    "stärkste",
+    "schlimmste",
     # a diagnosis or a cause
     "diagnose",
     "diagnostiziert",
@@ -83,7 +89,15 @@ _JUDGEMENTS = (
     "neuropathisch",
     "psychosomatisch",
     "depressiv",
-    # a justification for the inpatient stay
+    # a justification, or a cause given as a reason
+    "weil",
+    "wegen",
+    "aufgrund",
+    "infolge",
+    "dadurch",
+    "deshalb",
+    "begründung",
+    "begründet",
     "indiziert",
     "indikation",
     "medizinisch notwendig",
@@ -129,6 +143,7 @@ _JUDGEMENTS = (
     # an effect or tolerance the physician did not give
     "wirksam",
     "unwirksam",
+    "wirkungslos",
     "ohne wirkung",
     "gut verträglich",
     "ohne nebenwirkung",
@@ -161,6 +176,8 @@ _JUDGEMENTS = (
     "oktober",
     "november",
     "dezember",
+    "frühling",
+    "heute",
     "gestern",
     "vorgestern",
     "kürzlich",
@@ -194,11 +211,16 @@ _PROVENANCE = (
 )
 
 _NUMBER = re.compile(r"\d+(?:[.,]\d+)*")
+# A quantity with a unit. The plural endings of "Monate", "Tabletten" and the like count as
+# the same unit.
 _MEASURE = re.compile(
-    r"\d+(?:[.,]\d+)?\s*(?:mg|µg|mcg|g|ml|mmol|ie|%|tropfen|tabletten|kapseln|stunden|tage|"
-    r"wochen|monate|jahre)(?!\w)",
+    r"(\d+(?:[.,]\d+)?)\s*(mg|µg|mcg|ml|mmol|g|ie|%|tropfen|tablette|kapsel|stunde|tag|woche|"
+    r"monat|jahr)(?:e|en|n)?(?!\w)",
     re.IGNORECASE,
 )
+# A quoted passage is a sentence or two, not a stretch of the notes that would carry every
+# wording and number in them.
+MAX_QUOTE = 300
 # Words that say two statements in the notes disagree.
 _DISAGREE = ("widerspr", "abweich", "unterschiedlich", "uneinheitlich", " oder ")
 _NUMBER_WORDS = {
@@ -253,7 +275,7 @@ def check_result(generated: drafts.Generated, sources: Mapping[str, str]) -> dra
     for section in generated.sections:
         kept = []
         for paragraph in section.paragraphs:
-            problem = _problem(paragraph, sources, conflicts.get(section.title, ()))
+            problem = _problem(paragraph, sources, conflicts)
             if problem is None:
                 kept.append(paragraph)
             else:
@@ -275,7 +297,7 @@ def _problem(
 ) -> str | None:
     """The clarification text for a paragraph the notes do not support, or None when it stays.
 
-    `conflicts` are the contradictions the model flagged for the paragraph's section."""
+    `conflicts` are the contradictions the model flagged anywhere in its result."""
     if not paragraph.references:
         return NO_REFERENCE
     quotes = []
@@ -283,6 +305,8 @@ def _problem(
         source = sources.get(reference.source)
         if source is None or _squash(reference.quote) not in _squash(source):
             return NO_REFERENCE
+        if len(_squash(reference.quote)) > MAX_QUOTE:
+            return TOO_BROAD
         quotes.append(_squash(reference.quote))
     said = _squash(f"{paragraph.heading} {paragraph.text}")
     quoted = " ".join(quotes)
@@ -303,6 +327,9 @@ def _problem(
     if unknown:
         return _not_in_the_notes(f"die Zahl {unknown[0]}")
     stated = _measures(said)
+    unsaid = sorted(stated - _measures(quoted))
+    if unsaid:
+        return _not_in_the_notes(f"die Angabe {unsaid[0]}")
     for conflict in conflicts:
         if stated & conflict and not conflict <= stated:
             return (
@@ -313,24 +340,24 @@ def _problem(
     return None
 
 
-def _conflicts(items: Sequence[Clarification]) -> dict[str, list[frozenset[str]]]:
-    """The measures each flagged contradiction sets against each other, by section.
+def _conflicts(items: Sequence[Clarification]) -> list[frozenset[str]]:
+    """The measures each flagged contradiction sets against each other.
 
     An item counts when it says the notes disagree and names two or more measures, as in "50 mg
-    oder 100 mg". A paragraph of that section that names some of them but not all would settle
+    oder 100 mg". A paragraph of any section that names some of them but not all would settle
     the contradiction, which only the physician may do.
     """
-    found: dict[str, list[frozenset[str]]] = {}
+    found: list[frozenset[str]] = []
     for item in items:
         measures = _measures(item.text)
         if len(measures) >= 2 and any(word in f" {item.text.lower()} " for word in _DISAGREE):
-            found.setdefault(item.section, []).append(frozenset(measures))
+            found.append(frozenset(measures))
     return found
 
 
 def _measures(text: str) -> set[str]:
-    """Quantities with a unit, like "50 mg" or "3 Monate", without the space between them."""
-    return {"".join(match.split()).lower() for match in _MEASURE.findall(text)}
+    """Quantities with a unit, like "50mg" or "3monat" for "3 Monaten"."""
+    return {f"{number}{unit.lower()}" for number, unit in _MEASURE.findall(text)}
 
 
 def _join(measures: Sequence[str]) -> str:
@@ -343,7 +370,12 @@ def _squash(text: str) -> str:
 
 
 def _find(term: str, lower_text: str) -> int | None:
-    """Where `term` starts a word in the lower-cased text, or None."""
+    """Where `term` is in the lower-cased text, or None. A short term has to start a word, so
+    "wegen" does not match "bewegen". A long one may sit inside a compound, so "störung" finds
+    "Schlafstörung"."""
+    if len(term) >= 7:
+        at = lower_text.find(term)
+        return at if at >= 0 else None
     match = re.search(r"(?<!\w)" + re.escape(term), lower_text)
     return match.start() if match else None
 
