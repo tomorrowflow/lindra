@@ -126,6 +126,105 @@ def test_up_writes_a_private_env_file_with_a_generated_token(env, stack):
     assert stat.S_IMODE(path.stat().st_mode) == 0o600
 
 
+PREVIEW_TOKEN = "preview-token-for-tests_0123456789"
+
+
+def stored_token(env, project):
+    return env.read_env(env.STATE_DIR / f"{project}.env")["LINDRA_TOKEN"]
+
+
+def test_up_takes_the_throwaway_token_from_the_preview_variable(env, stack, monkeypatch):
+    monkeypatch.setenv("LINDRA_PREVIEW_TOKEN", PREVIEW_TOKEN)
+
+    assert run_main(env, "up", "--project", "lindra-pv-lfr-14", "--port", "48619") == 0
+
+    assert stored_token(env, "lindra-pv-lfr-14") == PREVIEW_TOKEN
+    assert stack.token == PREVIEW_TOKEN
+    assert run_main(env, "check", "--project", "lindra-pv-lfr-14") == 0
+
+
+@pytest.mark.parametrize("value", [None, "", "   "])
+def test_up_generates_a_token_without_a_usable_preview_variable(env, stack, monkeypatch, value):
+    if value is None:
+        monkeypatch.delenv("LINDRA_PREVIEW_TOKEN", raising=False)
+    else:
+        monkeypatch.setenv("LINDRA_PREVIEW_TOKEN", value)
+
+    assert run_main(env, "up", "--project", "p") == 0
+
+    assert len(stored_token(env, "p")) >= 32
+
+
+def test_an_existing_env_file_keeps_its_token_whatever_the_variable_says(env, stack, monkeypatch):
+    monkeypatch.delenv("LINDRA_PREVIEW_TOKEN", raising=False)
+    run_main(env, "up", "--project", "p")
+    generated = stored_token(env, "p")
+
+    monkeypatch.setenv("LINDRA_PREVIEW_TOKEN", PREVIEW_TOKEN)
+    assert run_main(env, "up", "--project", "p") == 0
+    assert stored_token(env, "p") == generated
+
+    run_main(env, "up", "--project", "q")
+    monkeypatch.delenv("LINDRA_PREVIEW_TOKEN")
+    assert run_main(env, "up", "--project", "q") == 0
+    assert stored_token(env, "q") == PREVIEW_TOKEN
+
+
+@pytest.mark.parametrize("tier", ["test", "production"])
+def test_the_test_and_production_tiers_never_read_the_preview_variable(
+    env, stack, monkeypatch, tier
+):
+    monkeypatch.setenv("LINDRA_PREVIEW_TOKEN", PREVIEW_TOKEN)
+    project = f"lindra-{'prod' if tier == 'production' else tier}"
+
+    assert run_main(env, "up", "--tier", tier) == 0
+
+    token = stored_token(env, project)
+    assert token != PREVIEW_TOKEN
+    assert len(token) >= 32
+
+
+@pytest.mark.parametrize("value", ["has space", "two\nlines", "dollar$HOME", "hash#tag", "ü"])
+def test_up_refuses_a_preview_token_that_would_not_survive_the_env_file(
+    env, stack, monkeypatch, capsys, value
+):
+    monkeypatch.setenv("LINDRA_PREVIEW_TOKEN", value)
+
+    assert run_main(env, "up", "--project", "p") == 2
+
+    assert "LINDRA_PREVIEW_TOKEN" in capsys.readouterr().out
+    assert not (env.STATE_DIR / "p.env").exists()
+    assert stack.commands == []
+
+
+def test_the_preview_token_never_reaches_the_output(env, stack, monkeypatch, capsys):
+    monkeypatch.setenv("LINDRA_PREVIEW_TOKEN", PREVIEW_TOKEN)
+
+    run_main(env, "up", "--project", "p", "--port", "48600")
+    run_main(env, "check", "--project", "p")
+    run_main(env, "down", "--project", "p")
+
+    assert PREVIEW_TOKEN not in capsys.readouterr().out
+
+
+def test_a_preview_stack_binds_the_pinned_port_on_loopback_and_down_removes_it(
+    env, stack, monkeypatch
+):
+    monkeypatch.setenv("LINDRA_PREVIEW_TOKEN", PREVIEW_TOKEN)
+
+    run_main(env, "up", "--project", "lindra-pv-lfr-14", "--port", "48619")
+    values = env.read_env(env.STATE_DIR / "lindra-pv-lfr-14.env")
+
+    assert values["LINDRA_PORT"] == "48619"
+    assert values["LINDRA_BIND"] == "127.0.0.1"
+
+    assert run_main(env, "down", "--project", "lindra-pv-lfr-14") == 0
+    down = next(c for c in stack.commands if "down" in c)
+    assert {"--volumes", "--rmi"} <= set(down)
+    assert not (env.STATE_DIR / "lindra-pv-lfr-14.env").exists()
+    assert run_main(env, "check", "--project", "lindra-pv-lfr-14") == 2
+
+
 def test_env_file_location_is_gitignored(env):
     repo = SCRIPT.parent.parent
     probe = repo / ".lindra-env" / "lindra-lfr-02.env"
