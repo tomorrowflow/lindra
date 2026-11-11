@@ -756,6 +756,88 @@ def test_a_dose_moved_between_two_drugs_without_any_punctuation_is_dropped_too()
     assert kept(bound("Ibuprofen 400 mg Metamizol 500 mg bei Bedarf.", notes), THERAPIE)
 
 
+def test_a_score_detached_from_its_pain_by_new_punctuation_is_dropped():
+    notes = "Knie NRS 6, Hüfte NRS 7."
+
+    assert kept(bound("Knie, NRS 7. Hüfte, NRS 6.", notes, SCHMERZ), SCHMERZ) == []
+    assert kept(bound("Knie NRS 7. Hüfte NRS 6.", notes, SCHMERZ), SCHMERZ) == []
+    assert kept(bound("Knie, NRS 6. Hüfte, NRS 7.", notes, SCHMERZ), SCHMERZ)
+    assert kept(bound("Hüfte NRS 7. Knie NRS 6.", notes, SCHMERZ), SCHMERZ)
+
+
+def test_two_numbers_of_one_clause_without_units_stay_with_their_words():
+    notes = "Schmerzbeginn 2024 Operation 2020."
+
+    assert kept(bound("Schmerzbeginn 2020 Operation 2024.", notes, SCHMERZ), SCHMERZ) == []
+    assert kept(bound("Operation 2020 Schmerzbeginn 2024.", notes, SCHMERZ), SCHMERZ)
+
+
+def test_a_quantity_written_before_its_word_stays_with_that_word():
+    notes = "500 mg Ibuprofen 400 mg Metamizol."
+
+    assert kept(bound("Ibuprofen 400 mg Metamizol 500 mg.", notes), THERAPIE) == []
+    assert kept(bound("500 mg Ibuprofen 400 mg Metamizol.", notes), THERAPIE)
+
+
+def test_a_side_written_short_stays_with_its_part():
+    notes = "Schmerz re Knie, li Hüfte."
+
+    assert kept(bound("Schmerz li Knie, re Hüfte.", notes, SCHMERZ), SCHMERZ) == []
+    assert kept(bound("Schmerz re Knie, li Hüfte.", notes, SCHMERZ), SCHMERZ)
+
+
+@pytest.mark.parametrize(
+    ("notes", "text"),
+    [
+        ("Fieber negativ.", "Fieber."),
+        ("Kaum Fieber.", "Fieber."),
+        ("Frei von Fieber.", "Fieber."),
+        ("Ein Husten fehlt.", "Husten."),
+    ],
+)
+def test_a_denial_in_the_notes_that_the_paragraph_leaves_out_drops_it(notes, text):
+    assert kept(bound(text, notes, BEFUND), BEFUND) == []
+
+
+def test_a_denial_the_quote_leaves_out_of_its_sentence_drops_the_paragraph():
+    notes = "Keine Übelkeit, Erbrechen, Schwindel."
+    tail = paragraph("Erbrechen. Schwindel.", "Erbrechen, Schwindel")
+    whole = paragraph("Keine Übelkeit, Erbrechen, Schwindel.", notes.removesuffix("."))
+
+    result = fidelity.check_result(generated(BEFUND, tail), {"notes": notes})
+
+    assert kept(result, BEFUND) == []
+    assert "Verneinung" in items_for(result, BEFUND)[0]
+    assert kept(fidelity.check_result(generated(BEFUND, whole), {"notes": notes}), BEFUND)
+
+
+def test_a_denial_far_away_in_a_list_sentence_does_not_drop_an_item_of_the_list():
+    notes = "Physiotherapie 2025, Infiltration 2025 ohne Dauerwirkung, Wärme bei Bedarf."
+    clean = paragraph("Physiotherapie 2025.", "Physiotherapie 2025")
+    own = paragraph("Infiltration 2025 ohne Dauerwirkung.", "Infiltration 2025 ohne Dauerwirkung")
+
+    assert kept(fidelity.check_result(generated(THERAPIE, clean), {"notes": notes}), THERAPIE)
+    assert kept(fidelity.check_result(generated(THERAPIE, own), {"notes": notes}), THERAPIE)
+
+
+def test_a_date_that_belongs_to_the_next_clause_is_not_attached_to_the_previous_one():
+    notes = "Schmerz unverändert, NRS 5 bis 6. Nimmt kein Ibuprofen mehr seit dem 7.10."
+    said = paragraph(
+        "Schmerz unverändert, NRS 5 bis 6. Seit dem 7.10. kein Ibuprofen mehr.",
+        "Schmerz unverändert, NRS 5 bis 6",
+        "Nimmt kein Ibuprofen mehr seit dem 7.10",
+    )
+
+    assert kept(fidelity.check_result(generated(BEFUND, said), {"notes": notes}), BEFUND)
+
+
+def test_a_weder_noch_list_cannot_lose_its_denial_on_the_second_item():
+    notes = "Weder Fieber, noch Husten."
+    said = paragraph("Husten.", "noch Husten")
+
+    assert kept(fidelity.check_result(generated(BEFUND, said), {"notes": notes}), BEFUND) == []
+
+
 def test_a_dose_moved_across_an_und_is_dropped_too():
     notes = "Ibuprofen 400 mg und Metamizol 500 mg."
 
@@ -787,7 +869,7 @@ def test_a_side_moved_to_another_part_of_the_quote_drops_the_paragraph():
 def test_a_decimal_and_a_date_are_not_split_into_clauses():
     notes = "Am 12.03.2024 Ibuprofen 0,5 g bei Bedarf."
 
-    assert kept(bound("Ibuprofen 0,5 g bei Bedarf, am 12.03.2024.", notes), THERAPIE)
+    assert kept(bound("Am 12.03.2024 Ibuprofen 0,5 g bei Bedarf.", notes), THERAPIE)
 
 
 def test_a_clause_of_only_function_words_or_gap_words_needs_no_clause_of_the_quote():

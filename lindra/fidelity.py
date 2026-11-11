@@ -21,8 +21,10 @@ decides which of its paragraphs the physician's notes support. A paragraph stays
   diagnosis, a cause or any other fact the quote does not hold cannot enter by a name the
   term lists never heard of, and
 - its words, numbers and denials stay together as the quote has them: each clause of the
-  paragraph has to be held by one clause of a quote, so a dose cannot move to the other
-  drug, a "kein" to the other substance or a finding to the other side.
+  paragraph has to be held by one clause of a quote, each number has to stand next to the
+  words it stands next to in the quote, and the denial that begins before a quote has to be
+  in it, so a dose cannot move to the other drug, a score to the other pain, a "kein" to the
+  other substance or a finding to the other side.
 
 Whatever the check drops goes on the clarification list as a gap, and a section left without
 a paragraph and without an item gets one. The draft therefore holds only what the notes
@@ -67,6 +69,14 @@ def _not_together(clause: str) -> str:
         "Eine Angabe verband Wörter, Zahlen oder eine Verneinung, die an der zitierten Stelle "
         f"der Notizen nicht zusammen stehen («{clause}»). Sie steht nicht im Entwurf. Ergänzen "
         "Sie sie in den Notizen, wenn sie gelten soll."
+    )
+
+
+def _cut_off_denial(word: str) -> str:
+    return (
+        "Eine Angabe zitierte nur einen Teil eines Satzes der Notizen. Der Rest enthält eine "
+        f"Verneinung («{word}»), die für das Zitierte gelten kann. Sie steht nicht im Entwurf. "
+        "Legen Sie in den Notizen fest, was gilt."
     )
 
 
@@ -300,15 +310,20 @@ _GAP_WORDS = frozenset(
 )
 
 _LETTERS = r"[^\W\d_]"
-_WORD = re.compile(_LETTERS + r"{4,}")
+# A word of four letters or more, and the short sides and body parts that carry a finding
+# ("li", "re", "bds", "Arm", "Fuß", "Ohr").
+_WORD = re.compile(rf"{_LETTERS}{{4,}}|(?i:\b(?:li|re|bds|arm|fuß|ohr)\b)")
 # An abbreviation of capitals ("MRT", "HWS", "NRS") has to appear as it is.
 _ABBREVIATION = re.compile(rf"(?<!{_LETTERS})[A-ZÄÖÜ]{{3,}}(?!{_LETTERS})")
-# Words that make a statement a denial. A paragraph and its quote must agree on whether
-# there is one: "strahlt aus" must not become "strahlt nicht aus", or the reverse.
 # Where one clause ends and the next begins: a comma or full stop that is not inside a number
 # ("0,5", "12.03.2024"), the other punctuation, and "und" and "sowie".
 _CLAUSE_BREAK = re.compile(r"(?<!\d)[,.]|[,.](?!\d)|[;!?()\n]|\b(?:und|sowie)\b")
-_NEGATION = re.compile(r"\b(?:nicht|nichts|nie|niemals|weder|ohne|kein\w*)\b")
+# Words that make a statement a denial. A paragraph and its quote must agree on whether
+# there is one: "strahlt aus" must not become "strahlt nicht aus", or the reverse.
+_NEGATION = re.compile(
+    r"\b(?:nicht|nichts|nie|niemals|weder|ohne|kaum|negativ|fehlt|fehlen|ausgeschlossen|"
+    r"nirgend\w*|kein\w*)\b|\bfrei von\b"
+)
 # Where one sentence of the notes ends and the next begins. The abbreviations of notes do not
 # end one ("ca.", "ggf.", "z. B.").
 _SENTENCE_BREAK = re.compile(
@@ -449,9 +464,11 @@ def _problem(
     if unsaid:
         return _not_in_the_notes(f"die Angabe {unsaid[0]}")
     for reference in paragraph.references:
-        cue = _cut_off_cue(_squash(sources[reference.source]), _squash(reference.quote), quoted)
-        if cue:
-            return _cut_off(cue)
+        found = _cut_off_cue(_squash(sources[reference.source]), _squash(reference.quote), quoted)
+        if found and found[0] == "hedge":
+            return _cut_off(found[1])
+        if found:
+            return _cut_off_denial(found[1])
     for conflict in conflicts:
         if stated & conflict and not conflict <= stated:
             return (
@@ -483,8 +500,9 @@ def _hedge_in(lower_text: str) -> str | None:
     return next((cue for cue in _HEDGES if cue in lower_text), None)
 
 
-def _cut_off_cue(source: str, quote: str, quoted: str) -> str | None:
-    """A wording of uncertainty in the quote's sentence that the paragraph's quotes leave out."""
+def _cut_off_cue(source: str, quote: str, quoted: str) -> tuple[str, str] | None:
+    """A wording of uncertainty ("hedge") or of denial ("denial") in the quote's sentence that
+    the paragraph's quotes leave out: the quote would carry on the statement without it."""
     start = source.find(quote)
     end = start + len(quote)
     first, last = 0, len(source)
@@ -496,7 +514,18 @@ def _cut_off_cue(source: str, quote: str, quoted: str) -> str | None:
             break
     outside = f"{source[first:start]} {source[end:last]}".lower()
     cue = _hedge_in(outside)
-    return cue if cue and cue not in quoted.lower() else None
+    if cue and cue not in quoted.lower():
+        return "hedge", cue
+    # A denial reaches along a list ("keine Übelkeit, Erbrechen, Schwindel"), but not to every
+    # item of a long one: only the clause the quote starts in or ends in, and the clause before
+    # the quote, count.
+    near = " ".join(
+        [*_CLAUSE_BREAK.split(source[first:start])[-2:], _CLAUSE_BREAK.split(source[end:last])[0]]
+    )
+    denial = _NEGATION.search(near.lower())
+    if denial and not _NEGATION.search(quoted.lower()):
+        return "denial", denial.group()
+    return None
 
 
 def _disagreements(source: str) -> list[frozenset[str]]:
@@ -544,10 +573,11 @@ class _Clause:
     numbers: frozenset[str]
     abbreviations: frozenset[str]
     negated: bool
-    # Each quantity with its unit and the words between it and the quantity before ("Tramadol
-    # retard 100 mg" binds 100mg to tramadol and retard), for a list that has no punctuation
-    # between its drugs.
-    anchors: tuple[tuple[str, tuple[str, ...]], ...]
+    # Each number with the words and abbreviations it stands next to: the nearest run of them
+    # before it, or after it when nothing comes before. "Tramadol retard 100 mg" binds 100 to
+    # tramadol and retard, and a list without punctuation between its drugs keeps each dose
+    # with its own drug.
+    numbered: tuple[tuple[str, frozenset[str]], ...]
 
     @property
     def says_something(self) -> bool:
@@ -555,17 +585,20 @@ class _Clause:
 
     def stands_behind(self, other: _Clause) -> bool:
         """Whether `other`, a clause of a quote, holds all of this clause's words, numbers and
-        abbreviations, agrees on denial and keeps each quantity with the word it follows."""
-        held = dict(other.anchors)
+        abbreviations, agrees on denial and keeps each number with the words it stands next
+        to."""
         return (
             self.negated == other.negated
             and self.numbers <= other.numbers
             and self.abbreviations <= other.abbreviations
             and all(any(_same_word(w, o) for o in other.words) for w in self.words)
             and all(
-                any(_same_word(words[-1], o) for o in held[m])
-                for m, words in self.anchors
-                if m in held
+                any(
+                    not run or not held or any(_same_word(a, b) for a in run for b in held)
+                    for value, held in other.numbered
+                    if value == number
+                )
+                for number, run in self.numbered
             )
         )
 
@@ -574,27 +607,57 @@ def _content_words(text: str) -> list[str]:
     return [w for w in (m.lower() for m in _WORD.findall(text)) if not _carries_no_claim(w)]
 
 
+# The things a clause is made of, in order: numbers (digits or spelled out), abbreviations and
+# words. Whatever else stands between them is skipped.
+_TOKEN = re.compile(
+    rf"(?P<number>\d+(?:[.,]\d+)*)"
+    rf"|(?P<spelled>(?i:(?<!\w)(?:{_SPELLED})(?:mal|fach)?(?!\w)))"
+    rf"|(?P<abbreviation>(?<!{_LETTERS})[A-ZÄÖÜ]{{3,}}(?!{_LETTERS}))"
+    rf"|(?P<word>{_WORD.pattern})"
+)
+
+
+def _numbered(part: str) -> tuple[tuple[str, frozenset[str]], ...]:
+    """Each number of the clause with the nearest run of words and abbreviations next to it."""
+    tokens: list[tuple[bool, str]] = []
+    for match in _TOKEN.finditer(part):
+        if match["number"] or match["spelled"]:
+            tokens.append((True, next(iter(_numbers(match.group())))))
+        elif match["abbreviation"]:
+            tokens.append((False, match.group().lower()))
+        elif not _carries_no_claim(match.group().lower()):
+            tokens.append((False, match.group().lower()))
+
+    def run_from(start: int, step: int) -> frozenset[str]:
+        at = start
+        while 0 <= at < len(tokens) and tokens[at][0]:
+            at += step
+        found = []
+        while 0 <= at < len(tokens) and not tokens[at][0]:
+            found.append(tokens[at][1])
+            at += step
+        return frozenset(found)
+
+    return tuple(
+        (value, run_from(i - 1, -1) or run_from(i + 1, 1))
+        for i, (is_number, value) in enumerate(tokens)
+        if is_number
+    )
+
+
+def _clause(part: str) -> _Clause:
+    return _Clause(
+        part.strip(),
+        tuple(_content_words(part)),
+        frozenset(_numbers(part)),
+        frozenset(_ABBREVIATION.findall(part)),
+        _negated(part),
+        _numbered(part),
+    )
+
+
 def _clauses(text: str) -> list[_Clause]:
-    found = []
-    for part in _CLAUSE_BREAK.split(text):
-        anchors = []
-        start = 0
-        for match in _MEASURE.finditer(part):
-            before = _content_words(part[start : match.start()])
-            start = match.end()
-            if before:
-                anchors.append((f"{match.group(1)}{match.group(2).lower()}", tuple(before)))
-        found.append(
-            _Clause(
-                part.strip(),
-                tuple(_content_words(part)),
-                frozenset(_numbers(part)),
-                frozenset(_ABBREVIATION.findall(part)),
-                _negated(part),
-                tuple(anchors),
-            )
-        )
-    return found
+    return [_clause(part) for part in _CLAUSE_BREAK.split(text)]
 
 
 def _unbound(text: str, quotes: Sequence[str]) -> str | None:
@@ -605,11 +668,27 @@ def _unbound(text: str, quotes: Sequence[str]) -> str | None:
     still say what the quote does not: a dose moved to the other drug, a denial moved to the
     other word, a finding moved to the other side. Within a clause they have to stay together."""
     held = [clause for quote in quotes for clause in _clauses(quote)]
-    for clause in _clauses(text):
+    parts = _CLAUSE_BREAK.split(text)
+    for index, part in enumerate(parts):
+        clause = _clause(part)
         if not clause.says_something:
             continue
-        if not clause.words:
-            # Bare numbers ("50 mg oder 100 mg") bind to nothing; each has to be in the quote.
+        if not clause.words and len(clause.numbers) == 1:
+            # A number with no word of its own ("Knie, NRS 7", "Seit dem 7.10., kein
+            # Ibuprofen") belongs to the clause before it or the one after it, unless the quote
+            # sets it apart in the same way. New punctuation must not detach a number from the
+            # word it belonged to.
+            neighbours = [
+                _clause(f"{parts[at]} {part}" if at < index else f"{part} {parts[at]}")
+                for at in (index - 1, index + 1)
+                if 0 <= at < len(parts) and parts[at].strip()
+            ]
+            apart = any(not other.words and clause.stands_behind(other) for other in held)
+            joined = any(c.stands_behind(other) for c in neighbours for other in held)
+            if not (apart or joined):
+                return clause.text
+        elif not clause.words and len(clause.numbers) > 1:
+            # Bare alternatives ("50 mg oder 100 mg") bind to nothing; each has to be in a quote.
             if not all(any(n in other.numbers for other in held) for n in clause.numbers):
                 return clause.text
         elif not any(clause.stands_behind(other) for other in held):
@@ -625,6 +704,8 @@ def _same_word(word: str, other: str) -> bool:
     stands behind "Rückenschmerz" and "Kinder" behind "Kindern", while "Schulterarthrose" has
     no word behind it in "Schulter" and "Fibromyalgie" none in "Rückenschmerz". The text may
     name a part of a compound of the passage, never a longer compound than the passage has."""
+    if len(word) < 4:
+        return word == other
     if len(word) <= 5:
         return len(os.path.commonprefix([word, other])) >= max(3, len(word) - 1)
     match = SequenceMatcher(None, word, other, autojunk=False).find_longest_match(
