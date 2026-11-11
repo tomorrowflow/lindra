@@ -42,6 +42,8 @@ The theme kit also proposes its own paper, ink and primary values. The tokens ke
 | Selected sidebar row | Teal, text on Sage tint `#1B4542` | Sage tint, selected row `#E3E9E2` | 8.61 to 1 | passes |
 | Body text on the Sage tint (proposal pane) | Ink (brand kit) `#243331` | Sage tint, selected row `#E3E9E2` | 10.68 to 1 | passes |
 | Secondary text on the Sage tint | Ink, secondary text `#4F5F5D` | Sage tint, selected row `#E3E9E2` | 5.44 to 1 | passes |
+| Open reference on a writing surface | Teal, text on Sage tint `#1B4542` | White `#FFFFFF` | 10.62 to 1 | passes |
+| Open reference on the page paper | Teal, text on Sage tint `#1B4542` | Paper (brand kit) `#F7F5F0` | 9.75 to 1 | passes |
 | Body text on the darker paper step | Ink (brand kit) `#243331` | Paper, darker step `#EAE6DD` | 10.59 to 1 | passes |
 | Disabled button label | Ink, secondary text `#4F5F5D` | Paper, darker step `#EAE6DD` | 5.39 to 1 | passes |
 | Delete button label | White `#FFFFFF` | Error (theme kit red) `#B43F46` | 5.61 to 1 | passes |

@@ -286,3 +286,134 @@ def test_a_draft_is_possibly_outdated_only_when_notes_moved_past_its_revision():
     assert encounter(notes_revision=3, draft_revision=2).draft_possibly_outdated
     # A draft the physician only wrote by hand was never generated from notes.
     assert not encounter(notes_revision=5).draft_possibly_outdated
+
+
+# ---- a hand edit keeps the reference of every paragraph it did not touch ----
+
+
+def drafted_therapy():
+    """A draft whose Therapeutische Anamnese has three paragraphs, each with its own reference."""
+    raw = result()
+    raw["sections"][2]["paragraphs"] = [
+        {
+            "text": "Ibuprofen 400 mg.",
+            "heading": "Aktuelle Medikation",
+            "references": [{"source": "notes", "quote": "Ibuprofen 400 mg"}],
+        },
+        {
+            "text": "Metformin.",
+            "heading": "Aktuelle Medikation",
+            "references": [{"source": "notes", "quote": "Metformin"}],
+        },
+        {
+            "text": "Physiotherapie 2024.",
+            "heading": "Frühere nichtmedikamentöse Behandlungen",
+            "references": [{"source": "notes", "quote": "Physiotherapie 2024"}],
+        },
+    ]
+    generated = drafts.parse_generated(raw, "assessment")
+    return drafts.accept(None, Proposal(1, generated.sections, generated.clarifications))
+
+
+def quotes_by_block(section):
+    return [[r.quote for r in p.references] for p in section.paragraphs]
+
+
+def test_rewriting_one_paragraph_removes_only_its_reference():
+    draft = drafted_therapy()
+    text = drafts.section_text(draft.sections[2]).replace("Metformin.", "Metformin 500 mg.")
+
+    edited = drafts.edit_section(draft, "assessment", 2, text)
+
+    section = edited.sections[2]
+    assert section.manual
+    assert drafts.section_text(section) == text
+    assert quotes_by_block(section) == [["Ibuprofen 400 mg"], [], ["Physiotherapie 2024"]]
+
+
+def test_a_paragraph_added_by_hand_has_no_reference_and_the_others_keep_theirs():
+    draft = drafted_therapy()
+    text = drafts.section_text(draft.sections[2]) + "\n\nNeue Zeile von Hand."
+
+    edited = drafts.edit_section(draft, "assessment", 2, text)
+
+    assert quotes_by_block(edited.sections[2]) == [
+        ["Ibuprofen 400 mg"],
+        ["Metformin"],
+        ["Physiotherapie 2024"],
+        [],
+    ]
+
+
+def test_a_removed_paragraph_takes_its_reference_with_it():
+    draft = drafted_therapy()
+    text = drafts.section_text(draft.sections[2]).replace("Metformin.\n\n", "")
+
+    edited = drafts.edit_section(draft, "assessment", 2, text)
+
+    assert quotes_by_block(edited.sections[2]) == [["Ibuprofen 400 mg"], ["Physiotherapie 2024"]]
+
+
+def test_a_paragraph_that_changed_in_one_character_has_no_reference():
+    draft = drafted_therapy()
+    text = drafts.section_text(draft.sections[2]).replace("400 mg", "400 mg.")
+
+    edited = drafts.edit_section(draft, "assessment", 2, text)
+
+    assert quotes_by_block(edited.sections[2])[0] == []
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["", "Ein Satz.", "\nErste Zeile\n\n\nZweite Zeile  \n", "\n\n", "A\n\nB\n\n", "x\r\n\r\ny"],
+)
+def test_a_hand_edit_gives_back_exactly_the_text_that_was_typed(text):
+    draft = drafted_therapy()
+
+    edited = drafts.edit_section(draft, "assessment", 2, text)
+
+    assert drafts.section_text(edited.sections[2]) == text
+
+
+def test_the_reference_of_an_untouched_paragraph_survives_a_second_edit():
+    draft = drafted_therapy()
+    once_text = drafts.section_text(draft.sections[2]).replace("Metformin.", "M.")
+    once = drafts.edit_section(draft, "assessment", 2, once_text)
+
+    twice = drafts.edit_section(once, "assessment", 2, drafts.section_text(once.sections[2]) + "!")
+
+    assert quotes_by_block(twice.sections[2]) == [["Ibuprofen 400 mg"], [], []]
+
+
+# ---- a pain problem is a block with its own heading ----
+
+
+def test_every_pain_problem_may_have_its_own_heading_and_no_other_section_may():
+    def with_heading(section_index, heading):
+        raw = result()
+        raw["sections"][section_index]["paragraphs"][0]["heading"] = heading
+        return raw
+
+    generated = drafts.parse_generated(with_heading(3, "Linkes Knie"), "assessment")
+
+    assert generated.sections[3].paragraphs[0].heading == "Linkes Knie"
+    for broken in (with_heading(0, "Linkes Knie"), with_heading(3, "K" * 81), with_heading(3, 4)):
+        with pytest.raises(GenerationFailed):
+            drafts.parse_generated(broken, "assessment")
+
+
+def test_pain_problems_stay_separate_blocks_in_the_section_text():
+    section = Section(
+        ASSESSMENT_SECTIONS[3],
+        (
+            Paragraph("Drei Attacken pro Monat.", "Migräne"),
+            Paragraph("Seit fünf Jahren belastungsabhängig.", "Linkes Knie"),
+            Paragraph("Brennend, seit zwei Jahren.", "Beide Füße"),
+        ),
+    )
+
+    assert drafts.section_text(section) == (
+        "Migräne\nDrei Attacken pro Monat.\n\n"
+        "Linkes Knie\nSeit fünf Jahren belastungsabhängig.\n\n"
+        "Beide Füße\nBrennend, seit zwei Jahren."
+    )

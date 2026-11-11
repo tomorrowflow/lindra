@@ -5,6 +5,7 @@
 #}
 {% extends "encounter_step.html" %}
 {% from "icons.html" import icon %}
+{% from "references.html" import origin %}
 {% set title = rev.titles[index] %}
 {% set number = index + 1 %}
 {% set section = rev.sections[index] %}
@@ -33,7 +34,8 @@
   <section class="pane" aria-labelledby="pane-draft">
     <h2 class="pane-title" id="pane-draft">Aktueller Entwurf</h2>
     <label class="visually-hidden" for="section-text">Text des Abschnitts {{ title }}</label>
-    <textarea class="textarea pane-text" id="section-text" lang="de" data-section data-save-url="/api/cases/{{ case.id }}/encounters/{{ encounter.id }}/draft/sections/{{ number }}" data-head-url="/faelle/{{ case.id }}/kontakte/{{ encounter.id }}/abschnitte/{{ number }}/kopf" placeholder="Noch kein Entwurf. Erzeugen Sie einen aus den Notizen oder schreiben Sie diesen Abschnitt selbst.">{# An HTML parser drops one line break right after the tag. #}{% if draft_text[:1] in ("\n", "\r") %}{{ "\n" }}{% endif %}{{ draft_text }}</textarea>
+    <textarea class="textarea pane-text" id="section-text" lang="de" data-section data-save-url="/api/cases/{{ case.id }}/encounters/{{ encounter.id }}/draft/sections/{{ number }}" data-head-url="/faelle/{{ case.id }}/kontakte/{{ encounter.id }}/abschnitte/{{ number }}/kopf" data-origins-url="/faelle/{{ case.id }}/kontakte/{{ encounter.id }}/abschnitte/{{ number }}/herkunft" placeholder="Noch kein Entwurf. Erzeugen Sie einen aus den Notizen oder schreiben Sie diesen Abschnitt selbst.">{# An HTML parser drops one line break right after the tag. #}{% if draft_text[:1] in ("\n", "\r") %}{{ "\n" }}{% endif %}{{ draft_text }}</textarea>
+    {% include "section_origins.html" %}
   </section>
 
   <section class="pane pane-proposal" aria-labelledby="pane-proposal">
@@ -46,10 +48,20 @@
       <h3 class="para-heading">{{ paragraph.heading }}</h3>
       {% endif %}
       <p>{{ paragraph.text }}</p>
+      {{ origin(paragraph) }}
       {% else %}
       <p class="pane-empty">Der Vorschlag lässt diesen Abschnitt leer.</p>
       {% endfor %}
     </div>
+    {% set proposed_questions = rev.proposal.clarifications | selectattr("section", "equalto", title) | list %}
+    {% if proposed_questions %}
+    <div class="pane-questions">
+      <h3 class="pane-questions-title">{{ icon("circle-help") }}<span>Zu klären, laut Vorschlag</span></h3>
+      <ul>
+        {% for item in proposed_questions %}<li>{{ item.text }}</li>{% endfor %}
+      </ul>
+    </div>
+    {% endif %}
     {% else %}
     <p class="pane-empty">Noch kein Vorschlag. «Entwurf erzeugen» legt einen aus den Notizen an.</p>
     {% endif %}

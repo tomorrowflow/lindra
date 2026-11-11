@@ -16,7 +16,7 @@ Run Python through the project virtualenv. Nothing needs Node or a network at ru
 | Format | `.venv/bin/python -m ruff format .` (CI runs `--check`) |
 | Contrast check | `.venv/bin/python scripts/contrast_check.py` |
 | Vendor assets | `python3 scripts/fetch_assets.py --check` verifies the pins; without `--check` it refetches |
-| Browser flow and screenshots | `.venv/bin/python -m playwright install chromium` once, then `.venv/bin/python scripts/screenshots.py [output-dir]`; it exits non-zero on any finding and writes the review pictures to `docs/screenshots/LFR-07/` by default |
+| Browser flow and screenshots | `.venv/bin/python -m playwright install chromium` once, then `.venv/bin/python scripts/screenshots.py [output-dir]`; it exits non-zero on any finding and writes the pictures to `LFR-07/` (review steps) and `LFR-08/` (references, pain problems, clarification list) under `docs/screenshots/` by default |
 | CI lint | `docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.12 -no-color` |
 | Throwaway stack | `python3 scripts/env.py up --project lindra-<ticket>`, then `check`, `reset` and `down` with the same `--project` |
 

@@ -16,11 +16,16 @@ RawBody = Annotated[dict[str, Any] | None, Body()]
 
 
 def section_json(number: int, section: drafts.Section) -> dict[str, Any]:
+    """A section as the API shows it. Each paragraph says where it comes from: `notes` when it
+    has input references, `hand` when the physician wrote it."""
+    stored = drafts.section_to_json(section)
+    for paragraph in stored["paragraphs"]:
+        paragraph["origin"] = drafts.origin_of(paragraph["references"])
     return {
         "number": number,
         "text": drafts.section_text(section),
         "empty": drafts.is_empty(section),
-        **drafts.section_to_json(section),
+        **stored,
     }
 
 

@@ -1056,6 +1056,146 @@ textarea.pane-text::placeholder {
   color: var(--text-secondary);
 }
 
+/* A pain problem is its own block: a hairline above every block after the first. */
+.proposal-text .para-heading:not(:first-child) {
+  margin-top: 20px;
+  padding-top: 12px;
+  border-top: 1px solid var(--hairline);
+}
+
+/* Input references (ADR 0008): "aus Notizen" opens the quoted passage of the notes,
+   "von Hand, keine Herkunft" has nothing to open. Origin, never a claim of correctness. */
+.origin {
+  margin: 4px 0 0;
+}
+
+.origin-toggle,
+.origin-hand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 12px;
+  color: var(--text-secondary);
+  font-size: 0.9375rem;
+}
+
+.origin-hand {
+  margin: 0;
+  padding-left: 0;
+}
+
+.origin-toggle {
+  cursor: pointer;
+  list-style: none;
+  border-radius: var(--radius-selector);
+}
+
+.origin-toggle::-webkit-details-marker {
+  display: none;
+}
+
+.origin-toggle:hover {
+  background-color: var(--color-base-200);
+}
+
+.origin[open] > .origin-toggle {
+  color: var(--teal-on-tint);
+}
+
+.origin-quotes {
+  display: grid;
+  gap: 8px;
+  padding: 0 0 8px;
+}
+
+.origin-quote {
+  margin: 0;
+  padding: 8px 12px;
+  border-left: 2px solid var(--color-primary);
+  border-radius: 0 var(--radius-selector) var(--radius-selector) 0;
+  background-color: var(--color-base-200);
+  color: var(--color-base-content);
+  font-size: 0.9375rem;
+  line-height: 1.5;
+}
+
+/* Under the draft text: one row per paragraph, the start of it and where it came from. */
+.origins {
+  flex: none;
+  max-height: 14rem;
+  overflow-y: auto;
+  border-top: 1px solid var(--hairline);
+}
+
+.origins-title {
+  margin: 8px 0 0;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.origin-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.origin-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0 12px;
+}
+
+.origin-row .origin-toggle,
+.origin-row .origin-hand {
+  padding-right: 0;
+}
+
+.origin-row .origin {
+  flex: none;
+}
+
+.origin-row details.origin[open] {
+  flex-basis: 100%;
+}
+
+.origin-excerpt {
+  flex: 1;
+  min-width: 8rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pane-questions {
+  flex: none;
+  padding-top: 8px;
+  border-top: 1px solid var(--hairline);
+}
+
+.pane-questions-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 4px;
+  font-size: 0.9375rem;
+  font-weight: 500;
+}
+
+.pane-questions ul {
+  margin: 0;
+  padding-left: 20px;
+  list-style: disc;
+}
+
+.final-step .clarifications {
+  max-width: 720px;
+  margin-top: 16px;
+}
+
 .clarifications {
   padding: 12px 16px;
   border: 1px dashed rgb(134 88 16 / 50%);

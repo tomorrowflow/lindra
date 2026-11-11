@@ -14,10 +14,10 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from lindra import cases, drafts
+from lindra import cases, drafts, fidelity
 from lindra.cast import SECTIONS, Clarification
 from lindra.store import OpenedEncounter, Store, Tx
-from lindra.textmodel import GenerationFailed, GenerationRequest, TextModel
+from lindra.textmodel import NOTES_SOURCE, GenerationFailed, GenerationRequest, TextModel
 
 log = logging.getLogger(__name__)
 
@@ -212,7 +212,11 @@ def generate(
 
 
 def ask(model: TextModel, request: GenerationRequest) -> drafts.Generated:
-    """Call the adapter and check its result; anything but a structured draft is a failure."""
+    """Call the adapter and check its result.
+
+    Anything but a structured draft is a failure. A structured one loses the paragraphs the
+    notes do not support, and each of them goes on the clarification list.
+    """
     try:
         raw = model.generate(request)
     except GenerationFailed:
@@ -220,7 +224,8 @@ def ask(model: TextModel, request: GenerationRequest) -> drafts.Generated:
     except Exception as error:
         log.exception("the text model failed")
         raise GenerationFailed(MODEL_ERROR) from error
-    return drafts.parse_generated(raw, request.kind)
+    generated = drafts.parse_generated(raw, request.kind)
+    return fidelity.check_result(generated, {NOTES_SOURCE: request.notes})
 
 
 # ---- the physician's decisions ----
