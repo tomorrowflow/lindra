@@ -195,8 +195,11 @@ def test_the_proposal_has_structured_paragraphs_with_input_references_and_subhea
             "source": "notes",
             "quote": "Patientin lebt mit Ehemann in einer Etagenwohnung, zwei erwachsene "
             "Kinder, arbeitet halbtags im Büro, aktuell krankgeschrieben.",
+            "origin": "notes",
+            "encounter": None,
         }
     ]
+    assert first["origin"] == "notes"
     assert proposal["sections"][5]["paragraphs"][0]["heading"] == (
         "Körperliche und internistische Untersuchung"
     )
@@ -234,14 +237,6 @@ def test_generating_needs_notes(client):
 
     assert response.status_code == 409
     assert response.json() == {"detail": "Zuerst Notizen eintragen"}
-
-
-def test_a_visit_has_no_draft_in_this_release_step(client):
-    visit = Encounter(client, kind="visit")
-
-    assert visit.get("/draft").status_code == 404
-    assert visit.generate().status_code == 404
-    assert visit.edit(1, "Text").status_code == 404
 
 
 def test_a_case_or_encounter_that_does_not_exist_is_not_found(client, assessment):

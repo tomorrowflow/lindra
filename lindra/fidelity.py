@@ -48,6 +48,7 @@ from difflib import SequenceMatcher
 
 from lindra import drafts
 from lindra.cast import SUBHEADINGS, UNASSIGNED_PAIN, Clarification
+from lindra.textmodel import NOTES_SOURCE
 
 NO_REFERENCE = (
     "Eine Angabe verweist auf keine Stelle der Notizen und steht nicht im Entwurf. "
@@ -58,6 +59,11 @@ TOO_BROAD = (
     "nicht im Entwurf. Ergänzen Sie sie in den Notizen, wenn sie gelten soll."
 )
 EMPTY_SECTION = "Die Notizen enthalten keine Angaben für diesen Abschnitt."
+BACKGROUND_ONLY = (
+    "Eine Angabe stützt sich nur auf frühere Kontakte. Was eine Visite heute findet, "
+    "einschätzt und vereinbart, stammt aus ihren Notizen, deshalb steht sie nicht im Entwurf. "
+    "Ergänzen Sie sie in den Notizen, wenn sie heute gilt."
+)
 NEGATION = (
     "Eine Angabe verneinte oder bejahte etwas anders als die zitierte Stelle der Notizen. Sie "
     "steht nicht im Entwurf. Ergänzen Sie sie in den Notizen, wenn sie gelten soll."
@@ -386,13 +392,19 @@ _FORM_HEADINGS = frozenset(h for headings in SUBHEADINGS.values() for h in headi
 }
 
 
-def check_result(generated: drafts.Generated, sources: Mapping[str, str]) -> drafts.Generated:
-    """The result with the paragraphs the notes do not support taken out.
+def check_result(
+    generated: drafts.Generated,
+    sources: Mapping[str, str],
+    today_only: frozenset[str] = frozenset(),
+) -> drafts.Generated:
+    """The result with the paragraphs the notes and the background do not support taken out.
 
-    `sources` maps a reference's source key to the text it quotes from: for now the key
-    `notes` and the encounter's notes. A paragraph that fails goes on the clarification list
-    under its section; a section left with no paragraph and no item gets one. The model's own
-    items come first, then ours in section order.
+    `sources` maps a reference's source key to the text it quotes from: the key `notes` with
+    the encounter's notes and, for a visit, the key of each background encounter with its
+    accepted draft. A paragraph that fails goes on the clarification list under its section; a
+    section left with no paragraph and no item gets one. The model's own items come first,
+    then ours in section order. A paragraph in a `today_only` section that quotes no notes
+    passage, only earlier encounters, is dropped as well.
     """
     items = list(generated.clarifications)
     conflicts = _conflicts(items) + [c for text in sources.values() for c in _disagreements(text)]
@@ -402,6 +414,9 @@ def check_result(generated: drafts.Generated, sources: Mapping[str, str]) -> dra
         kept = []
         for paragraph in section.paragraphs:
             problem = _problem(paragraph, sources, conflicts)
+            if problem is None and section.title in today_only:
+                if not any(r.source == NOTES_SOURCE for r in paragraph.references):
+                    problem = BACKGROUND_ONLY
             if problem is None:
                 kept.append(paragraph)
             else:
@@ -473,7 +488,7 @@ def _problem(
         if stated & conflict and not conflict <= stated:
             return (
                 f"Eine Angabe nannte nur {_join(sorted(stated & conflict))} von "
-                f"{_join(sorted(conflict))}, die sich in den Notizen widersprechen. Sie steht "
+                f"{_join(sorted(conflict))}, die sich widersprechen. Sie steht "
                 "nicht im Entwurf. Legen Sie in den Notizen fest, was gilt."
             )
     quoted_cue = _hedge_in(lower_quoted)

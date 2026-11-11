@@ -415,9 +415,10 @@ def test_the_selected_encounter_shows_its_steps_beneath_it_and_no_other_does(bro
 
     sidebar = sidebar_of(browser.get(shown[1]["href"]).text)
 
-    assert sidebar.count('class="step-link') == 1
+    # A visit has the notes, its four sections and the last step.
+    assert sidebar.count('class="step-link') == 6
     assert sidebar.index(shown[1]["href"]) < sidebar.index('class="step-link')
-    assert sidebar.index('class="step-link') < sidebar.index(shown[2]["href"])
+    assert sidebar.rindex('class="step-link') < sidebar.index(shown[2]["href"])
 
 
 def test_no_steps_are_shown_while_only_the_case_is_selected(browser):

@@ -145,17 +145,6 @@ def test_the_current_step_is_marked_in_the_sidebar(review):
     assert current == [ASSESSMENT_SECTIONS[2]]
 
 
-def test_a_visit_has_only_its_notes_step_and_no_draft_controls(browser, api_client):
-    visit = Review(browser, api_client, kind="visit")
-
-    page = visit.get("/notizen").text
-
-    assert [label for _, label, _ in steps_in_sidebar(page)] == ["Notizen"]
-    assert "data-generate" not in page
-    assert visit.step(1).status_code == 404
-    assert visit.final().status_code == 404
-
-
 def test_a_section_number_that_does_not_exist_is_not_found(review):
     response = review.step(8)
 

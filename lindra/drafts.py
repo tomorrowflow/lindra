@@ -12,6 +12,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from typing import Any
 
+from lindra import background
 from lindra.cast import (
     SECTIONS,
     SUBHEADINGS,
@@ -22,16 +23,26 @@ from lindra.cast import (
 from lindra.textmodel import NOTES_SOURCE, GenerationFailed
 
 OUTDATED_REASON = "Veraltet: Notizen seit diesem Vorschlag geändert"
+OUTDATED_BACKGROUND_REASON = "Veraltet: Hintergrund seit diesem Vorschlag geändert"
+OUTDATED_BOTH_REASON = "Veraltet: Notizen und Hintergrund seit diesem Vorschlag geändert"
+BACKGROUND_CHANGED = "Hintergrund seit Erstellung geändert"
 ORIGIN_NOTES, ORIGIN_HAND = "notes", "hand"
+ORIGIN_BACKGROUND, ORIGIN_BOTH = "background", "notes_and_background"
 UNSTRUCTURED = "Das Ergebnis des Textmodells hat nicht die erwartete Struktur."
 
 
 @dataclass(frozen=True)
 class InputReference:
-    """Where a generated paragraph comes from: a passage of the encounter's notes."""
+    """Where a generated paragraph comes from: a passage of the encounter's notes, or in a
+    visit a passage of the accepted draft of a background encounter (`source` names it)."""
 
     source: str
     quote: str
+
+    @property
+    def encounter_id(self) -> int | None:
+        """The background encounter this reference quotes, None for a passage of the notes."""
+        return background.encounter_of(self.source)
 
 
 @dataclass(frozen=True)
@@ -67,11 +78,13 @@ class Generated:
 
 @dataclass(frozen=True)
 class Proposal:
-    """One generation for the whole draft, bound to the notes revision it was made from."""
+    """One generation for the whole draft, bound to the notes revision it was made from and,
+    for a visit, to the background revision (None for the assessment)."""
 
     notes_revision: int
     sections: tuple[Section, ...]
     clarifications: tuple[Clarification, ...]
+    background_revision: int | None = None
 
 
 @dataclass(frozen=True)
@@ -147,7 +160,9 @@ def _parse_reference(raw: Any) -> InputReference:
     if not isinstance(raw, dict):
         raise GenerationFailed(UNSTRUCTURED)
     source, quote = raw.get("source"), raw.get("quote")
-    if source != NOTES_SOURCE or not isinstance(quote, str) or not quote.strip():
+    if not isinstance(source, str) or not isinstance(quote, str) or not quote.strip():
+        raise GenerationFailed(UNSTRUCTURED)
+    if source != NOTES_SOURCE and background.encounter_of(source) is None:
         raise GenerationFailed(UNSTRUCTURED)
     return InputReference(source, quote)
 
@@ -201,9 +216,24 @@ def excerpt(paragraph: Paragraph, limit: int = 60) -> str:
     return flat if len(flat) <= limit else flat[: limit - 1].rstrip() + "…"
 
 
-def origin_of(references: Sequence[Any]) -> str:
-    """`notes` for a paragraph generated from the notes, `hand` for one without a reference."""
-    return ORIGIN_NOTES if references else ORIGIN_HAND
+def origin_of(sources: Sequence[str]) -> str:
+    """Where a paragraph comes from, given the source of each of its references: `notes` for
+    one generated from today's notes, `background` for one drawn from earlier encounters,
+    `notes_and_background` for both, `hand` for one without a reference."""
+    from_notes = any(source == NOTES_SOURCE for source in sources)
+    from_background = any(background.encounter_of(source) is not None for source in sources)
+    if from_notes and from_background:
+        return ORIGIN_BOTH
+    if from_background:
+        return ORIGIN_BACKGROUND
+    return ORIGIN_NOTES if from_notes else ORIGIN_HAND
+
+
+def outdated_reason(*, notes: bool, background: bool) -> str:
+    """The reason a proposal cannot be accepted, spelled out for the physician."""
+    if notes and background:
+        return OUTDATED_BOTH_REASON
+    return OUTDATED_BACKGROUND_REASON if background else OUTDATED_REASON
 
 
 # ---- editing, acceptance, outdated and stale ----
@@ -314,16 +344,19 @@ def clarifications_from_json(raw: list[dict[str, str]]) -> tuple[Clarification, 
 
 
 def proposal_to_json(proposal: Proposal) -> dict[str, Any]:
-    """The stored form; the notes revision lives in its own column."""
+    """The stored form; the notes and background revisions live in their own columns."""
     return {
         "sections": [section_to_json(s) for s in proposal.sections],
         "clarifications": clarifications_to_json(proposal.clarifications),
     }
 
 
-def proposal_from_json(raw: dict[str, Any], notes_revision: int) -> Proposal:
+def proposal_from_json(
+    raw: dict[str, Any], notes_revision: int, background_revision: int | None = None
+) -> Proposal:
     return Proposal(
         notes_revision,
         tuple(section_from_json(s) for s in raw["sections"]),
         clarifications_from_json(raw["clarifications"]),
+        background_revision,
     )

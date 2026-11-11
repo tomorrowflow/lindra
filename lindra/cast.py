@@ -40,6 +40,10 @@ VISIT_SECTIONS = (
     "Vereinbartes Vorgehen und Ziele",
 )
 SECTIONS = {"assessment": ASSESSMENT_SECTIONS, "visit": VISIT_SECTIONS}
+# In a visit only the first section may rest on the background alone. What is found, judged and
+# agreed today comes from today's notes, so a paragraph of these sections needs a notes
+# reference, never only a historical one (ADR 0010, ADR 0001).
+TODAY_ONLY_SECTIONS = {"assessment": (), "visit": VISIT_SECTIONS[1:]}
 
 # Inside the Schmerzanamnese every pain problem is its own block, headed by the name the
 # physician gave it. The headings are the physician's words, so they are not a fixed list, and
@@ -86,15 +90,22 @@ class Clarification:
 
 @dataclass(frozen=True)
 class Paragraph:
-    """One paragraph of an expected draft, with the passages of the notes it was written from."""
+    """One paragraph of an expected draft, with the passages of the notes it was written from
+    and, in a visit, the passages of earlier encounters (by encounter key) it drew on."""
 
     text: str
     quotes: tuple[str, ...] = ()
     heading: str = ""
+    background: tuple[tuple[str, str], ...] = ()
 
 
-def _p(text: str, *quotes: str, heading: str = "") -> Paragraph:
-    return Paragraph(text, quotes, heading)
+def _p(
+    text: str,
+    *quotes: str,
+    heading: str = "",
+    background: tuple[tuple[str, str], ...] = (),
+) -> Paragraph:
+    return Paragraph(text, quotes, heading, background)
 
 
 @dataclass(frozen=True)
@@ -231,9 +242,14 @@ def _validate_case(case: Case) -> list[str]:
     by_key = {e.key: e for e in case.encounters}
     for encounter in case.encounters:
         problems += _validate_encounter(case, encounter, by_key)
+    generated: set[str] = set()
     for what, key in case.timeline:
         if what not in ("accept", "generate") or key not in by_key:
             problems.append(f"{where}: timeline entry {what} {key} is not an event of this case")
+        elif what == "generate":
+            generated.add(key)
+        elif by_key[key].kind == "visit" and key not in generated:
+            problems.append(f"{where}: {key} is accepted before it is generated")
     return problems
 
 
@@ -257,7 +273,7 @@ def _validate_encounter(
     for section, paragraphs in encounter.draft.items():
         if not paragraphs and section not in flagged:
             problems.append(f"{where}: empty section {section} has no clarification item")
-        problems += _validate_paragraphs(where, encounter, section, paragraphs)
+        problems += _validate_paragraphs(where, encounter, section, paragraphs, by_key)
     for clip in encounter.audio:
         if not clip.transcript.strip():
             problems.append(f"{where}: clip {clip.key} has no canned transcript")
@@ -273,18 +289,32 @@ def _validate_encounter(
 
 
 def _validate_paragraphs(
-    where: str, encounter: Encounter, section: str, paragraphs: tuple[Paragraph, ...]
+    where: str,
+    encounter: Encounter,
+    section: str,
+    paragraphs: tuple[Paragraph, ...],
+    by_key: dict[str, Encounter],
 ) -> list[str]:
     problems: list[str] = []
     allowed = SUBHEADINGS.get(section, ()) if encounter.kind == "assessment" else ()
     for paragraph in paragraphs:
         if not paragraph.text.strip():
             problems.append(f"{where}: {section} has an empty paragraph")
-        if not paragraph.quotes:
+        if not paragraph.quotes and not paragraph.background:
             problems.append(f"{where}: a paragraph of {section} has no input reference")
+        if not paragraph.quotes and section in TODAY_ONLY_SECTIONS[encounter.kind]:
+            problems.append(f"{where}: a paragraph of {section} rests on the background alone")
         for quote in paragraph.quotes:
             if quote not in encounter.notes:
                 problems.append(f"{where}: reference {quote!r} is not a passage of the notes")
+        for key, quote in paragraph.background:
+            earlier = by_key.get(key)
+            if key not in encounter.background or earlier is None:
+                problems.append(f"{where}: {key} is not in the background of this encounter")
+            elif not any(
+                quote in p.text for paragraphs in earlier.draft.values() for p in paragraphs
+            ):
+                problems.append(f"{where}: reference {quote!r} is not a passage of {key}")
         if paragraph.heading and names_pain_problems(encounter.kind, section):
             if not valid_pain_heading(paragraph.heading):
                 problems.append(f"{where}: pain heading {paragraph.heading!r} is not valid")
@@ -426,9 +456,10 @@ _CASE_BACK = Case(
             entered_on=_d("2026-10-09"),
             notes=(
                 "Schmerz im Verlauf unverändert, NRS 5 bis 6. Nimmt kein Ibuprofen mehr seit "
-                "dem 7.10. Teilnahme an der Bewegungstherapie gut. Befund: Druckschmerz L4 bis "
-                "S1 etwas geringer. Einschätzung nach Gespräch: Bewegungstherapie wird "
-                "fortgeführt. Vereinbart: tägliche Gehstrecke um 100 m steigern."
+                "dem 7.10. Teilnahme an der Bewegungstherapie gut. Heute berichtet sie von "
+                "Ausstrahlung ins linke Bein. Befund: Druckschmerz L4 bis S1 etwas geringer. "
+                "Einschätzung nach Gespräch: Bewegungstherapie wird fortgeführt. Vereinbart: "
+                "tägliche Gehstrecke um 100 m steigern."
             ),
             draft={
                 "Verlauf seit letzter Visite": (
@@ -437,6 +468,17 @@ _CASE_BACK = Case(
                         "Teilnahme an der Bewegungstherapie gut.",
                         "Schmerz im Verlauf unverändert, NRS 5 bis 6. Nimmt kein Ibuprofen mehr "
                         "seit dem 7.10. Teilnahme an der Bewegungstherapie gut.",
+                    ),
+                    _p(
+                        "Zuvor: Ibuprofen 400 mg bei Bedarf, bis zu zwei Tabletten täglich, "
+                        "Wirkung gering.",
+                        background=(
+                            (
+                                "assessment",
+                                "Ibuprofen 400 mg bei Bedarf, bis zu zwei Tabletten täglich, "
+                                "Wirkung gering.",
+                            ),
+                        ),
                     ),
                 ),
                 "Aktuelle Befunde": (
@@ -458,6 +500,15 @@ _CASE_BACK = Case(
                     ),
                 ),
             },
+            clarifications=(
+                Clarification(
+                    "Verlauf seit letzter Visite",
+                    "Die Angaben widersprechen sich. Aufnahmeassessment vom 05.10.2026: «Nach "
+                    "Angabe der Patientin strahlt der Schmerz nicht ins Bein aus.» Notizen dieser "
+                    "Visite: «Heute berichtet sie von Ausstrahlung ins linke Bein.» Keine der "
+                    "beiden Angaben steht im Entwurf. Welche gilt?",
+                ),
+            ),
             background=("assessment",),
             audio=(
                 FixtureClip(
@@ -626,6 +677,12 @@ _CASE_MULTIPLE = Case(
                         "Migräne in dieser Woche 1 Attacke, Sumatriptan wirksam. Knie "
                         "unverändert, Schlaf 5 Stunden.",
                     ),
+                    _p(
+                        "Zuvor: Pregabalin 75 mg zweimal täglich, Wirkung teilweise.",
+                        background=(
+                            ("assessment", "Pregabalin 75 mg zweimal täglich, Wirkung teilweise."),
+                        ),
+                    ),
                 ),
                 "Aktuelle Befunde": (
                     _p("Beugung links 115 Grad.", "Heute Beugung links 115 Grad."),
@@ -685,10 +742,12 @@ _CASE_MULTIPLE = Case(
         ),
     ),
     # The assessment is corrected and accepted again after visit-1's draft was
-    # generated, so visit-1 shows the changed background. visit-2 came later.
+    # generated and accepted, so visit-1 shows the changed background. visit-2 came later
+    # and its proposal is still pending.
     timeline=(
         ("accept", "assessment"),
         ("generate", "visit-1"),
+        ("accept", "visit-1"),
         ("accept", "assessment"),
         ("generate", "visit-2"),
     ),
@@ -798,6 +857,12 @@ _CASE_GAPS = Case(
                         "Schmerz im Nacken etwas besser. Tramadol unverändert.",
                         "Schmerz im Nacken etwas besser",
                         "Tramadol unverändert",
+                    ),
+                    _p(
+                        "Zuvor: Tramadol retard zweimal täglich, Dosis unklar.",
+                        background=(
+                            ("assessment", "Tramadol retard zweimal täglich, Dosis unklar."),
+                        ),
                     ),
                 ),
                 "Aktuelle Befunde": (),

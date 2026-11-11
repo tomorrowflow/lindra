@@ -187,8 +187,103 @@ def test_every_paragraph_of_every_draft_quotes_the_notes_it_came_from(fictional_
         for encounter in case.encounters:
             for paragraphs in encounter.draft.values():
                 for paragraph in paragraphs:
-                    assert paragraph.quotes
+                    assert paragraph.quotes or paragraph.background
                     assert all(quote in encounter.notes for quote in paragraph.quotes)
+
+
+def test_a_visit_paragraph_may_quote_an_earlier_encounter_it_has_as_background(fictional_cast):
+    historical = 0
+    for case in fictional_cast.cases:
+        by_key = {e.key: e for e in case.encounters}
+        for encounter in case.encounters:
+            for paragraphs in encounter.draft.values():
+                for paragraph in paragraphs:
+                    for key, quote in paragraph.background:
+                        historical += 1
+                        assert encounter.kind == "visit"
+                        assert key in encounter.background
+                        earlier = by_key[key]
+                        assert any(quote in p.text for ps in earlier.draft.values() for p in ps)
+    assert historical >= 3
+
+
+def test_validation_refuses_a_background_quote_that_is_not_in_the_earlier_draft(fictional_cast):
+    case = fictional_cast.cases[0]
+    visit = case.encounters[1]
+    invented = cast.Paragraph("Zuvor: etwas.", background=(("assessment", "steht nirgends"),))
+    draft = {**visit.draft, cast.VISIT_SECTIONS[0]: (invented,)}
+    broken_case = dataclasses.replace(
+        case,
+        encounters=(case.encounters[0], dataclasses.replace(visit, draft=draft)),
+    )
+    broken = dataclasses.replace(fictional_cast, cases=(broken_case, *fictional_cast.cases[1:]))
+
+    assert any("not a passage of assessment" in p for p in cast.validate_cast(broken))
+
+
+def test_validation_refuses_a_background_quote_of_an_encounter_outside_the_background(
+    fictional_cast,
+):
+    case = fictional_cast.cases[1]
+    visit = case.encounters[1]
+    quote = case.encounters[0].draft[cast.ASSESSMENT_SECTIONS[0]][0].text[:20]
+    paragraph = cast.Paragraph("Zuvor.", background=(("visit-2", quote),))
+    draft = {**visit.draft, cast.VISIT_SECTIONS[0]: (paragraph,)}
+    broken_case = dataclasses.replace(
+        case,
+        encounters=(
+            case.encounters[0],
+            dataclasses.replace(visit, draft=draft),
+            *case.encounters[2:],
+        ),
+    )
+    broken = dataclasses.replace(
+        fictional_cast, cases=(fictional_cast.cases[0], broken_case, fictional_cast.cases[2])
+    )
+
+    assert any("not in the background" in p for p in cast.validate_cast(broken))
+
+
+def test_validation_refuses_a_decision_that_rests_on_the_background_alone(fictional_cast):
+    case = fictional_cast.cases[0]
+    visit = case.encounters[1]
+    quote = "Ibuprofen 400 mg bei Bedarf"
+    only_history = cast.Paragraph("Zuvor: Ibuprofen.", background=(("assessment", quote),))
+    draft = {**visit.draft, cast.VISIT_SECTIONS[3]: (only_history,)}
+    broken_case = dataclasses.replace(
+        case, encounters=(case.encounters[0], dataclasses.replace(visit, draft=draft))
+    )
+    broken = dataclasses.replace(fictional_cast, cases=(broken_case, *fictional_cast.cases[1:]))
+
+    assert any("rests on the background alone" in p for p in cast.validate_cast(broken))
+
+
+def test_validation_refuses_a_visit_accepted_before_it_was_generated(fictional_cast):
+    case = fictional_cast.cases[2]
+    broken_case = dataclasses.replace(case, timeline=(("accept", "visit-1"),))
+    broken = dataclasses.replace(fictional_cast, cases=(*fictional_cast.cases[:2], broken_case))
+
+    assert any("accepted before it is generated" in p for p in cast.validate_cast(broken))
+
+
+def test_one_visit_has_a_contradiction_with_its_background_and_names_both_statements(
+    fictional_cast,
+):
+    visit = fictional_cast.cases[0].encounters[1]
+    items = [c for c in visit.clarifications if "widersprechen" in c.text]
+
+    assert len(items) == 1
+    assert "Aufnahmeassessment" in items[0].text
+    assert "strahlt der Schmerz nicht ins Bein aus" in items[0].text
+    assert "Ausstrahlung ins linke Bein" in items[0].text
+
+
+def test_a_visit_without_a_decision_leaves_the_section_empty_and_asks(fictional_cast):
+    visit = fictional_cast.cases[2].encounters[1]
+
+    assert visit.draft[cast.VISIT_SECTIONS[3]] == ()
+    assert any(c.section == cast.VISIT_SECTIONS[3] for c in visit.clarifications)
+    assert "Vereinbart" not in visit.notes
 
 
 def test_the_two_sections_with_subsections_keep_distinct_headings(fictional_cast):
