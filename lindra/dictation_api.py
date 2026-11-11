@@ -8,17 +8,16 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from datetime import datetime
-from typing import Annotated, Any
 
-from fastapi import APIRouter, Body, Request, Response
+from fastapi import APIRouter, Request, Response
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse
 
 from lindra import case_api, cases, dictation
+from lindra.case_api import RawBody
 from lindra.speech import SpeechRecognizer, TranscriptionFailed
 from lindra.store import Store
 
-RawBody = Annotated[dict[str, Any] | None, Body()]
 TOO_LARGE = "Die Aufnahme ist zu lang"
 
 

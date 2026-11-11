@@ -289,7 +289,7 @@ def test_accepting_into_an_encounter_that_does_not_exist_is_not_found(client):
 def test_the_answer_carries_the_sidebar_badge_the_encounter_has_now(assessment):
     response = accept_dictation(assessment, "Neu.")
 
-    assert response.json()["badge"]["label"]
+    assert response.json()["badge"]["label"] == "Notizen gespeichert, noch kein Entwurf"
 
 
 # ---- a pending proposal becomes outdated ----
