@@ -13,6 +13,10 @@ The application runs on a fixed clock (10.11.2026 14:30), so both default states
 new-visit form are reproducible. The case screens (ticket 05) are checked on every run
 but their pictures are not kept; the encounter screens are written to the output directory.
 
+The review steps (ticket 07) and the fidelity steps (ticket 08: input references, pain
+problems, the clarification list) write their pictures to `LFR-07` and `LFR-08` under the
+output directory, which defaults to `docs/screenshots`.
+
 Usage: .venv/bin/python scripts/screenshots.py [output-dir]
 Needs `playwright install chromium` once.
 """
@@ -812,9 +816,112 @@ def review_screens(page: Page, base_url: str, out: Path, name: str) -> list[str]
     return findings
 
 
+def small_targets(page: Page, selector: str) -> list[dict]:
+    return [b for b in boxes(page, selector) if b["w"] > 0 and (b["w"] < 44 or b["h"] < 44)]
+
+
+def fidelity_screens(page: Page, base_url: str, out: Path, name: str) -> list[str]:
+    """Input references, pain problems and the clarification list (ticket 08), on the second
+    fictional case: three pains and an open question. Taps a reference and reads the quoted
+    passage, hand-rewrites one paragraph and sees only its reference go, and checks that the
+    clarification list stays as it was."""
+    findings: list[str] = []
+    portrait = name == "ipad-portrait"
+    open_case(page, base_url, "FIK-2026-002", portrait)
+    open_drawer(page, portrait)
+    page.click(".encounter-link:has-text('Aufnahmeassessment')")
+    page.wait_for_url("**/notizen")
+    notes_bar = bar_layout(page)
+    generate_and_wait(page)
+
+    # The Schmerzanamnese (step 5): every pain problem is its own block, none is the main pain.
+    go_to_step(page, portrait, 5)
+    headings = page.eval_on_selector_all(
+        ".proposal-text .para-heading", "els => els.map(e => e.textContent.trim())"
+    )
+    if headings != ["Migräne", "Linkes Knie", "Beide Füße", "Ohne Zuordnung zu einem Schmerz"]:
+        findings.append(f"{name}: the proposal's pain blocks are {headings}")
+    if "Hauptschmerz" in page.inner_text(".proposal-text"):
+        findings.append(f"{name}: the proposal names a main pain nobody named")
+    if bar_layout(page) != notes_bar:
+        findings.append(f"{name}: the pain step moved the action bar")
+    page.screenshot(path=out / f"pain-problems-proposal-{name}.png")
+
+    # Tap a reference: the quoted passage of the notes opens.
+    toggle = page.locator(".proposal-text .origin-toggle").first
+    quote = page.locator(".proposal-text .origin-quote").first
+    if quote.is_visible():
+        findings.append(f"{name}: a reference shows its passage before it is tapped")
+    toggle.click()
+    page.wait_for_function("document.querySelector('.proposal-text details.origin').open")
+    if "Migräne seit der Jugend, 3 Attacken pro Monat" not in quote.inner_text():
+        findings.append(f"{name}: the reference shows {quote.inner_text()!r}")
+    if not quote.is_visible():
+        findings.append(f"{name}: the quoted passage is not visible after the tap")
+    if small_targets(page, ".origin-toggle"):
+        findings.append(f"{name}: a reference toggle is under 44 by 44 CSS px")
+    if "aus Notizen" not in toggle.inner_text():
+        findings.append(f"{name}: the reference reads {toggle.inner_text()!r}")
+    for claim in ("korrekt", "geprüft", "Konfidenz", "%"):
+        if claim in page.inner_text(".proposal-text"):
+            findings.append(f"{name}: the proposal pane says {claim!r}")
+    page.screenshot(path=out / f"reference-open-{name}-proposal.png")
+
+    # Accept; the draft pane lists where each paragraph came from.
+    go_to_step(page, portrait, 9)
+    page.click(".action-bar button:has-text('Übernehmen')")
+    page.wait_for_url("**/abschluss")
+    go_to_step(page, portrait, 5)
+    page.screenshot(path=out / f"pain-problems-draft-{name}.png")
+    asked = page.inner_text(".clarifications")
+    if "Welcher der drei Schmerzen steht im Vordergrund" not in asked:
+        findings.append(f"{name}: the pain step does not show its clarification item")
+
+    # Therapeutische Anamnese (step 4): three paragraphs, each "aus Notizen"; rewrite one.
+    go_to_step(page, portrait, 4)
+    if page.locator("#section-origins .origin-toggle").count() != 3:
+        findings.append(f"{name}: the draft pane does not list three references")
+    if page.locator("#section-origins .origin-hand").count() != 0:
+        findings.append(f"{name}: a generated paragraph reads von Hand")
+    list_before = None
+    go_to_step(page, portrait, 9)
+    list_before = page.inner_text(".clarifications")
+    go_to_step(page, portrait, 4)
+    page.click("#section-text")
+    page.keyboard.press("Control+End")
+    page.keyboard.type(" Zweimal pro Woche.", delay=10)
+    page.wait_for_function(
+        "document.querySelector('[data-save-indicator]').textContent.includes('Gespeichert')"
+    )
+    page.wait_for_selector("#section-origins .origin-hand")
+    hand = page.locator("#section-origins .origin-hand")
+    if hand.count() != 1 or "von Hand, keine Herkunft" not in hand.inner_text():
+        findings.append(f"{name}: the rewritten paragraph does not read von Hand, keine Herkunft")
+    if page.locator("#section-origins .origin-toggle").count() != 2:
+        findings.append(f"{name}: the other paragraphs lost their reference")
+    if "Zweimal pro Woche." not in page.input_value("#section-text"):
+        findings.append(f"{name}: the hand edit is not in the draft pane")
+    page.screenshot(path=out / f"hand-rewritten-{name}.png")
+    page.locator("#section-origins .origin-toggle").first.click()
+    page.screenshot(path=out / f"reference-open-{name}-draft.png")
+
+    # The edit removed no clarification item; the final step shows the whole list.
+    go_to_step(page, portrait, 9)
+    if page.inner_text(".clarifications") != list_before:
+        findings.append(f"{name}: a manual edit changed the clarification list")
+    page.evaluate("document.querySelector('.step-body').scrollTop = 99999")
+    page.screenshot(path=out / f"clarification-list-{name}.png")
+    if bar_layout(page) != notes_bar:
+        findings.append(f"{name}: the final step moved the action bar")
+    findings += check_targets(page, f"{name} fidelity final step")
+    return findings
+
+
 def main(argv: list[str]) -> int:
-    out = Path(argv[0]) if argv else Path("docs/screenshots/LFR-07")
+    root = Path(argv[0]) if argv else Path("docs/screenshots")
+    out, fidelity_out = root / "LFR-07", root / "LFR-08"
     out.mkdir(parents=True, exist_ok=True)
+    fidelity_out.mkdir(parents=True, exist_ok=True)
     findings: list[str] = []
     with (
         running_server() as base_url,
@@ -834,11 +941,13 @@ def main(argv: list[str]) -> int:
             findings.extend(notes_screens(page, base_url, Path(scratch), name))
             reseed(base_url)
             findings.extend(review_screens(page, base_url, out, name))
+            reseed(base_url)
+            findings.extend(fidelity_screens(page, base_url, fidelity_out, name))
             context.close()
         browser.close()
     for finding in findings:
         print(finding)
-    print(f"screenshots written to {out}")
+    print(f"screenshots written to {out} and {fidelity_out}")
     return 1 if findings else 0
 
 

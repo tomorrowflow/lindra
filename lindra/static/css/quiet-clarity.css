@@ -1123,7 +1123,7 @@ textarea.pane-text::placeholder {
 /* Under the draft text: one row per paragraph, the start of it and where it came from. */
 .origins {
   flex: none;
-  max-height: 11rem;
+  max-height: 14rem;
   overflow-y: auto;
   border-top: 1px solid var(--hairline);
 }
