@@ -17,7 +17,7 @@ jobs:
 
       - name: Install
         run: |
-          python3 -m venv .venv
+          virtualenv --quiet .venv
           .venv/bin/python -m pip install --quiet -e ".[dev]"
 
       - name: Lint
