@@ -1185,6 +1185,37 @@ def dictation_screens(page: Page, base_url: str, out: Path, name: str) -> list[s
         findings.append(f"{name}: closing the failure left the overlay open")
     if api_encounter(base_url, page) != before:
         findings.append(f"{name}: a failed transcription changed the notes")
+
+    # The answer is lost after the service appended and the physician then discards the
+    # dictation: the page must show the notes as saved, or her next edit would save the stale
+    # text over the passage.
+    use_fixture_audio(page, clip)
+    page.click("[data-dictate]")
+    wait_for_panel(page, "recording")
+    page.click("[data-stop]")
+    wait_for_panel(page, "reviewing")
+    page.route(accept_route, lose_answer)
+    page.click("[data-accept]")
+    page.wait_for_selector("[data-accept-error]:not([hidden])")
+    page.unroute(accept_route)
+    with page.expect_navigation():
+        page.click("[data-discard]")
+    page.wait_for_load_state()
+    held_back = api_encounter(base_url, page)
+    if (
+        held_back["notes"].count("[Diktat, ") != 3
+        or page.input_value("#notes") != held_back["notes"]
+    ):
+        findings.append(f"{name}: after a lost answer and a discard the page shows stale notes")
+    page.click("#notes")
+    page.keyboard.press("Control+End")
+    page.keyboard.type(" Danach getippt.", delay=5)
+    page.wait_for_function(
+        "document.querySelector('[data-save-indicator]').textContent.includes('Gespeichert')"
+    )
+    saved = api_encounter(base_url, page)["notes"]
+    if saved != held_back["notes"] + " Danach getippt.":
+        findings.append(f"{name}: typing after a lost answer and a discard changed the passage")
     return findings
 
 

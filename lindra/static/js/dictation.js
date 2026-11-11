@@ -29,6 +29,7 @@ if (dialog && control) {
   let ended = true; // false from the tap on the control until a button ends the dictation
   let current = null; // the panel showing
   let dictationId = null; // names the transcript under review
+  let maybeAppended = false; // an accept of this transcript may have been saved unseen
 
   // The service did not answer, or failed after it may have saved: the append may have happened.
   // The text is locked meanwhile: the service keeps the first text it received for this id.
@@ -71,6 +72,7 @@ if (dialog && control) {
     retry = null;
     field.value = "";
     field.readOnly = false;
+    maybeAppended = false;
     ended = true;
     dialog.close();
     control.focus();
@@ -164,6 +166,7 @@ if (dialog && control) {
     // One id per transcript, kept for every attempt to accept it: the service adds the passage
     // once however often the same id arrives.
     dictationId = newId();
+    maybeAppended = false;
     field.readOnly = false;
     field.value = result.transcript;
     outdates.hidden = !result.outdates_proposal;
@@ -198,10 +201,12 @@ if (dialog && control) {
         credentials: "same-origin",
       });
     } catch {
+      maybeAppended = true;
       rejected(UNSURE, true);
       return;
     }
     if (response.status >= 500) {
+      maybeAppended = true;
       rejected(UNSURE, true);
       return;
     }
@@ -225,7 +230,16 @@ if (dialog && control) {
     start();
   });
   dialog.querySelector("[data-stop]").addEventListener("click", () => recorder?.state === "recording" && recorder.stop());
-  dialog.querySelector("[data-discard]").addEventListener("click", close);
+  // Discarding changes nothing, unless an accept may have reached the service without its
+  // answer arriving. Then the page behind still shows the notes from before, and the next
+  // thing the physician typed would save over the passage. Reloading shows the notes as saved.
+  dialog.querySelector("[data-discard]").addEventListener("click", () => {
+    if (!maybeAppended) {
+      close();
+    } else {
+      location.reload();
+    }
+  });
   dialog.querySelector("[data-close]").addEventListener("click", close);
   dialog.querySelector("[data-retry-dictation]").addEventListener("click", () => retry?.());
   accept.addEventListener("click", acceptTranscript);
