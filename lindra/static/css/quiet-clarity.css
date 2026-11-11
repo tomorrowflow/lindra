@@ -1210,6 +1210,87 @@ textarea.pane-text::placeholder {
   min-width: 136px;
 }
 
+/* ---- Dictation overlay (ADR 0008): one fixed-size modal, one panel per state ---- */
+
+.dictation {
+  width: min(640px, calc(100vw - 32px));
+  height: min(560px, calc(100dvh - 32px));
+}
+
+/* A panel is a flex column; without this rule `hidden` would lose against `display: flex`. */
+.dictation-state[hidden] {
+  display: none;
+}
+
+/* The waiting panels have no buttons; their action row keeps the height of the others. */
+.dictation .dialog-actions {
+  box-sizing: border-box;
+  height: 80px;
+  align-items: center;
+}
+
+.dictation-body {
+  gap: 12px;
+}
+
+.dictation-body > p {
+  margin: 0;
+}
+
+.dictation-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 1.25rem;
+  font-weight: 500;
+}
+
+.dictation-elapsed {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+}
+
+.dictation-text {
+  flex: 1;
+  min-height: 160px;
+  width: 100%;
+  padding: 12px 16px;
+  resize: none;
+  font-size: 1rem;
+  line-height: 1.5;
+  background-color: var(--color-base-100);
+  border: 1px solid rgb(36 51 49 / 25%);
+  border-radius: var(--radius-field);
+}
+
+.dictation-text:focus {
+  border-color: var(--color-primary);
+}
+
+.dictation-warning {
+  display: flex;
+  align-items: start;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: var(--radius-field);
+  background-color: var(--warning-tint);
+  color: var(--color-warning);
+}
+
+.dictation-warning[hidden] {
+  display: none;
+}
+
+.dictation-warning.dictation-problem,
+.dictation-status.dictation-problem {
+  color: var(--color-error);
+}
+
+.dictation-warning.dictation-problem {
+  background-color: var(--error-tint);
+}
+
 /* ---- Motion: a hover is a colour change; nothing moves for its own sake ---- */
 
 @media (prefers-reduced-motion: reduce) {

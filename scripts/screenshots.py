@@ -7,11 +7,15 @@ the save status changes, the status area keeps its width when its text changes, 
 control is at least 44 by 44 CSS pixels, a form error or a period conflict never moves
 the dialog's buttons, a case and an encounter can be opened from the portrait drawer, a
 visit outside the period is refused, a backdated visit sorts by its date, and the notes
-autosave through saving, saved, not saved (network lost) and failed save with retry.
+autosave through saving, saved, not saved (network lost) and failed save with retry. It also
+runs the review of an assessment and the dictation flow (ticket 10): the overlay blocks the
+step while it records, transcribes and shows the transcript, a corrected transcript is
+appended to the notes and outdates a pending proposal, discarding changes nothing, and a
+denied microphone and a recording that cannot be transcribed are told in the overlay.
 
 The application runs on a fixed clock (10.11.2026 14:30), so both default states of the
-new-visit form are reproducible. The case screens (ticket 05) are checked on every run
-but their pictures are not kept; the encounter screens are written to the output directory.
+new-visit form are reproducible. Every earlier ticket's screens are checked on every run but
+their pictures are not kept; the dictation screens are written to the output directory.
 
 Usage: .venv/bin/python scripts/screenshots.py [output-dir]
 Needs `playwright install chromium` once.
@@ -19,6 +23,8 @@ Needs `playwright install chromium` once.
 
 from __future__ import annotations
 
+import base64
+import re
 import socket
 import sys
 import tempfile
@@ -30,7 +36,9 @@ from pathlib import Path
 import httpx
 import uvicorn
 from playwright.sync_api import Page, sync_playwright
+from playwright.sync_api import TimeoutError as PlaywrightTimeout
 
+from lindra import cast
 from lindra.app import create_app
 from lindra.config import Settings
 
@@ -46,6 +54,49 @@ INSIDE_CASE = {
     "period_start": "2026-11-09",
     "period_end": "2026-11-20",
 }
+# Runs in every page before its own scripts. It counts the requests for the microphone, can
+# answer one with the denial a physician gives in Safari, and lets a test hand the overlay a
+# fixture clip as "the recording": a recorder set to `window.__fixtureAudio` (base64) returns
+# that clip, otherwise the browser's own recorder records from the fake microphone.
+INIT_SCRIPT = """
+(() => {
+  window.__micRequests = 0;
+  const media = navigator.mediaDevices;
+  if (media && media.getUserMedia) {
+    const real = media.getUserMedia.bind(media);
+    media.getUserMedia = async (constraints) => {
+      window.__micRequests += 1;
+      if (window.__denyMicrophone) throw new DOMException("Permission denied", "NotAllowedError");
+      return real(constraints);
+    };
+  }
+  const Real = window.MediaRecorder;
+  class FixtureRecorder extends EventTarget {
+    constructor() {
+      super();
+      this.state = "inactive";
+      this.mimeType = "audio/wav";
+    }
+    start() {
+      this.state = "recording";
+    }
+    stop() {
+      this.state = "inactive";
+      const bytes = Uint8Array.from(atob(window.__fixtureAudio), (c) => c.charCodeAt(0));
+      const chunk = new Event("dataavailable");
+      chunk.data = new Blob([bytes], { type: this.mimeType });
+      this.dispatchEvent(chunk);
+      this.dispatchEvent(new Event("stop"));
+    }
+  }
+  if (Real) {
+    window.MediaRecorder = new Proxy(Real, {
+      construct: (target, args) =>
+        window.__fixtureAudio ? new FixtureRecorder() : new target(...args),
+    });
+  }
+})();
+"""
 VIEWPORTS = {
     "ipad-portrait": {"viewport": {"width": 820, "height": 1180}, "device_scale_factor": 2},
     "desktop": {"viewport": {"width": 1440, "height": 900}, "device_scale_factor": 1},
@@ -812,8 +863,286 @@ def review_screens(page: Page, base_url: str, out: Path, name: str) -> list[str]
     return findings
 
 
+def api_encounter(base_url: str, page: Page) -> dict:
+    """The encounter the page shows, as the JSON API has it: notes, revision and badge."""
+    case_id, encounter_id = re.search(r"/faelle/(\d+)/kontakte/(\d+)/", page.url).groups()
+    response = httpx.get(
+        f"{base_url}/api/cases/{case_id}/encounters/{encounter_id}",
+        headers={"Authorization": f"Bearer {TOKEN}"},
+    )
+    response.raise_for_status()
+    return response.json()
+
+
+def use_fixture_audio(page: Page, clip: cast.FixtureClip | None) -> None:
+    """The next recording is this fixture clip; None records from the browser's fake device."""
+    encoded = base64.b64encode(cast.fixture_audio(clip.key)).decode() if clip else None
+    page.evaluate("encoded => { window.__fixtureAudio = encoded; }", encoded)
+
+
+def dictation_states(page: Page) -> list[str]:
+    """The overlay panels that are showing; exactly one while the overlay is open."""
+    return page.eval_on_selector_all(
+        "dialog.dictation[open] .dictation-state:not([hidden])",
+        "els => els.map(e => e.dataset.state)",
+    )
+
+
+def wait_for_panel(page: Page, state: str) -> None:
+    page.wait_for_selector(f"dialog.dictation[open] [data-state={state}]:not([hidden])")
+
+
+def check_overlay_blocks(page: Page, name: str, state: str) -> list[str]:
+    """While the overlay is open nothing behind it can be tapped, tabbed to or escaped to."""
+    findings: list[str] = []
+    where = f"{name} overlay {state}"
+    state_key = "failed" if state == "denied" else state
+    url = page.url
+    viewport = page.viewport_size
+    for selector in (".action-bar .action-button", ".topbar .btn", ".case-link", ".step-link"):
+        for box in boxes(page, selector):
+            x, y = box["x"] + box["w"] / 2, box["y"] + box["h"] / 2
+            if not (0 <= x <= viewport["width"] and 0 <= y <= viewport["height"]):
+                continue
+            hit = page.evaluate(
+                "([x, y]) => !!document.elementFromPoint(x, y)?.closest('dialog.dictation')",
+                [x, y],
+            )
+            if not hit:
+                findings.append(f"{where}: {selector} can be tapped at {x:.0f},{y:.0f}")
+    try:
+        page.click(".action-bar a:has-text('Weiter')", timeout=600)
+        findings.append(f"{where}: Weiter could be clicked")
+    except PlaywrightTimeout:
+        pass
+    # Twice: a second Escape without a tap in between closes a dialog whatever `cancel` did.
+    page.keyboard.press("Escape")
+    page.keyboard.press("Escape")
+    page.wait_for_timeout(150)
+    if not page.locator("dialog.dictation[open]").count() or dictation_states(page) != [state_key]:
+        findings.append(f"{where}: Escape closed the overlay")
+    for _ in range(12):
+        page.keyboard.press("Tab")
+        # A panel with nothing to tap (the wait) leaves focus on the page itself, whose
+        # content is inert.
+        inside = (
+            "document.activeElement === document.body"
+            " || document.activeElement.closest('dialog.dictation')"
+        )
+        if not page.evaluate(f"!!({inside})"):
+            findings.append(f"{where}: Tab moved focus out of the overlay")
+            break
+    if page.url != url:
+        findings.append(f"{where}: the page behind navigated")
+    return findings
+
+
+def overlay_layout(page: Page) -> dict:
+    return {
+        "dialog": boxes(page, "dialog.dictation")[0],
+        "actions": boxes(page, ".dictation-state:not([hidden]) .dialog-actions")[0],
+    }
+
+
+def dictation_screens(page: Page, base_url: str, out: Path, name: str) -> list[str]:
+    """The dictation flow: the microphone control on a review step, the overlay blocking the
+    step, recording, transcribing, reviewing and correcting the canned transcript, accepting it
+    into the notes (with a refused accept first), discarding, and the failures: microphone
+    denied and a recording the speech stand-in cannot transcribe. Typed notes survive each."""
+    findings: list[str] = []
+    portrait = name == "ipad-portrait"
+    transcript_route = "**/api/cases/*/encounters/*/dictation/transcript"
+    accept_route = "**/api/cases/*/encounters/*/dictation/accept"
+    clip = next(
+        clip
+        for case in cast.load_cast().cases
+        if case.case_number == "FIK-2026-001"
+        for encounter in case.encounters
+        if encounter.kind == "assessment"
+        for clip in encounter.audio
+    )
+    corrected = clip.transcript.replace("zweimal", "dreimal")
+
+    open_case(page, base_url, "FIK-2026-001", portrait)
+    open_drawer(page, portrait)
+    page.click(".encounter-link:has-text('Aufnahmeassessment')")
+    page.wait_for_url("**/notizen")
+    notes_url = page.url
+    generate_and_wait(page)
+    go_to_step(page, portrait, 5)
+    section_url = page.url
+    bar = bar_layout(page)
+    if page.is_disabled("[data-dictate]"):
+        findings.append(f"{name}: the microphone control is disabled on a review step")
+    if page.locator("dialog.dictation[open]").count() or page.evaluate("window.__micRequests"):
+        findings.append(f"{name}: the page opened the overlay or the microphone before the tap")
+    before = api_encounter(base_url, page)
+
+    # Microphone permission denied: told in the overlay, with a way out; nothing is lost.
+    page.evaluate("window.__denyMicrophone = true")
+    page.click("[data-dictate]")
+    wait_for_panel(page, "failed")
+    shown = page.inner_text("dialog.dictation [data-state=failed]")
+    if "Mikrofon nicht erlaubt" not in shown or "Lindra darf das Mikrofon nicht" not in shown:
+        findings.append(f"{name}: the denied-permission message reads {shown!r}")
+    for label in ("Schließen", "Erneut versuchen"):
+        button = page.locator(f"dialog.dictation [data-state=failed] .btn:has-text('{label}')")
+        if not button.is_visible():
+            findings.append(f"{name}: the denied-permission overlay has no {label}")
+    findings += check_overlay_blocks(page, name, "denied")
+    findings += check_targets(page, f"{name} overlay denied")
+    page.screenshot(path=out / f"dictation-denied-{name}.png")
+    page.click("[data-retry-dictation]")
+    wait_for_panel(page, "failed")
+    if page.evaluate("window.__micRequests") != 2:
+        findings.append(f"{name}: retry after a denial did not ask for the microphone again")
+    page.click("[data-close]")
+    if page.locator("dialog.dictation[open]").count() or page.url != section_url:
+        findings.append(f"{name}: closing the denied-permission overlay did not end on the step")
+    if api_encounter(base_url, page) != before:
+        findings.append(f"{name}: a denied microphone changed the encounter")
+    page.evaluate("window.__denyMicrophone = false")
+
+    # The canned transcript for fixture audio, through every state of the overlay.
+    use_fixture_audio(page, clip)
+    held: list = []
+    page.route(transcript_route, lambda route: held.append(route))
+    layouts = {}
+    page.click("[data-dictate]")
+    wait_for_panel(page, "recording")
+    layouts["recording"] = overlay_layout(page)
+    page.wait_for_timeout(1200)
+    if page.inner_text("[data-elapsed]") == "0:00":
+        findings.append(f"{name}: the recording time does not run")
+    findings += check_overlay_blocks(page, name, "recording")
+    findings += check_targets(page, f"{name} overlay recording")
+    page.screenshot(path=out / f"dictation-recording-{name}.png")
+    page.click("[data-stop]")
+    wait_for_panel(page, "transcribing")
+    layouts["transcribing"] = overlay_layout(page)
+    while not held:
+        page.wait_for_timeout(50)
+    findings += check_overlay_blocks(page, name, "transcribing")
+    page.screenshot(path=out / f"dictation-transcribing-{name}.png")
+    for route in held:
+        route.continue_()
+    page.unroute(transcript_route)
+    wait_for_panel(page, "reviewing")
+    layouts["reviewing"] = overlay_layout(page)
+    if page.input_value("[data-transcript]") != clip.transcript:
+        findings.append(f"{name}: the transcript is {page.input_value('[data-transcript]')!r}")
+    if not page.is_visible("[data-outdates]"):
+        findings.append(f"{name}: the overlay does not say the pending proposal becomes outdated")
+    findings += check_overlay_blocks(page, name, "reviewing")
+    findings += check_targets(page, f"{name} overlay reviewing")
+    page.screenshot(path=out / f"dictation-reviewing-{name}.png")
+    if any(layout != layouts["recording"] for layout in layouts.values()):
+        findings.append(f"{name}: the overlay or its buttons moved between states: {layouts}")
+    box = layouts["recording"]["dialog"]
+    if not (0 <= box["x"] and box["x"] + box["w"] <= page.viewport_size["width"]):
+        findings.append(f"{name}: the overlay does not fit the viewport: {box}")
+    if api_encounter(base_url, page) != before:
+        findings.append(f"{name}: recording and transcribing changed the encounter")
+
+    # Correct the transcript; a refused accept keeps it, the next one appends it.
+    page.fill("[data-transcript]", corrected)
+    page.route(accept_route, lambda route: route.fulfill(status=500, body="{}"))
+    page.click("[data-accept]")
+    page.wait_for_selector("[data-accept-error]:not([hidden])")
+    if page.input_value("[data-transcript]") != corrected or page.is_disabled("[data-accept]"):
+        findings.append(f"{name}: a refused accept lost the corrected text or its button")
+    if api_encounter(base_url, page) != before:
+        findings.append(f"{name}: a refused accept changed the notes")
+    page.unroute(accept_route)
+    with page.expect_navigation():
+        page.click("[data-accept]")
+    page.wait_for_load_state()
+    if page.url != notes_url:
+        findings.append(f"{name}: accepting did not show the notes step: {page.url}")
+    after = api_encounter(base_url, page)
+    notes = page.input_value("#notes")
+    expected_tail = f"\n\n[Diktat, 10.11.2026 14:30]\n{corrected}\n"
+    if notes != after["notes"] or not notes.startswith(before["notes"]):
+        findings.append(f"{name}: the notes do not start with the typed text")
+    if not notes.endswith(expected_tail) or "zweimal aufzuwachen" in notes:
+        findings.append(f"{name}: the notes end with {notes[-120:]!r}")
+    if after["notes_revision"] != before["notes_revision"] + 1:
+        findings.append(f"{name}: the notes revision is {after['notes_revision']}")
+    badge = page.get_attribute(".encounter-link.current ~ .badge-button", "aria-label")
+    if badge != "Zustand: Vorschlag veraltet":
+        findings.append(f"{name}: the sidebar badge after dictating reads {badge!r}")
+    page.eval_on_selector("#notes", "e => e.scrollTop = e.scrollHeight")
+    page.screenshot(path=out / f"notes-dictated-{name}.png")
+    go_to_step(page, portrait, 9)
+    if not page.is_disabled(".action-bar button:has-text('Übernehmen')"):
+        findings.append(f"{name}: the proposal can be accepted after the notes changed")
+    if bar_layout(page) != bar:
+        findings.append(f"{name}: the action bar differs on the final step after dictating")
+    page.goto(notes_url)
+
+    # Discarding changes nothing.
+    before = api_encounter(base_url, page)
+    use_fixture_audio(page, clip)
+    page.click("[data-dictate]")
+    wait_for_panel(page, "recording")
+    page.click("[data-stop]")
+    wait_for_panel(page, "reviewing")
+    page.click("[data-discard]")
+    if page.locator("dialog.dictation[open]").count():
+        findings.append(f"{name}: discarding left the overlay open")
+    if api_encounter(base_url, page) != before or page.input_value("#notes") != before["notes"]:
+        findings.append(f"{name}: discarding a transcript changed the notes")
+
+    # Typed text that is not saved yet is saved first and stays above the dictated passage.
+    page.click("#notes")
+    page.keyboard.press("Control+End")
+    page.keyboard.type(" Gerade getippt.", delay=5)
+    page.click("[data-dictate]")
+    wait_for_panel(page, "recording")
+    page.click("[data-stop]")
+    wait_for_panel(page, "reviewing")
+    with page.expect_navigation():
+        page.click("[data-accept]")
+    page.wait_for_load_state()
+    notes = page.input_value("#notes")
+    if " Gerade getippt.\n\n[Diktat, 10.11.2026 14:30]\n" not in notes:
+        findings.append(f"{name}: text typed just before dictating is not above the passage")
+    if notes.count("[Diktat, ") != 2 or not notes.startswith(before["notes"]):
+        findings.append(f"{name}: a second dictation did not follow the first: {notes[-200:]!r}")
+
+    # A recording the speech stand-in cannot transcribe: told in the overlay, retry, close.
+    before = api_encounter(base_url, page)
+    use_fixture_audio(page, None)
+    sent: list = []
+    page.on(
+        "request",
+        lambda request: sent.append(request) if "dictation/transcript" in request.url else None,
+    )
+    page.click("[data-dictate]")
+    wait_for_panel(page, "recording")
+    page.wait_for_timeout(1200)
+    page.click("[data-stop]")
+    wait_for_panel(page, "failed")
+    shown = page.inner_text("dialog.dictation [data-state=failed]")
+    if "Text nicht erstellt" not in shown or "erfundenen Fälle" not in shown:
+        findings.append(f"{name}: the failed-transcription message reads {shown!r}")
+    findings += check_overlay_blocks(page, name, "failed")
+    findings += check_targets(page, f"{name} overlay failed")
+    page.screenshot(path=out / f"dictation-failed-{name}.png")
+    page.click("[data-retry-dictation]")
+    wait_for_panel(page, "failed")
+    if len(sent) != 2 or sent[0].post_data_buffer != sent[1].post_data_buffer:
+        findings.append(f"{name}: retry did not send the same recording again ({len(sent)})")
+    page.click("[data-close]")
+    if page.locator("dialog.dictation[open]").count():
+        findings.append(f"{name}: closing the failure left the overlay open")
+    if api_encounter(base_url, page) != before:
+        findings.append(f"{name}: a failed transcription changed the notes")
+    return findings
+
+
 def main(argv: list[str]) -> int:
-    out = Path(argv[0]) if argv else Path("docs/screenshots/LFR-07")
+    out = Path(argv[0]) if argv else Path("docs/screenshots/LFR-10")
     out.mkdir(parents=True, exist_ok=True)
     findings: list[str] = []
     with (
@@ -821,19 +1150,26 @@ def main(argv: list[str]) -> int:
         sync_playwright() as playwright,
         tempfile.TemporaryDirectory() as scratch,
     ):
-        browser = playwright.chromium.launch()
+        # A fake microphone that records a tone, and no permission prompt (headless Chromium
+        # has no prompt to show; a denial is simulated in `INIT_SCRIPT`).
+        browser = playwright.chromium.launch(
+            args=["--use-fake-device-for-media-stream", "--use-fake-ui-for-media-stream"]
+        )
         for name, viewport in VIEWPORTS.items():
             reseed(base_url)
             context = browser.new_context(**viewport, locale="de-DE")
+            context.add_init_script(INIT_SCRIPT)
             page = context.new_page()
             log_in(page, base_url)
-            # Tickets 05 and 06 are checked on every run; only this ticket's pictures are kept.
+            # Tickets 05 to 07 are checked on every run; only this ticket's pictures are kept.
             findings.extend(case_screens(page, base_url, Path(scratch), name))
             reseed(base_url)
             findings.extend(visit_screens(page, base_url, Path(scratch), name))
             findings.extend(notes_screens(page, base_url, Path(scratch), name))
             reseed(base_url)
-            findings.extend(review_screens(page, base_url, out, name))
+            findings.extend(review_screens(page, base_url, Path(scratch), name))
+            reseed(base_url)
+            findings.extend(dictation_screens(page, base_url, out, name))
             context.close()
         browser.close()
     for finding in findings:

@@ -18,6 +18,7 @@ from lindra import (
     badges,
     case_api,
     cases,
+    dictation_api,
     drafts,
     formatting,
     pages,
@@ -29,7 +30,8 @@ from lindra import (
 from lindra.cast import load_cast
 from lindra.config import Settings
 from lindra.pages import Clock
-from lindra.standins import FixtureTextModel
+from lindra.speech import SpeechRecognizer
+from lindra.standins import FixtureSpeech, FixtureTextModel
 from lindra.store import DATABASE_FILE, Store
 from lindra.textmodel import TextModel
 
@@ -58,9 +60,10 @@ def create_app(
     settings: Settings | None = None,
     clock: Clock | None = None,
     text_model: TextModel | None = None,
+    speech: SpeechRecognizer | None = None,
 ) -> FastAPI:
     """Build the service. `clock` is "now" for the pages; tests and screenshots pass a fixed
-    one. `text_model` replaces the configured adapter; tests pass one that fails."""
+    one. `text_model` and `speech` replace the configured adapters; tests pass ones that fail."""
     settings = settings or Settings.from_env()
     app = FastAPI(title="Lindra", docs_url=None, redoc_url=None, openapi_url=None)
     app.mount("/static", StaticFiles(directory=PACKAGE_DIR / "static"), name="static")
@@ -70,6 +73,7 @@ def create_app(
     app.include_router(case_api.build_router(store))
     app.include_router(review_api.build_router(store, model, generations))
     now = clock or wall_clock(settings.timezone)
+    app.include_router(dictation_api.build_router(store, speech or FixtureSpeech(load_cast()), now))
     app.include_router(pages.build_router(store, TEMPLATES, now, generations))
     app.include_router(review_pages.build_router(store, TEMPLATES, generations))
 
