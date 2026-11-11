@@ -5,13 +5,14 @@ date: 2026-11-08
 
 # Environments: throwaway, test and production tiers for a hosted web service
 
-Lindra has a hosted runtime (the web service, its SQLite file and the model adapters), so it has three environment tiers, each its own Linux identity, sharing one compose file and one executable Python script `scripts/env.py` with the commands `up`, `check`, `reset`, `down`, `ensure-test` and `install-timer`.
+Lindra has a hosted runtime (the web service, its SQLite file and the model adapters), so it has three environment tiers (plus the preview, a throwaway stack with a fixed name, port range and token), each its own Linux identity, sharing one compose file and one executable Python script `scripts/env.py` with the commands `up`, `check`, `reset`, `down`, `ensure-test` and `install-timer`.
 
 ## Tiers
 
 | Tier | Who runs it | Where | What it runs |
 | --- | --- | --- | --- |
 | Throwaway | the `factory` user, per ticket | the ticket's own stack in rootless Docker on the ticket's node | the ticket branch |
+| Preview | the `factory` user, per card in review, started by the Workboard | a throwaway stack on the node that built the card, project `lindra-pv-<card>`, one port from 48600 to 48619 on `127.0.0.1`, published by the node's `tailscale serve` | the card's branch, until the card leaves review |
 | Test | user and OpenClaw node `lindra-test` | rootless Docker on Linux 790, port 8780, compose project `lindra-test` | only `origin/main`, refreshed by `scripts/env.py ensure-test` from the user timer `lindra-test-env.timer` every 5 minutes |
 | Production | the operator as `frogger`, never a ticket or agent | open, see below | a `main` commit that is green on test, deployed by the operator following the runbook in `docs/environments.md` |
 
@@ -30,7 +31,7 @@ There is no other outside service. The persistent test stack always runs the sta
 ## Data, secrets, access
 
 - `reset` seeds the fictional cast and nothing else; never real, pseudonymised or production-copied data.
-- Nodes read `LINDRA_TEST_URL` and `LINDRA_TEST_TOKEN`. `up` writes a gitignored env file with a generated test token when it is missing; test secrets are generated on the test node and never committed. Production secrets stay with the operator.
+- Nodes read `LINDRA_TEST_URL` and `LINDRA_TEST_TOKEN`. `up` writes a gitignored env file with a generated test token when it is missing; test secrets are generated on the test node and never committed. Production secrets stay with the operator. A new preview env file takes its token from `LINDRA_PREVIEW_TOKEN` instead, so the operator can log in; the value is never committed or printed.
 - Production holds no real patient data until the separate approval in ADR 0006 exists.
 
 ## Open decision: the production host

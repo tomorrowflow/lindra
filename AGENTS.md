@@ -24,7 +24,7 @@ CI (`.github/workflows/ci.yml`) runs install, lint, format check, vendor check, 
 
 ## Environments
 
-`docs/environments.md` documents every tier (throwaway, test, production): user, node, host, port, compose project, commands, data rule and stand-ins, and the production runbook. A ticket runs only its own throwaway stack through `scripts/env.py` and never touches the test tier or production. The stack runs on the stand-ins and the fictional cast in `lindra/cast.py`; nothing real, pseudonymised or production-copied goes into any tier or into the repository (ADR 0006, ADR 0007).
+`docs/environments.md` documents every tier (throwaway, preview, test, production): user, node, host, port, compose project, commands, data rule and stand-ins, and the production runbook. A ticket runs only its own throwaway stack through `scripts/env.py` and never touches the test tier or production. The stack runs on the stand-ins and the fictional cast in `lindra/cast.py`; nothing real, pseudonymised or production-copied goes into any tier or into the repository (ADR 0006, ADR 0007).
 
 ## Code and tests
 
