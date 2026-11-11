@@ -14,6 +14,9 @@ Every command converges to the same state when run twice. Exit codes: 0 success,
 1 a check or an action failed, 2 the command cannot run as asked. The script needs
 only Python 3.12, git and Docker with the compose plugin (rootless Docker is the
 supported setup). Secrets live in `.lindra-env/<project>.env`, which git ignores.
+A throwaway `up` that creates the env file takes the login token from
+LINDRA_PREVIEW_TOKEN when it is set (the Workboard's preview stacks); otherwise it
+generates one.
 """
 
 from __future__ import annotations
@@ -49,6 +52,7 @@ LOCAL_BIND = "127.0.0.1"
 
 TEST_URL_VARIABLE = "LINDRA_TEST_URL"
 TEST_TOKEN_VARIABLE = "LINDRA_TEST_TOKEN"
+PREVIEW_TOKEN_VARIABLE = "LINDRA_PREVIEW_TOKEN"
 
 TIMER_NAME = "lindra-test-env.timer"
 SERVICE_NAME = "lindra-test-env.service"
@@ -159,17 +163,45 @@ def read_env(path: Path) -> dict[str, str]:
     return values
 
 
+class InvalidPreviewToken(ValueError):
+    """`LINDRA_PREVIEW_TOKEN` holds characters the env file cannot carry."""
+
+
+def preview_token(target: Target) -> str:
+    """The operator's token from `LINDRA_PREVIEW_TOKEN`, read for a throwaway stack only."""
+    if target.tier != "throwaway":
+        return ""
+    return os.environ.get(PREVIEW_TOKEN_VARIABLE, "").strip()
+
+
+def new_token(preset: str) -> str:
+    """The preset token, or a generated one when there is none.
+
+    The token goes into a compose env file, where whitespace, `$` and `#` change
+    its meaning, so only URL-safe characters are accepted.
+    """
+    if not preset:
+        return secrets.token_urlsafe(32)
+    if not re.fullmatch(r"[A-Za-z0-9._~-]+", preset):
+        raise InvalidPreviewToken(
+            f"{PREVIEW_TOKEN_VARIABLE} may hold only letters, digits and . _ ~ - characters"
+        )
+    return preset
+
+
 def ensure_env_file(
-    target: Target, port: int | None = None, bind: str | None = None
+    target: Target, port: int | None = None, bind: str | None = None, preset_token: str = ""
 ) -> dict[str, str]:
-    """Create the private env file with a generated token when it is missing.
+    """Create the private env file with a token when it is missing.
 
     An existing file keeps its token, port and bind address; `port` and `bind` (from
-    `up --port` and `--bind`) replace the stored values when given.
+    `up --port` and `--bind`) replace the stored values when given. A new file takes
+    `preset_token` (`up` passes `LINDRA_PREVIEW_TOKEN` for a throwaway stack) and a
+    generated token when that is empty.
     """
     stored = read_env(target.env_file)
     values = {
-        "LINDRA_TOKEN": stored.get("LINDRA_TOKEN") or secrets.token_urlsafe(32),
+        "LINDRA_TOKEN": stored.get("LINDRA_TOKEN") or new_token(preset_token),
         "LINDRA_PORT": str(port or stored.get("LINDRA_PORT") or target.port or free_port()),
         "LINDRA_BIND": format_bind(bind or stored.get("LINDRA_BIND") or target.bind),
         "LINDRA_TIER": target.tier,
@@ -290,7 +322,11 @@ def deployed_commit() -> str | None:
 
 def cmd_up(args: argparse.Namespace) -> int:
     target = resolve_target(args.tier, args.project)
-    values = ensure_env_file(target, args.port, args.bind)
+    try:
+        values = ensure_env_file(target, args.port, args.bind, preview_token(target))
+    except InvalidPreviewToken as error:
+        print(f"up: {error}")
+        return 2
     commit = head_commit()
     compose(target, "up", "-d", "--build", "--wait", "--remove-orphans", commit=commit)
     url = base_url(values)
@@ -501,7 +537,11 @@ def build_parser() -> argparse.ArgumentParser:
             )
         return sub
 
-    up = add("up", "build and start the stack, then seed the cast on a fresh volume")
+    up = add(
+        "up",
+        "build and start the stack, then seed the cast on a fresh volume; a new throwaway "
+        f"env file takes its token from {PREVIEW_TOKEN_VARIABLE} when set",
+    )
     up.add_argument("--port", type=int, help="host port; stored in the env file")
     up.add_argument("--bind", help="host address to listen on; stored in the env file")
     check = add("check", "check health, an authenticated route, the stand-ins and the seed hook")
