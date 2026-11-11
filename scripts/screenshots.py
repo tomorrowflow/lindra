@@ -1065,7 +1065,9 @@ def dictation_screens(page: Page, base_url: str, out: Path, name: str) -> list[s
     page.unroute(accept_route)
     page.route(accept_route, lambda route: route.fulfill(status=500, body="{}"))
     page.click("[data-accept]")
-    page.wait_for_function("document.querySelector('[data-transcript]').readOnly")
+    page.wait_for_selector("[data-accept-error]:not([hidden])")
+    if not page.evaluate("document.querySelector('[data-transcript]').readOnly"):
+        findings.append(f"{name}: the text is not locked while the outcome is unclear")
     if page.input_value("[data-transcript]") != corrected or page.is_disabled("[data-accept]"):
         findings.append(f"{name}: a server error lost the corrected text or its button")
     if api_encounter(base_url, page) != before:
@@ -1232,8 +1234,16 @@ def dictation_screens(page: Page, base_url: str, out: Path, name: str) -> list[s
     if page.is_enabled("[data-discard]") or page.is_enabled("[data-accept]"):
         findings.append(f"{name}: discard or accept stays enabled while the accept is on its way")
     page.evaluate("document.querySelector('[data-discard]').click()")
+    page.keyboard.press("Escape")
+    page.keyboard.press("Escape")
+    page.wait_for_timeout(150)
     if not page.locator("dialog.dictation[open]").count():
         findings.append(f"{name}: the overlay closed while the accept was on its way")
+    if not page.evaluate("document.querySelector('[data-transcript]').readOnly"):
+        findings.append(f"{name}: the transcript stays editable while the accept is on its way")
+    page.evaluate("document.querySelector('[data-transcript]').dispatchEvent(new Event('input'))")
+    if page.is_enabled("[data-accept]") or page.is_enabled("[data-discard]"):
+        findings.append(f"{name}: an input event re-enabled accept or discard in flight")
     with page.expect_navigation():
         for route in waiting:
             route.continue_()

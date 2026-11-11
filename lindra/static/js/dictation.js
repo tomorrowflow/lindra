@@ -194,6 +194,8 @@ if (dialog && control) {
     acceptError.hidden = true;
     accept.disabled = true;
     discard.disabled = true;
+    // Typing would enable the accept button again, and the text sent must be the text shown.
+    field.readOnly = true;
     if (!(await flushAll())) {
       rejected("Ihre Notizen sind noch nicht gespeichert. Der Text bleibt hier, bis Sie es erneut versuchen.");
       return;
@@ -250,6 +252,8 @@ if (dialog && control) {
   dialog.querySelector("[data-retry-dictation]").addEventListener("click", () => retry?.());
   accept.addEventListener("click", acceptTranscript);
   field.addEventListener("input", () => {
+    // A locked text (accept on its way, outcome unclear) leaves the buttons as they are.
+    if (field.readOnly) return;
     accept.disabled = !field.value.trim();
   });
   // Escape would close the overlay with a transcript in it; only the buttons end a dictation.
