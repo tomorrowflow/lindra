@@ -36,6 +36,7 @@ import uvicorn
 from playwright.sync_api import Page, sync_playwright
 
 from lindra.app import create_app
+from lindra.cast import load_cast
 from lindra.config import Settings
 
 TOKEN = "screenshot-token"
@@ -343,7 +344,9 @@ def visit_screens(page: Page, base_url: str, out: Path, name: str) -> list[str]:
         findings.append(
             f"{name}: the backdated visit is not in date order: {encounter_dates(page)}"
         )
-    if page.locator(".step-link").count() != 1:
+    # A visit has the notes, its four sections and the last step, and only the selected
+    # encounter shows them.
+    if page.locator(".step-list").count() != 1 or page.locator(".step-link").count() != 6:
         findings.append(f"{name}: steps show beneath more than the selected encounter")
     page.screenshot(path=out / f"visit-backdated-{name}.png")
 
@@ -916,11 +919,236 @@ def fidelity_screens(page: Page, base_url: str, out: Path, name: str) -> list[st
     return findings
 
 
+def accept_proposal(page: Page, portrait: bool, final_step: int) -> None:
+    """Open the last step, which is "Übernehmen" while a proposal is pending, and accept it."""
+    go_to_step(page, portrait, final_step)
+    page.click(".action-bar button:has-text('Übernehmen')")
+    page.wait_for_url("**/abschluss")
+
+
+def encounter_badge_label(page: Page, when: str) -> str:
+    """The label of the state badge the sidebar shows beside the encounter dated `when`."""
+    item = page.locator(".encounter-item", has=page.locator(".encounter-link", has_text=when))
+    return item.locator(".badge-button").get_attribute("aria-label") or ""
+
+
+def open_encounter(page: Page, portrait: bool, label: str) -> None:
+    """Switch to another encounter of the open case from the sidebar (the drawer in portrait)."""
+    open_drawer(page, portrait)
+    previous = page.url
+    page.click(f".encounter-link:has-text('{label}')")
+    page.wait_for_function("url => location.href !== url", arg=previous)
+    page.wait_for_load_state()
+
+
+def background_screens(page: Page, base_url: str, out: Path, name: str) -> list[str]:
+    """The second half of the browser flow (ticket 09), on the first fictional case: accept the
+    assessment, be refused a visit outside the period and create a backdated one inside it,
+    generate the visit and read a historical reference, accept the assessment again and see the
+    visit's background marker, badge and refused proposal, switch encounters through the
+    drawer, and open an encounter without an accepted draft."""
+    findings: list[str] = []
+    portrait = name == "ipad-portrait"
+    case_number = "FIK-2026-001"
+    assessment, seeded_visit, new_visit = (
+        "Aufnahmeassessment",
+        "09.10.2026 09:00",
+        "09.10.2026 08:00",
+    )
+
+    # The accepted assessment is what the visit draws on.
+    open_case(page, base_url, case_number, portrait)
+    open_drawer(page, portrait)
+    page.click(f".encounter-link:has-text('{assessment}')")
+    page.wait_for_url("**/notizen")
+    generate_and_wait(page)
+    accept_proposal(page, portrait, 9)
+
+    # A visit outside the period is refused and keeps what was typed; backdated inside it, it
+    # is created.
+    open_case(page, base_url, case_number, portrait)
+    page.click("main a:has-text('Neue Visite')")
+    page.wait_for_selector("dialog[open]")
+    page.fill("#visit_date", "2026-10-20")
+    page.fill("#visit_time", "08:00")
+    page.click("button:has-text('Visite anlegen')")
+    page.wait_for_selector(".field-error:not(:empty)")
+    if "Behandlungszeitraum" not in page.inner_text("#visit_date-error"):
+        findings.append(f"{name}: the refusal outside the period does not name the period")
+    page.fill("#visit_date", "2026-10-09")
+    page.click("button:has-text('Visite anlegen')")
+    page.wait_for_url("**/notizen")
+    # The fixture model answers with the cast's draft, whose references point into the notes of
+    # the cast's visit, so those are the notes entered.
+    page.fill("#notes", load_cast().cases[0].encounters[1].notes)
+    page.wait_for_function(
+        "document.querySelector('[data-save-indicator]').textContent.includes('Gespeichert')"
+    )
+    notes_bar = bar_layout(page)
+    if encounter_badge_label(page, new_visit) != "Zustand: Notizen gespeichert, noch kein Entwurf":
+        findings.append(f"{name}: the new visit does not show the notes-only badge")
+
+    # Generating the visit: its four sections, a historical reference beside today's.
+    generate_and_wait(page)
+    go_to_step(page, portrait, 2)
+    if (
+        page.locator(".section-step .step-title").inner_text().strip()
+        != "Verlauf seit letzter Visite"
+    ):
+        findings.append(f"{name}: the first visit step is not Verlauf seit letzter Visite")
+    labels = page.eval_on_selector_all(
+        ".step-list .step-label", "els => els.map(e => e.textContent.trim())"
+    )
+    if labels != [
+        "Notizen",
+        "Verlauf seit letzter Visite",
+        "Aktuelle Befunde",
+        "Ärztliche Einschätzung",
+        "Vereinbartes Vorgehen und Ziele",
+        "Übernehmen",
+    ]:
+        findings.append(f"{name}: the visit steps are {labels}")
+    if bar_layout(page) != notes_bar:
+        findings.append(f"{name}: the visit step moved the action bar")
+    earlier = page.locator(".proposal-text details.origin-earlier")
+    today = page.locator(".proposal-text details.origin:not(.origin-earlier)")
+    if earlier.count() != 1 or today.count() < 1:
+        findings.append(f"{name}: the proposal does not show one historical and a notes reference")
+    else:
+        toggle, quote = earlier.locator(".origin-toggle"), earlier.locator(".origin-quote")
+        if "aus früherem Kontakt" not in toggle.inner_text():
+            findings.append(f"{name}: the historical reference reads {toggle.inner_text()!r}")
+        if "aus Notizen" not in today.first.locator(".origin-toggle").inner_text():
+            findings.append(f"{name}: today's reference no longer reads aus Notizen")
+        if quote.is_visible():
+            findings.append(f"{name}: the historical quote shows before it is tapped")
+        toggle.click()
+        page.wait_for_function(
+            "document.querySelector('.proposal-text details.origin-earlier').open"
+        )
+        if "Ibuprofen 400 mg bei Bedarf" not in quote.inner_text():
+            findings.append(f"{name}: the historical reference shows {quote.inner_text()!r}")
+        caption = earlier.locator(".origin-caption").inner_text()
+        if caption.strip() != "Aufnahmeassessment, 05.10.2026 09:00":
+            findings.append(f"{name}: the reference names {caption!r}, not encounter and date")
+        looks = page.evaluate(
+            "() => { const s = sel => getComputedStyle(document.querySelector(sel));"
+            " return [s('.proposal-text details.origin-earlier > summary').backgroundColor,"
+            " s('.proposal-text details.origin:not(.origin-earlier) > summary').backgroundColor]; }"
+        )
+        if looks[0] == looks[1]:
+            findings.append(f"{name}: the two kinds of reference look the same: {looks}")
+        if small_targets(page, ".origin-toggle"):
+            findings.append(f"{name}: a reference toggle is under 44 by 44 CSS px")
+    page.screenshot(path=out / f"visit-historical-reference-{name}.png")
+    findings += check_targets(page, f"{name} visit proposal step")
+
+    # Accept it. The contradiction with the background is on the list, naming both statements.
+    accept_proposal(page, portrait, 6)
+    go_to_step(page, portrait, 2)
+    kept_text = page.input_value("#section-text")
+    asked = page.inner_text(".clarifications")
+    if "strahlt der Schmerz nicht ins Bein aus" not in asked or "Ausstrahlung" not in asked:
+        findings.append(f"{name}: the contradiction item does not name both statements")
+    if page.locator("#section-origins .origin-earlier").count() != 1:
+        findings.append(f"{name}: the draft pane does not list the historical reference")
+    if page.locator("[data-background-changed]").count() != 0:
+        findings.append(f"{name}: the marker shows before the background changed")
+
+    # A second proposal on the current background; then the assessment is accepted again.
+    generate_and_wait(page)
+    if encounter_badge_label(page, new_visit) != "Zustand: Vorschlag liegt vor":
+        findings.append(f"{name}: a pending visit proposal does not show its badge")
+    open_encounter(page, portrait, assessment)
+    page.click("#notes")
+    page.keyboard.press("Control+End")
+    page.keyboard.type(" Nachts wacht sie zweimal auf.", delay=10)
+    page.wait_for_function(
+        "document.querySelector('[data-save-indicator]').textContent.includes('Gespeichert')"
+    )
+    generate_and_wait(page)
+    accept_proposal(page, portrait, 9)
+
+    # The visit: its draft carries the marker with the text kept, its proposal is refused.
+    open_encounter(page, portrait, new_visit)
+    if (
+        encounter_badge_label(page, new_visit)
+        != "Zustand: Vorschlag veraltet, Hintergrund geändert"
+    ):
+        findings.append(
+            f"{name}: the sidebar badge of the visit is {encounter_badge_label(page, new_visit)!r}"
+        )
+    marker = page.locator("[data-background-changed]")
+    if marker.count() != 1 or "Hintergrund seit Erstellung geändert" not in marker.inner_text():
+        findings.append(f"{name}: the visit does not show Hintergrund seit Erstellung geändert")
+    page.screenshot(path=out / f"visit-background-marker-{name}.png")
+    go_to_step(page, portrait, 2)
+    if page.input_value("#section-text") != kept_text:
+        findings.append(f"{name}: the visit text changed with its background")
+    if "Veraltet" not in page.inner_text("#section-head"):
+        findings.append(f"{name}: a section of the outdated proposal does not say Veraltet")
+    go_to_step(page, portrait, 6)
+    reason = page.locator("[data-outdated-reason]")
+    if "Veraltet: Hintergrund seit diesem Vorschlag geändert" not in reason.inner_text():
+        findings.append(f"{name}: the refused proposal does not spell out its reason")
+    elif not reason.is_visible():
+        findings.append(f"{name}: the reason is not visible")
+    if not page.is_disabled(".action-bar button:has-text('Übernehmen')"):
+        findings.append(f"{name}: an outdated visit proposal can be accepted")
+    if bar_layout(page) != notes_bar:
+        findings.append(f"{name}: the refused proposal moved the action bar")
+    page.screenshot(path=out / f"proposal-refused-background-{name}.png")
+    findings += check_targets(page, f"{name} refused visit proposal")
+
+    # Discarding the proposal leaves the marker, the text and the badge of the draft.
+    page.click(".action-bar button:has-text('Verwerfen')")
+    page.wait_for_load_state()
+    if page.locator("[data-background-changed]").count() != 1:
+        findings.append(f"{name}: discarding the outdated proposal cleared the marker")
+    label = encounter_badge_label(page, new_visit)
+    if label != "Zustand: Hintergrund seit Erstellung geändert":
+        findings.append(f"{name}: the visit's badge after discarding is {label!r}")
+    open_drawer(page, portrait)
+    item = page.locator(".encounter-item", has=page.locator(".encounter-link", has_text=new_visit))
+    item.locator(".badge-button").click()
+    page.wait_for_selector(".encounter-item .badge-explanation:not([hidden])")
+    page.screenshot(path=out / f"sidebar-background-badge-{name}.png")
+    close_drawer(page, portrait)
+    go_to_step(page, portrait, 2)
+    if page.input_value("#section-text") != kept_text:
+        findings.append(f"{name}: discarding the proposal changed the draft")
+
+    # Switching encounters through the drawer; the assessment has no marker of its own.
+    open_drawer(page, portrait)
+    page.screenshot(path=out / f"encounter-switch-{name}.png")
+    page.click(f".encounter-link:has-text('{assessment}')")
+    page.wait_for_url("**/notizen")
+    if page.locator("[data-background-changed]").count() != 0:
+        findings.append(f"{name}: the assessment shows a background marker")
+    if assessment not in page.inner_text(".case-subtitle"):
+        findings.append(f"{name}: the encounter switch did not open the assessment")
+
+    # An encounter without an accepted draft has nothing to copy.
+    open_encounter(page, portrait, seeded_visit)
+    go_to_step(page, portrait, 6)
+    if page.locator("[data-nothing-to-copy]").count() != 1:
+        findings.append(f"{name}: an encounter without a draft does not say there is nothing")
+    if page.locator("[data-copy]").count() != 0:
+        findings.append(f"{name}: an encounter without a draft offers a copy control")
+    if not page.is_disabled(".action-bar button:has-text('Kopieren')"):
+        findings.append(f"{name}: the action bar's copy button is enabled without a draft")
+    page.screenshot(path=out / f"nothing-to-copy-{name}.png")
+    findings += check_targets(page, f"{name} encounter without a draft")
+    return findings
+
+
 def main(argv: list[str]) -> int:
     root = Path(argv[0]) if argv else Path("docs/screenshots")
     out, fidelity_out = root / "LFR-07", root / "LFR-08"
+    background_out = root / "LFR-09"
     out.mkdir(parents=True, exist_ok=True)
     fidelity_out.mkdir(parents=True, exist_ok=True)
+    background_out.mkdir(parents=True, exist_ok=True)
     findings: list[str] = []
     with (
         running_server() as base_url,
@@ -942,11 +1170,13 @@ def main(argv: list[str]) -> int:
             findings.extend(review_screens(page, base_url, out, name))
             reseed(base_url)
             findings.extend(fidelity_screens(page, base_url, fidelity_out, name))
+            reseed(base_url)
+            findings.extend(background_screens(page, base_url, background_out, name))
             context.close()
         browser.close()
     for finding in findings:
         print(finding)
-    print(f"screenshots written to {out} and {fidelity_out}")
+    print(f"screenshots written to {out}, {fidelity_out} and {background_out}")
     return 1 if findings else 0
 
 
