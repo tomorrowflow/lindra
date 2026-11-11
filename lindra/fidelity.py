@@ -10,7 +10,9 @@ decides which of its paragraphs the physician's notes support. A paragraph stays
   conversion, a score interpretation, a claim of completeness or approval) unless a quoted
   passage says it, and
 - it names no provenance (the patient's report, a prior finding, the physician's own finding)
-  that a quoted passage does not name.
+  that a quoted passage does not name, and
+- it does not settle a contradiction the model put on the clarification list by naming only
+  one of the measures the notes set against each other.
 
 Whatever the check drops goes on the clarification list as a gap, and a section left without
 a paragraph and without an item gets one. The draft therefore holds only what the notes
@@ -24,7 +26,7 @@ whether a quoted passage supports its paragraph. A reference shows origin, not c
 from __future__ import annotations
 
 import re
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import replace
 
 from lindra import drafts
@@ -192,6 +194,13 @@ _PROVENANCE = (
 )
 
 _NUMBER = re.compile(r"\d+(?:[.,]\d+)*")
+_MEASURE = re.compile(
+    r"\d+(?:[.,]\d+)?\s*(?:mg|µg|mcg|g|ml|mmol|ie|%|tropfen|tabletten|kapseln|stunden|tage|"
+    r"wochen|monate|jahre)(?!\w)",
+    re.IGNORECASE,
+)
+# Words that say two statements in the notes disagree.
+_DISAGREE = ("widerspr", "abweich", "unterschiedlich", "uneinheitlich", " oder ")
 _NUMBER_WORDS = {
     "null": 0,
     "einmal": 1,
@@ -238,12 +247,13 @@ def check_result(generated: drafts.Generated, sources: Mapping[str, str]) -> dra
     items come first, then ours in section order.
     """
     items = list(generated.clarifications)
+    conflicts = _conflicts(items)
     sections: list[drafts.Section] = []
     dropped: list[Clarification] = []
     for section in generated.sections:
         kept = []
         for paragraph in section.paragraphs:
-            problem = _problem(paragraph, sources)
+            problem = _problem(paragraph, sources, conflicts.get(section.title, ()))
             if problem is None:
                 kept.append(paragraph)
             else:
@@ -258,8 +268,14 @@ def check_result(generated: drafts.Generated, sources: Mapping[str, str]) -> dra
     return replace(generated, sections=tuple(sections), clarifications=tuple(items))
 
 
-def _problem(paragraph: drafts.Paragraph, sources: Mapping[str, str]) -> str | None:
-    """The clarification text for a paragraph the notes do not support, or None when it stays."""
+def _problem(
+    paragraph: drafts.Paragraph,
+    sources: Mapping[str, str],
+    conflicts: Sequence[frozenset[str]],
+) -> str | None:
+    """The clarification text for a paragraph the notes do not support, or None when it stays.
+
+    `conflicts` are the contradictions the model flagged for the paragraph's section."""
     if not paragraph.references:
         return NO_REFERENCE
     quotes = []
@@ -286,7 +302,39 @@ def _problem(paragraph: drafts.Paragraph, sources: Mapping[str, str]) -> str | N
     unknown = sorted(_numbers(said) - _numbers(quoted))
     if unknown:
         return _not_in_the_notes(f"die Zahl {unknown[0]}")
+    stated = _measures(said)
+    for conflict in conflicts:
+        if stated & conflict and not conflict <= stated:
+            return (
+                f"Eine Angabe nannte nur {_join(sorted(stated & conflict))} von "
+                f"{_join(sorted(conflict))}, die sich in den Notizen widersprechen. Sie steht "
+                "nicht im Entwurf. Legen Sie in den Notizen fest, was gilt."
+            )
     return None
+
+
+def _conflicts(items: Sequence[Clarification]) -> dict[str, list[frozenset[str]]]:
+    """The measures each flagged contradiction sets against each other, by section.
+
+    An item counts when it says the notes disagree and names two or more measures, as in "50 mg
+    oder 100 mg". A paragraph of that section that names some of them but not all would settle
+    the contradiction, which only the physician may do.
+    """
+    found: dict[str, list[frozenset[str]]] = {}
+    for item in items:
+        measures = _measures(item.text)
+        if len(measures) >= 2 and any(word in f" {item.text.lower()} " for word in _DISAGREE):
+            found.setdefault(item.section, []).append(frozenset(measures))
+    return found
+
+
+def _measures(text: str) -> set[str]:
+    """Quantities with a unit, like "50 mg" or "3 Monate", without the space between them."""
+    return {"".join(match.split()).lower() for match in _MEASURE.findall(text)}
+
+
+def _join(measures: Sequence[str]) -> str:
+    return " und ".join(measures)
 
 
 def _squash(text: str) -> str:

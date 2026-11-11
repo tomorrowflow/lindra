@@ -16,6 +16,7 @@ from lindra.cast import PAIN_HEADING_LIMIT, PAIN_SECTION, SECTIONS, SUBHEADINGS,
 from lindra.textmodel import NOTES_SOURCE, GenerationFailed
 
 OUTDATED_REASON = "Veraltet: Notizen seit diesem Vorschlag geändert"
+ORIGIN_NOTES, ORIGIN_HAND = "notes", "hand"
 UNSTRUCTURED = "Das Ergebnis des Textmodells hat nicht die erwartete Struktur."
 
 
@@ -183,6 +184,20 @@ def _blocks(section: Section) -> list[tuple[str, Paragraph]]:
 
 def is_empty(section: Section) -> bool:
     return not section_text(section).strip()
+
+
+def excerpt(paragraph: Paragraph, limit: int = 60) -> str:
+    """The start of a paragraph on one line, with its heading, to say which one a reference
+    belongs to."""
+    flat = " ".join(paragraph.text.split())
+    if paragraph.heading:
+        flat = f"{paragraph.heading} · {flat}"
+    return flat if len(flat) <= limit else flat[: limit - 1].rstrip() + "…"
+
+
+def origin_of(references: Sequence[Any]) -> str:
+    """`notes` for a paragraph generated from the notes, `hand` for one without a reference."""
+    return ORIGIN_NOTES if references else ORIGIN_HAND
 
 
 # ---- editing, acceptance, outdated and stale ----

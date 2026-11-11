@@ -785,3 +785,161 @@ def test_the_notes_step_shows_the_stale_marker_too(review):
     possibly_outdated(review)
 
     assert 'class="marker"' in review.get("/notizen").text
+
+
+# ---- input references, pain problems and the clarification list (ticket 08) ----
+
+
+def origins_of(page):
+    return page.split('id="section-origins"', 1)[1]
+
+
+def test_every_paragraph_of_the_proposal_has_a_tappable_reference_with_its_quoted_passage(review):
+    review.generate()
+
+    pane = proposal_pane(review.step(1).text)
+
+    assert pane.count('<details class="origin">') == 1
+    assert "aus Notizen" in pane
+    assert (
+        '<blockquote class="origin-quote" lang="de">Patientin lebt mit Ehemann in einer '
+        "Etagenwohnung, zwei erwachsene Kinder, arbeitet halbtags im Büro, aktuell "
+        "krankgeschrieben.</blockquote>"
+    ) in pane
+
+
+def test_a_paragraph_with_several_passages_shows_each(browser, api_client):
+    second = Review(browser, api_client, "FIK-2026-002")
+    second.generate()
+
+    pane = proposal_pane(second.step(2).text)
+
+    for quote in ("Migräne seit der Jugend", "Diabetes mellitus Typ 2", "Topiramat 2022"):
+        assert quote in pane
+    assert pane.count("<blockquote") == 3
+
+
+def test_the_reference_says_where_the_text_came_from_and_nothing_about_correctness(review):
+    review.generate()
+    review.accept()
+
+    origins = origins_of(review.step(1).text).split("</main>", 1)[0].lower()
+
+    for claim in ("korrekt", "geprüft", "verifiziert", "bestätigt", "sicher", "konfidenz", "%"):
+        assert claim not in origins
+
+
+def test_the_draft_pane_lists_where_each_paragraph_came_from(review):
+    review.generate()
+    review.accept()
+
+    origins = origins_of(review.step(3).text)
+
+    assert origins.count("aus Notizen") == 2
+    assert "von Hand, keine Herkunft" not in origins
+    assert "Aktuelle Medikation · Ibuprofen 400 mg bei Bedarf" in origins
+    assert "Frühere nichtmedikamentöse Behandlungen · Physio" in origins
+
+
+def test_a_hand_rewritten_paragraph_shows_von_hand_keine_herkunft(review):
+    review.generate()
+    review.accept()
+    review.edit(1, "Lebt allein.")
+
+    origins = origins_of(review.step(1).text)
+
+    assert "von Hand, keine Herkunft" in origins
+    assert "aus Notizen" not in origins
+
+
+def test_only_the_rewritten_paragraph_of_a_section_loses_its_reference(browser, api_client):
+    second = Review(browser, api_client, "FIK-2026-002")
+    second.generate()
+    second.accept()
+    text = textarea_text(second.step(3).text, "data-section")
+    second.edit(3, text.replace("Physiotherapie 2025.", "Physiotherapie 2025, wöchentlich."))
+
+    origins = origins_of(second.step(3).text)
+
+    assert origins.count("aus Notizen") == 2
+    assert origins.count("von Hand, keine Herkunft") == 1
+
+
+def test_the_origins_fragment_follows_the_saved_text(review):
+    review.generate()
+    review.accept()
+    assert "aus Notizen" in review.get("/abschnitte/1/herkunft").text
+
+    review.edit(1, "Meine Fassung.")
+    after = review.get("/abschnitte/1/herkunft")
+
+    assert after.status_code == 200
+    assert "von Hand, keine Herkunft" in after.text
+    assert "aus Notizen" not in after.text
+    assert after.text.lstrip().startswith('<div class="origins" id="section-origins">')
+    assert review.get("/abschnitte/9/herkunft").status_code == 404
+
+
+def test_a_section_without_a_draft_lists_no_origins(review):
+    assert "Herkunft der Absätze" not in review.step(1).text
+
+
+def test_the_pain_step_shows_each_pain_problem_as_its_own_block_with_its_own_heading(
+    browser, api_client
+):
+    second = Review(browser, api_client, "FIK-2026-002")
+    second.generate()
+
+    pane = proposal_pane(second.step(4).text)
+
+    headings = re.findall(r'<h3 class="para-heading">([^<]*)</h3>', pane)
+    assert headings == ["Migräne", "Linkes Knie", "Beide Füße", "Ohne Zuordnung zu einem Schmerz"]
+    assert "Hauptschmerz" not in pane
+
+
+def test_the_proposal_pane_shows_the_questions_the_proposal_has_for_the_section(
+    browser, api_client
+):
+    gaps = Review(browser, api_client, "FIK-2026-003")
+    gaps.generate()
+
+    pane = proposal_pane(gaps.step(1).text)
+
+    assert "Zu klären, laut Vorschlag" in pane
+    assert "Die Notizen enthalten keine Sozialanamnese." in pane
+    assert "Zu klären, laut Vorschlag" not in proposal_pane(gaps.step(2).text)
+
+
+def test_the_final_step_shows_the_whole_clarification_list_after_acceptance(browser, api_client):
+    gaps = Review(browser, api_client, "FIK-2026-003")
+    gaps.generate()
+    gaps.accept()
+
+    page = body_of(gaps.final().text)
+
+    assert "Zu klären" in page and "laut Vorschlag" not in page
+    for section in ("Sozialanamnese", "Therapeutische Anamnese", "Schmerzanamnese"):
+        assert f"<strong>{section}.</strong>" in page
+    assert "Die Angaben zu Tramadol widersprechen sich: 50 mg oder 100 mg zweimal täglich." in page
+    assert "Die Begründung für den stationären Aufenthalt fehlt" in page
+
+
+def test_a_manual_edit_leaves_the_list_on_the_final_step_as_it_was(browser, api_client):
+    gaps = Review(browser, api_client, "FIK-2026-003")
+    gaps.generate()
+    gaps.accept()
+    before = body_of(gaps.final().text)
+
+    for number in range(1, 8):
+        gaps.edit(number, f"Von Hand ergänzt {number}.")
+
+    after = body_of(gaps.final().text)
+    assert after.count("<strong>") == before.count("<strong>")
+    assert "Die Notizen enthalten keine Sozialanamnese." in after
+
+
+def test_the_final_step_without_a_list_shows_no_list(review):
+    review.generate()
+    review.accept()
+
+    assert "Zu klären" not in body_of(review.final().text)

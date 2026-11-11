@@ -332,6 +332,61 @@ def test_a_statement_without_a_source_stays_without_one():
     assert kept(result, BEFUND) == ["Druckschmerz paravertebral L4."]
 
 
+# ---- a contradiction the model flagged is not settled by one of its sides ----
+
+TRAMADOL_NOTES = (
+    "Tramadol retard 50 mg zweimal täglich, an anderer Stelle steht 100 mg zweimal täglich."
+)
+CONFLICT = Clarification(THERAPIE, "Die Angaben zu Tramadol widersprechen sich: 50 mg oder 100 mg.")
+
+
+def tramadol(text, *quotes):
+    result = generated(THERAPIE, paragraph(text, *quotes), clarifications=[CONFLICT])
+    return fidelity.check_result(result, {"notes": TRAMADOL_NOTES})
+
+
+def test_a_paragraph_that_names_one_side_of_a_flagged_contradiction_is_dropped():
+    result = tramadol("Tramadol retard 100 mg zweimal täglich.", "steht 100 mg zweimal täglich")
+
+    assert kept(result, THERAPIE) == []
+    assert "widersprechen" in items_for(result, THERAPIE)[-1]
+
+
+def test_a_paragraph_that_names_both_sides_or_neither_stays():
+    both = tramadol(
+        "Tramadol retard zweimal täglich, 50 mg oder 100 mg.",
+        "Tramadol retard 50 mg zweimal täglich, an anderer Stelle steht 100 mg zweimal täglich",
+    )
+    neither = tramadol(
+        "Tramadol retard zweimal täglich, Dosis unklar.", "Tramadol retard 50 mg zweimal täglich"
+    )
+
+    assert kept(both, THERAPIE)
+    assert kept(neither, THERAPIE)
+
+
+def test_a_dose_in_another_section_is_not_held_to_a_contradiction_of_this_one():
+    notes = TRAMADOL_NOTES + " Ibuprofen 400 mg."
+    other = paragraph("Ibuprofen 400 mg.", "Ibuprofen 400 mg")
+
+    result = fidelity.check_result(
+        generated(FRUEHER, other, clarifications=[CONFLICT]), {"notes": notes}
+    )
+
+    assert kept(result, FRUEHER) == ["Ibuprofen 400 mg."]
+
+
+def test_a_flagged_question_without_two_measures_holds_no_paragraph_back():
+    asked = Clarification(THERAPIE, "Welche Dosis gilt für Tramadol?")
+    result = generated(
+        THERAPIE, paragraph("Tramadol 100 mg.", "steht 100 mg"), clarifications=[asked]
+    )
+
+    assert kept(fidelity.check_result(result, {"notes": TRAMADOL_NOTES}), THERAPIE) == [
+        "Tramadol 100 mg."
+    ]
+
+
 # ---- the check is pure and leaves a good result as it is ----
 
 
