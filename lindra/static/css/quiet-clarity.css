@@ -1121,8 +1121,8 @@ textarea.pane-text::placeholder {
 }
 
 /* "aus früherem Kontakt" (ADR 0010): an earlier encounter, not today's notes. Sage ground,
-   a dashed rule and the encounter named over the quote keep history apart from today's
-   observations, which keep the solid teal rule. Only pairs the contrast check lists. */
+   a dashed rule and the encounter named over the quote keep earlier encounters apart from
+   today's observations, which keep the solid teal rule. Only pairs the contrast check lists. */
 .origin-earlier > .origin-toggle {
   background-color: var(--sage-tint);
   color: var(--teal-on-tint);

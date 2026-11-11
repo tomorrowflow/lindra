@@ -37,7 +37,7 @@
       <span>{{ background_changed_text }}</span>
       <span class="more">Mehr</span>
     </button>
-    <p class="badge-explanation" id="background-explanation" hidden>Ein früherer Kontakt wurde übernommen, nachdem dieser Entwurf entstanden ist. Der Text bleibt, wie er ist, und Lindra erzeugt nichts von selbst neu. «Neu erzeugen» legt einen Vorschlag auf dem aktuellen Hintergrund an.</p>
+    <p class="badge-explanation" id="background-explanation" hidden>{{ badge_states["background_changed"].explanation }}</p>
   </div>
   {% endif %}
   {% if rev.possibly_outdated %}

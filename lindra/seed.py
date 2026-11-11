@@ -17,7 +17,7 @@ from datetime import datetime, time
 from pathlib import Path
 from typing import Any
 
-from lindra import background, cast, drafts, review, standins
+from lindra import background, cases, cast, drafts, review, standins
 from lindra.store import Store, Tx
 
 REPORT_FILE = "seed-report.json"
@@ -98,7 +98,7 @@ def hold_expected(
         current.notes_revision,
         generated.sections,
         generated.clarifications,
-        current.background_revision if encounter.kind == "visit" else None,
+        current.background_revision if encounter.kind == cases.VISIT else None,
     )
     review.hold(tx, case_id, encounter_id, proposal)
 
