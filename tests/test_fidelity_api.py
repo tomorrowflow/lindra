@@ -194,6 +194,53 @@ def test_the_draft_does_not_get_what_the_notes_do_not_say(tmp_path, kind, title,
     assert text not in "\n".join(s["text"] for s in encounter.handover()["sections"])
 
 
+# Words that are all in the quotes, put together in a way the notes do not say.
+REASSIGNED = [
+    (
+        "a dose moved to another drug",
+        THERAPIE,
+        "Sumatriptan 75 mg wirksam.",
+        ("Sumatriptan 50 mg wirksam", "Diclofenac 75 mg bei Bedarf"),
+        CASE_TWO,
+    ),
+    (
+        "a denial moved to another substance",
+        INTERNIST,
+        "Alkohol. Kein Nikotin.",
+        ("Keine Vorerkrankungen internistisch, kein Nikotin, kein Alkohol",),
+        CASE_ONE,
+    ),
+    (
+        "a finding moved to another test",
+        BEFUND,
+        "Lasègue seitengleich.",
+        ("Lasègue negativ, Reflexe seitengleich",),
+        CASE_ONE,
+    ),
+    (
+        "a finding moved to the other side",
+        BEFUND,
+        "Knie rechts: Erguss gering.",
+        ("Knie links Erguss gering, Streckung frei", "Füße Hypästhesie strumpfförmig"),
+        CASE_TWO,
+    ),
+]
+
+
+@pytest.mark.parametrize(
+    ("kind", "title", "text", "quotes", "number"), REASSIGNED, ids=[r[0] for r in REASSIGNED]
+)
+def test_the_draft_does_not_put_words_of_the_quotes_together_that_the_notes_keep_apart(
+    tmp_path, kind, title, text, quotes, number
+):
+    encounter, proposal = proposal_of(tmp_path, adding(title, paragraph(text, *quotes)), number)
+
+    assert text not in text_of(proposal, title)
+    assert len(items_for(proposal, title)) >= 1
+    shown = encounter.accept().json()
+    assert text not in "\n".join(s["text"] for s in shown["sections"])
+
+
 def test_the_main_pain_appears_only_for_the_pain_the_physician_named(tmp_path):
     named = paragraph(
         "Gonarthrose, Hauptschmerz.",

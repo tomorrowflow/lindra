@@ -708,6 +708,95 @@ def test_a_sentence_without_an_uncertainty_can_be_quoted_in_part():
     assert kept(part, SCHMERZ) == ["Tiefer Rückenschmerz."]
 
 
+# ---- words, numbers and denials stay with the words they belong to in the quote ----
+
+
+def bound(text, notes, section=THERAPIE):
+    """A paragraph that quotes the whole of the notes, which is short enough for a quote."""
+    said = paragraph(text, notes.removesuffix("."))
+    return fidelity.check_result(generated(section, said), {"notes": notes})
+
+
+TWO_DRUGS = "Ibuprofen 400 mg bei Bedarf, Metamizol 500 mg bei Bedarf."
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Ibuprofen 500 mg bei Bedarf.",
+        "Metamizol 400 mg bei Bedarf.",
+        "Ibuprofen 500 mg bei Bedarf, Metamizol 400 mg bei Bedarf.",
+    ],
+)
+def test_a_dose_moved_to_another_drug_of_the_same_quote_drops_the_paragraph(text):
+    result = bound(text, TWO_DRUGS)
+
+    assert kept(result, THERAPIE) == []
+    assert "nicht zusammen" in items_for(result, THERAPIE)[0]
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Ibuprofen 400 mg bei Bedarf.",
+        "Metamizol 500 mg bei Bedarf.",
+        "Metamizol 500 mg bei Bedarf, Ibuprofen 400 mg bei Bedarf.",
+        "Ibuprofen 400 mg bei Bedarf, Metamizol 500 mg bei Bedarf.",
+    ],
+)
+def test_a_dose_with_its_own_drug_stays_whatever_the_order(text):
+    assert kept(bound(text, TWO_DRUGS), THERAPIE) == [text]
+
+
+def test_a_dose_moved_between_two_drugs_without_any_punctuation_is_dropped_too():
+    notes = "Ibuprofen 400 mg Metamizol 500 mg bei Bedarf."
+
+    assert kept(bound("Ibuprofen 500 mg Metamizol 400 mg bei Bedarf.", notes), THERAPIE) == []
+    assert kept(bound("Metamizol 500 mg Ibuprofen 400 mg bei Bedarf.", notes), THERAPIE)
+    assert kept(bound("Ibuprofen 400 mg Metamizol 500 mg bei Bedarf.", notes), THERAPIE)
+
+
+def test_a_dose_moved_across_an_und_is_dropped_too():
+    notes = "Ibuprofen 400 mg und Metamizol 500 mg."
+
+    assert kept(bound("Ibuprofen 500 mg und Metamizol 400 mg.", notes), THERAPIE) == []
+    assert kept(bound("Ibuprofen 400 mg und Metamizol 500 mg.", notes), THERAPIE)
+
+
+def test_a_denial_moved_to_another_word_of_the_quote_drops_the_paragraph():
+    notes = "Kein Nikotin, Alkohol gelegentlich."
+
+    assert kept(bound("Nikotin gelegentlich, kein Alkohol.", notes, INTERNIST), INTERNIST) == []
+    assert kept(bound("Kein Nikotin, Alkohol gelegentlich.", notes, INTERNIST), INTERNIST)
+
+
+def test_an_attribute_moved_to_another_part_of_the_quote_drops_the_paragraph():
+    notes = "Knie links Erguss gering, Füße Hypästhesie strumpfförmig."
+
+    assert kept(bound("Füße: Erguss gering.", notes, BEFUND), BEFUND) == []
+    assert kept(bound("Füße: strumpfförmige Hypästhesie.", notes, BEFUND), BEFUND)
+
+
+def test_a_side_moved_to_another_part_of_the_quote_drops_the_paragraph():
+    notes = "Schulter rechts schmerzhaft, Knie links frei."
+
+    assert kept(bound("Schulter links schmerzhaft.", notes, BEFUND), BEFUND) == []
+    assert kept(bound("Knie links frei.", notes, BEFUND), BEFUND)
+
+
+def test_a_decimal_and_a_date_are_not_split_into_clauses():
+    notes = "Am 12.03.2024 Ibuprofen 0,5 g bei Bedarf."
+
+    assert kept(bound("Ibuprofen 0,5 g bei Bedarf, am 12.03.2024.", notes), THERAPIE)
+
+
+def test_a_clause_of_only_function_words_or_gap_words_needs_no_clause_of_the_quote():
+    notes = "Tramadol retard 50 mg zweimal täglich, an anderer Stelle steht 100 mg zweimal täglich."
+    said = paragraph("Tramadol retard zweimal täglich, Dosis unklar.", notes.removesuffix("."))
+
+    assert kept(fidelity.check_result(generated(THERAPIE, said), {"notes": notes}), THERAPIE)
+
+
 # ---- the check is pure and leaves a good result as it is ----
 
 

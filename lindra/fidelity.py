@@ -19,7 +19,10 @@ decides which of its paragraphs the physician's notes support. A paragraph stays
   carries, and
 - every word of it that is not a function word comes from the passages it quotes, so a
   diagnosis, a cause or any other fact the quote does not hold cannot enter by a name the
-  term lists never heard of.
+  term lists never heard of, and
+- its words, numbers and denials stay together as the quote has them: each clause of the
+  paragraph has to be held by one clause of a quote, so a dose cannot move to the other
+  drug, a "kein" to the other substance or a finding to the other side.
 
 Whatever the check drops goes on the clarification list as a gap, and a section left without
 a paragraph and without an item gets one. The draft therefore holds only what the notes
@@ -38,7 +41,7 @@ import math
 import os.path
 import re
 from collections.abc import Mapping, Sequence
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from difflib import SequenceMatcher
 
 from lindra import drafts
@@ -57,6 +60,14 @@ NEGATION = (
     "Eine Angabe verneinte oder bejahte etwas anders als die zitierte Stelle der Notizen. Sie "
     "steht nicht im Entwurf. Ergänzen Sie sie in den Notizen, wenn sie gelten soll."
 )
+
+
+def _not_together(clause: str) -> str:
+    return (
+        "Eine Angabe verband Wörter, Zahlen oder eine Verneinung, die an der zitierten Stelle "
+        f"der Notizen nicht zusammen stehen («{clause}»). Sie steht nicht im Entwurf. Ergänzen "
+        "Sie sie in den Notizen, wenn sie gelten soll."
+    )
 
 
 def _cut_off(cue: str) -> str:
@@ -294,6 +305,9 @@ _WORD = re.compile(_LETTERS + r"{4,}")
 _ABBREVIATION = re.compile(rf"(?<!{_LETTERS})[A-ZÄÖÜ]{{3,}}(?!{_LETTERS})")
 # Words that make a statement a denial. A paragraph and its quote must agree on whether
 # there is one: "strahlt aus" must not become "strahlt nicht aus", or the reverse.
+# Where one clause ends and the next begins: a comma or full stop that is not inside a number
+# ("0,5", "12.03.2024"), the other punctuation, and "und" and "sowie".
+_CLAUSE_BREAK = re.compile(r"(?<!\d)[,.]|[,.](?!\d)|[;!?()\n]|\b(?:und|sowie)\b")
 _NEGATION = re.compile(r"\b(?:nicht|nichts|nie|niemals|weder|ohne|kein\w*)\b")
 # Where one sentence of the notes ends and the next begins. The abbreviations of notes do not
 # end one ("ca.", "ggf.", "z. B.").
@@ -458,6 +472,9 @@ def _problem(
         word = _ungrounded(paragraph.heading, " ".join(sources.values()))
     if word:
         return _not_in_the_notes(f"das Wort «{word}»")
+    loose = _unbound(text, quotes)
+    if loose:
+        return _not_together(loose)
     return None
 
 
@@ -494,6 +511,12 @@ def _disagreements(source: str) -> list[frozenset[str]]:
     return found
 
 
+def _carries_no_claim(word: str) -> bool:
+    """Function words, words that only say something is unclear and spelled-out numbers are
+    checked elsewhere or say nothing."""
+    return word in _FUNCTION_WORDS or word in _GAP_WORDS or bool(_SPELLED_NUMBER.fullmatch(word))
+
+
 def _ungrounded(text: str, quoted: str) -> str | None:
     """The first word or abbreviation of the text that no word of the quoted passages stands
     behind."""
@@ -504,10 +527,93 @@ def _ungrounded(text: str, quoted: str) -> str | None:
             return match.group()
     for match in _WORD.finditer(text):
         word = match.group().lower()
-        if word in _FUNCTION_WORDS or word in _GAP_WORDS or _SPELLED_NUMBER.fullmatch(word):
+        if _carries_no_claim(word):
             continue
         if not any(_same_word(word, other) for other in known):
             return match.group()
+    return None
+
+
+@dataclass(frozen=True)
+class _Clause:
+    """What one clause of a text says: its words, numbers and abbreviations, and whether it
+    denies something."""
+
+    text: str
+    words: tuple[str, ...]
+    numbers: frozenset[str]
+    abbreviations: frozenset[str]
+    negated: bool
+    # Each quantity with its unit and the words between it and the quantity before ("Tramadol
+    # retard 100 mg" binds 100mg to tramadol and retard), for a list that has no punctuation
+    # between its drugs.
+    anchors: tuple[tuple[str, tuple[str, ...]], ...]
+
+    @property
+    def says_something(self) -> bool:
+        return bool(self.words or self.numbers or self.abbreviations)
+
+    def stands_behind(self, other: _Clause) -> bool:
+        """Whether `other`, a clause of a quote, holds all of this clause's words, numbers and
+        abbreviations, agrees on denial and keeps each quantity with the word it follows."""
+        held = dict(other.anchors)
+        return (
+            self.negated == other.negated
+            and self.numbers <= other.numbers
+            and self.abbreviations <= other.abbreviations
+            and all(any(_same_word(w, o) for o in other.words) for w in self.words)
+            and all(
+                any(_same_word(words[-1], o) for o in held[m])
+                for m, words in self.anchors
+                if m in held
+            )
+        )
+
+
+def _content_words(text: str) -> list[str]:
+    return [w for w in (m.lower() for m in _WORD.findall(text)) if not _carries_no_claim(w)]
+
+
+def _clauses(text: str) -> list[_Clause]:
+    found = []
+    for part in _CLAUSE_BREAK.split(text):
+        anchors = []
+        start = 0
+        for match in _MEASURE.finditer(part):
+            before = _content_words(part[start : match.start()])
+            start = match.end()
+            if before:
+                anchors.append((f"{match.group(1)}{match.group(2).lower()}", tuple(before)))
+        found.append(
+            _Clause(
+                part.strip(),
+                tuple(_content_words(part)),
+                frozenset(_numbers(part)),
+                frozenset(_ABBREVIATION.findall(part)),
+                _negated(part),
+                tuple(anchors),
+            )
+        )
+    return found
+
+
+def _unbound(text: str, quotes: Sequence[str]) -> str | None:
+    """The first clause of the text whose words, numbers and denial no single clause of a
+    quote holds together.
+
+    Each word of the paragraph may stand behind some word of the quote and the paragraph can
+    still say what the quote does not: a dose moved to the other drug, a denial moved to the
+    other word, a finding moved to the other side. Within a clause they have to stay together."""
+    held = [clause for quote in quotes for clause in _clauses(quote)]
+    for clause in _clauses(text):
+        if not clause.says_something:
+            continue
+        if not clause.words:
+            # Bare numbers ("50 mg oder 100 mg") bind to nothing; each has to be in the quote.
+            if not all(any(n in other.numbers for other in held) for n in clause.numbers):
+                return clause.text
+        elif not any(clause.stands_behind(other) for other in held):
+            return clause.text
     return None
 
 

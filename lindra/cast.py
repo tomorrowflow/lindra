@@ -527,8 +527,7 @@ _CASE_MULTIPLE = Case(
                         heading="Aktuelle Medikation",
                     ),
                     _p(
-                        "Infiltration 2025 am linken Knie ohne Dauerwirkung.",
-                        "Linkes Knie",
+                        "Infiltration 2025 ohne Dauerwirkung.",
                         "Infiltration 2025 ohne Dauerwirkung",
                         heading="Frühere Medikation",
                     ),
