@@ -16,6 +16,7 @@ if (dialog && control) {
   const panel = (state) => dialog.querySelector(`[data-state="${state}"]`);
   const field = dialog.querySelector("[data-transcript]");
   const accept = dialog.querySelector("[data-accept]");
+  const discard = dialog.querySelector("[data-discard]");
   const outdates = dialog.querySelector("[data-outdates]");
   const acceptError = dialog.querySelector("[data-accept-error]");
   const elapsed = dialog.querySelector("[data-elapsed]");
@@ -167,6 +168,7 @@ if (dialog && control) {
     // once however often the same id arrives.
     dictationId = newId();
     maybeAppended = false;
+    discard.disabled = false;
     field.readOnly = false;
     field.value = result.transcript;
     outdates.hidden = !result.outdates_proposal;
@@ -181,13 +183,17 @@ if (dialog && control) {
     acceptError.hidden = false;
     acceptError.scrollIntoView({ block: "nearest" });
     accept.disabled = !field.value.trim();
+    discard.disabled = false;
   }
 
   // Appending runs on the service, to the notes as they are saved there, so what was typed on
   // this page has to be saved first; the page then reloads to show the notes as they are now.
+  // While the request is on its way the transcript can be neither accepted again nor discarded:
+  // the service may save the passage after the overlay was closed over the old notes.
   async function acceptTranscript() {
     acceptError.hidden = true;
     accept.disabled = true;
+    discard.disabled = true;
     if (!(await flushAll())) {
       rejected("Ihre Notizen sind noch nicht gespeichert. Der Text bleibt hier, bis Sie es erneut versuchen.");
       return;
@@ -233,7 +239,7 @@ if (dialog && control) {
   // Discarding changes nothing, unless an accept may have reached the service without its
   // answer arriving. Then the page behind still shows the notes from before, and the next
   // thing the physician typed would save over the passage. Reloading shows the notes as saved.
-  dialog.querySelector("[data-discard]").addEventListener("click", () => {
+  discard.addEventListener("click", () => {
     if (!maybeAppended) {
       close();
     } else {

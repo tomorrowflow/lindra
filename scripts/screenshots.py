@@ -1216,6 +1216,35 @@ def dictation_screens(page: Page, base_url: str, out: Path, name: str) -> list[s
     saved = api_encounter(base_url, page)["notes"]
     if saved != held_back["notes"] + " Danach getippt.":
         findings.append(f"{name}: typing after a lost answer and a discard changed the passage")
+
+    # While the accept is on its way the dictation cannot be discarded: the service may save the
+    # passage after the overlay was closed over the old notes. The page then shows the saved notes.
+    use_fixture_audio(page, clip)
+    page.click("[data-dictate]")
+    wait_for_panel(page, "recording")
+    page.click("[data-stop]")
+    wait_for_panel(page, "reviewing")
+    waiting: list = []
+    page.route(accept_route, lambda route: waiting.append(route))
+    page.click("[data-accept]")
+    while not waiting:
+        page.wait_for_timeout(50)
+    if page.is_enabled("[data-discard]") or page.is_enabled("[data-accept]"):
+        findings.append(f"{name}: discard or accept stays enabled while the accept is on its way")
+    page.evaluate("document.querySelector('[data-discard]').click()")
+    if not page.locator("dialog.dictation[open]").count():
+        findings.append(f"{name}: the overlay closed while the accept was on its way")
+    with page.expect_navigation():
+        for route in waiting:
+            route.continue_()
+    page.unroute(accept_route)
+    page.wait_for_load_state()
+    after_flight = api_encounter(base_url, page)
+    if (
+        after_flight["notes"].count("[Diktat, ") != 4
+        or page.input_value("#notes") != after_flight["notes"]
+    ):
+        findings.append(f"{name}: the notes after an accept in flight are not the saved notes")
     return findings
 
 
