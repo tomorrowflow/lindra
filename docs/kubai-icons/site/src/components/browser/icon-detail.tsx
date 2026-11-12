@@ -199,7 +199,7 @@ export function IconDetail({ meta, related, categories, color, variant, badge, o
           ))}
         </div>
       </div>
-    
+
       <div className="flex min-w-0 flex-col gap-6 p-panel">
         {/* Every line here keeps one line's height, so switching versions never moves
             the controls below. */}
@@ -248,7 +248,7 @@ export function IconDetail({ meta, related, categories, color, variant, badge, o
             <RiGithubLine />
           </Button>
         </div>
-    
+
         {variants.length > 0 && (
           <section className="space-y-3">
             <div className="flex items-center justify-between gap-2">
@@ -272,7 +272,7 @@ export function IconDetail({ meta, related, categories, color, variant, badge, o
             </div>
           </section>
         )}
-    
+
         {snippets && (
           <Tabs value={lang} onValueChange={pickLang} className="min-w-0 gap-2">
             <TabsList>
