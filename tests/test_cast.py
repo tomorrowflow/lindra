@@ -196,7 +196,12 @@ def test_the_two_sections_with_subsections_keep_distinct_headings(fictional_cast
         for section, allowed in cast.SUBHEADINGS.items():
             headings = {p.heading for p in assessment.draft[section]}
             assert headings <= set(allowed)
-        other = [p for s, ps in assessment.draft.items() for p in ps if s not in cast.SUBHEADINGS]
+        other = [
+            p
+            for s, ps in assessment.draft.items()
+            for p in ps
+            if s not in cast.SUBHEADINGS and s != cast.PAIN_SECTION
+        ]
         assert not any(p.heading for p in other)
     second = fictional_cast.cases[1].encounters[0]
     assert len({p.heading for p in second.draft["Therapeutische Anamnese"]}) == 3

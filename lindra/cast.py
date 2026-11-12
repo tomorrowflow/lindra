@@ -41,6 +41,25 @@ VISIT_SECTIONS = (
 )
 SECTIONS = {"assessment": ASSESSMENT_SECTIONS, "visit": VISIT_SECTIONS}
 
+# Inside the Schmerzanamnese every pain problem is its own block, headed by the name the
+# physician gave it. The headings are the physician's words, so they are not a fixed list, and
+# there is no fixed number of them (ADR 0010).
+PAIN_SECTION = "Schmerzanamnese"
+PAIN_HEADING_LIMIT = 80
+
+
+def names_pain_problems(kind: str, section: str) -> bool:
+    """Whether the paragraph headings of this section are the names of pain problems."""
+    return kind == "assessment" and section == PAIN_SECTION
+
+
+def valid_pain_heading(heading: str) -> bool:
+    return len(heading) <= PAIN_HEADING_LIMIT and "\n" not in heading
+
+
+# The heading of what the notes say about the patient's limitations but do not tie to a pain.
+UNASSIGNED_PAIN = "Ohne Zuordnung zu einem Schmerz"
+
 # The distinct subsection headings the ward's form has inside two sections (ADR 0010).
 SUBHEADINGS = {
     "Therapeutische Anamnese": (
@@ -266,7 +285,10 @@ def _validate_paragraphs(
         for quote in paragraph.quotes:
             if quote not in encounter.notes:
                 problems.append(f"{where}: reference {quote!r} is not a passage of the notes")
-        if paragraph.heading and paragraph.heading not in allowed:
+        if paragraph.heading and names_pain_problems(encounter.kind, section):
+            if not valid_pain_heading(paragraph.heading):
+                problems.append(f"{where}: pain heading {paragraph.heading!r} is not valid")
+        elif paragraph.heading and paragraph.heading not in allowed:
             problems.append(f"{where}: {section} has no subsection heading {paragraph.heading}")
     return problems
 
@@ -300,8 +322,11 @@ _CASE_BACK = Case(
             notes=(
                 "Patientin lebt mit Ehemann in einer Etagenwohnung, zwei erwachsene Kinder, "
                 "arbeitet halbtags im Büro, aktuell krankgeschrieben. Vor 3 Jahren "
-                "Bandscheibenvorfall L4/5 konservativ behandelt. Seit 14 Monaten tiefer "
-                "Rückenschmerz, belastungsabhängig, NRS 6 im Mittel. Ibuprofen 400 mg bei "
+                "Bandscheibenvorfall L4/5 konservativ behandelt. MRT 03/2024 laut Arztbrief: "
+                "keine Wurzelkompression. Seit 14 Monaten tiefer "
+                "Rückenschmerz, belastungsabhängig, NRS 6 im Mittel. Die Patientin berichtet, "
+                "der Schmerz strahle nicht ins Bein aus. PainDETECT, deutsche Version, am "
+                "02.10.2026: 14 Punkte. Ibuprofen 400 mg bei "
                 "Bedarf, bis zu 2 Tabletten täglich, Wirkung gering. Physiotherapie 2024 mit "
                 "kurzer Besserung, Wärmeanwendungen. Keine Vorerkrankungen internistisch, "
                 "kein Nikotin, kein Alkohol. Untersuchung: Druckschmerz paravertebral L4 bis S1, "
@@ -323,6 +348,10 @@ _CASE_BACK = Case(
                         "Bandscheibenvorfall L4/5 vor drei Jahren, konservativ behandelt.",
                         "Vor 3 Jahren Bandscheibenvorfall L4/5 konservativ behandelt.",
                     ),
+                    _p(
+                        "Vorbefund laut Arztbrief, MRT 03/2024: keine Wurzelkompression.",
+                        "MRT 03/2024 laut Arztbrief: keine Wurzelkompression.",
+                    ),
                 ),
                 "Therapeutische Anamnese": (
                     _p(
@@ -339,10 +368,20 @@ _CASE_BACK = Case(
                 ),
                 "Schmerzanamnese": (
                     _p(
-                        "Tiefer Rückenschmerz seit 14 Monaten, belastungsabhängig, "
-                        "NRS im Mittel 6.",
+                        "Seit 14 Monaten, belastungsabhängig, NRS im Mittel 6.",
                         "Seit 14 Monaten tiefer Rückenschmerz, belastungsabhängig, "
                         "NRS 6 im Mittel.",
+                        heading="Tiefer Rückenschmerz",
+                    ),
+                    _p(
+                        "Nach Angabe der Patientin strahlt der Schmerz nicht ins Bein aus.",
+                        "Die Patientin berichtet, der Schmerz strahle nicht ins Bein aus.",
+                        heading="Tiefer Rückenschmerz",
+                    ),
+                    _p(
+                        "PainDETECT, deutsche Version, vom 02.10.2026: 14 Punkte.",
+                        "PainDETECT, deutsche Version, am 02.10.2026: 14 Punkte.",
+                        heading=UNASSIGNED_PAIN,
                     ),
                 ),
                 "Internistische, vegetative, psychiatrische und Suchtmittelanamnese": (
@@ -362,8 +401,8 @@ _CASE_BACK = Case(
                 ),
                 "Behandlungsplan und vereinbarte Ziele": (
                     _p(
-                        "Stationäre multimodale Schmerztherapie, weil die ambulanten Möglichkeiten "
-                        "über zwölf Monate ausgeschöpft sind. Ziel: Gehstrecke von 500 m auf 2 km.",
+                        "Stationäre multimodale Schmerztherapie, weil ambulant über zwölf Monate "
+                        "ausgeschöpft. Ziel: Gehstrecke von 500 m auf 2 km.",
                         "Stationäre Aufnahme zur multimodalen Schmerztherapie, weil ambulant über "
                         "12 Monate ausgeschöpft.",
                         "Ziel: Gehstrecke von 500 m auf 2 km steigern.",
@@ -479,7 +518,7 @@ _CASE_MULTIPLE = Case(
                 ),
                 "Therapeutische Anamnese": (
                     _p(
-                        "Sumatriptan 50 mg bei Migräne wirksam. Diclofenac 75 mg bei Bedarf. "
+                        "Sumatriptan 50 mg wirksam. Diclofenac 75 mg bei Bedarf. "
                         "Pregabalin 75 mg zweimal täglich, Wirkung teilweise. Metformin.",
                         "Sumatriptan 50 mg wirksam",
                         "Diclofenac 75 mg bei Bedarf",
@@ -488,7 +527,7 @@ _CASE_MULTIPLE = Case(
                         heading="Aktuelle Medikation",
                     ),
                     _p(
-                        "Infiltration 2025 am linken Knie ohne Dauerwirkung.",
+                        "Infiltration 2025 ohne Dauerwirkung.",
                         "Infiltration 2025 ohne Dauerwirkung",
                         heading="Frühere Medikation",
                     ),
@@ -500,21 +539,26 @@ _CASE_MULTIPLE = Case(
                 ),
                 "Schmerzanamnese": (
                     _p(
-                        "Migräne, drei Attacken pro Monat.",
+                        "Seit der Jugend, drei Attacken pro Monat.",
                         "Migräne seit der Jugend, 3 Attacken pro Monat",
+                        heading="Migräne",
                     ),
                     _p(
-                        "Linkes Knie bei Gonarthrose seit fünf Jahren, belastungsabhängig.",
+                        "Gonarthrose, seit fünf Jahren belastungsabhängig.",
                         "Linkes Knie, Gonarthrose, seit 5 Jahren belastungsabhängig",
+                        heading="Linkes Knie",
                     ),
                     _p(
-                        "Brennende Schmerzen beider Füße seit zwei Jahren bei Polyneuropathie.",
+                        "Brennende Schmerzen seit zwei Jahren bei Polyneuropathie.",
                         "Brennende Schmerzen beider Füße seit 2 Jahren bei Polyneuropathie",
+                        heading="Beide Füße",
                     ),
                     _p(
-                        "Schlaf auf vier bis fünf Stunden verkürzt, Einkäufe nur mit Hilfe.",
+                        "Schlaf auf vier bis fünf Stunden verkürzt, Alltag eingeschränkt, "
+                        "Einkäufe nur mit Hilfe.",
                         "Schlaf auf 4 bis 5 Stunden verkürzt, Alltag eingeschränkt, Einkäufe nur "
                         "mit Hilfe",
+                        heading=UNASSIGNED_PAIN,
                     ),
                 ),
                 "Internistische, vegetative, psychiatrische und Suchtmittelanamnese": (
@@ -526,7 +570,7 @@ _CASE_MULTIPLE = Case(
                 ),
                 "Untersuchungsbefunde": (
                     _p(
-                        "Linkes Knie: geringer Erguss, Streckung frei, Beugung 110 Grad.",
+                        "Knie links: Erguss gering, Streckung frei, Beugung 110 Grad.",
                         "Knie links Erguss gering, Streckung frei, Beugung 110 Grad",
                         heading="Orthopädischer Befund",
                     ),
@@ -548,6 +592,10 @@ _CASE_MULTIPLE = Case(
                     "Schmerzanamnese",
                     "Welcher der drei Schmerzen steht im Vordergrund, und welche Zahl gilt je "
                     "Schmerz auf der numerischen Skala?",
+                ),
+                Clarification(
+                    "Schmerzanamnese",
+                    "Schlaf, Alltag und Einkäufe sind keinem der drei Schmerzen zugeordnet.",
                 ),
             ),
             audio=(
@@ -573,7 +621,7 @@ _CASE_MULTIPLE = Case(
             draft={
                 "Verlauf seit letzter Visite": (
                     _p(
-                        "Eine Migräneattacke in dieser Woche, Sumatriptan wirksam. Knie "
+                        "Migräne in dieser Woche 1 Attacke, Sumatriptan wirksam. Knie "
                         "unverändert, Schlaf fünf Stunden.",
                         "Migräne in dieser Woche 1 Attacke, Sumatriptan wirksam. Knie "
                         "unverändert, Schlaf 5 Stunden.",
@@ -670,7 +718,7 @@ _CASE_GAPS = Case(
                 "Sozialanamnese": (),
                 "Frühere Anamnese und Vormedikation": (
                     _p(
-                        "Ibuprofen vor der aktuellen Medikation, Dauer unklar.",
+                        "Vorher Ibuprofen, Dauer unklar.",
                         "Vorher Ibuprofen, Dauer unklar.",
                     ),
                 ),
@@ -685,10 +733,11 @@ _CASE_GAPS = Case(
                 "Schmerzanamnese": (
                     _p(
                         "Chronischer Schulter-Nacken-Schmerz rechts, Beginn unklar. "
-                        "Verschlechterung nach einem Sturz im Frühjahr.",
+                        "Seit einem Sturz im Frühjahr schlechter.",
                         "Chronischer Schulter-Nacken-Schmerz rechts seit dem Sommer, vielleicht "
                         "schon länger.",
                         "Seit einem Sturz im Frühjahr schlechter.",
+                        heading="Schulter und Nacken rechts",
                     ),
                 ),
                 "Internistische, vegetative, psychiatrische und Suchtmittelanamnese": (),
@@ -746,7 +795,7 @@ _CASE_GAPS = Case(
             draft={
                 "Verlauf seit letzter Visite": (
                     _p(
-                        "Nackenschmerz etwas besser. Tramadol unverändert.",
+                        "Schmerz im Nacken etwas besser. Tramadol unverändert.",
                         "Schmerz im Nacken etwas besser",
                         "Tramadol unverändert",
                     ),

@@ -12,10 +12,17 @@ from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from typing import Any
 
-from lindra.cast import SECTIONS, SUBHEADINGS, Clarification
+from lindra.cast import (
+    SECTIONS,
+    SUBHEADINGS,
+    Clarification,
+    names_pain_problems,
+    valid_pain_heading,
+)
 from lindra.textmodel import NOTES_SOURCE, GenerationFailed
 
 OUTDATED_REASON = "Veraltet: Notizen seit diesem Vorschlag geändert"
+ORIGIN_NOTES, ORIGIN_HAND = "notes", "hand"
 UNSTRUCTURED = "Das Ergebnis des Textmodells hat nicht die erwartete Struktur."
 
 
@@ -110,10 +117,13 @@ def _parse_section(raw: dict[str, Any], kind: str) -> Section:
     if not isinstance(paragraphs, list):
         raise GenerationFailed(UNSTRUCTURED)
     allowed = SUBHEADINGS.get(title, ()) if kind == "assessment" else ()
-    return Section(title, tuple(_parse_paragraph(p, allowed) for p in paragraphs))
+    pain = names_pain_problems(kind, title)
+    return Section(title, tuple(_parse_paragraph(p, allowed, pain) for p in paragraphs))
 
 
-def _parse_paragraph(raw: Any, allowed_headings: Sequence[str]) -> Paragraph:
+def _parse_paragraph(raw: Any, allowed_headings: Sequence[str], any_heading: bool) -> Paragraph:
+    """A paragraph's heading is one of the form's subsection headings, or in the
+    Schmerzanamnese (`any_heading`) the name of the pain problem the paragraph describes."""
     if not isinstance(raw, dict):
         raise GenerationFailed(UNSTRUCTURED)
     text = raw.get("text")
@@ -121,7 +131,12 @@ def _parse_paragraph(raw: Any, allowed_headings: Sequence[str]) -> Paragraph:
     references = raw.get("references")
     if not isinstance(text, str) or not text.strip():
         raise GenerationFailed(UNSTRUCTURED)
-    if not isinstance(heading, str) or (heading and heading not in allowed_headings):
+    if not isinstance(heading, str):
+        raise GenerationFailed(UNSTRUCTURED)
+    if heading and any_heading:
+        if not valid_pain_heading(heading):
+            raise GenerationFailed(UNSTRUCTURED)
+    elif heading and heading not in allowed_headings:
         raise GenerationFailed(UNSTRUCTURED)
     if not isinstance(references, list):
         raise GenerationFailed(UNSTRUCTURED)
@@ -156,19 +171,39 @@ def section_text(section: Section) -> str:
     copy controls put on the clipboard. The section's own title is not part of it: the
     hospital system has that heading already.
     """
-    blocks: list[str] = []
+    return "\n\n".join(block for block, _ in _blocks(section))
+
+
+def _blocks(section: Section) -> list[tuple[str, Paragraph]]:
+    """Each paragraph with the block of text it is shown as. A subsection heading opens the
+    first block under it and is not repeated for the paragraphs that follow."""
+    blocks: list[tuple[str, Paragraph]] = []
     heading = ""
     for paragraph in section.paragraphs:
         if paragraph.heading and paragraph.heading != heading:
-            blocks.append(f"{paragraph.heading}\n{paragraph.text}")
+            blocks.append((f"{paragraph.heading}\n{paragraph.text}", paragraph))
         else:
-            blocks.append(paragraph.text)
+            blocks.append((paragraph.text, paragraph))
         heading = paragraph.heading
-    return "\n\n".join(blocks)
+    return blocks
 
 
 def is_empty(section: Section) -> bool:
     return not section_text(section).strip()
+
+
+def excerpt(paragraph: Paragraph, limit: int = 60) -> str:
+    """The start of a paragraph on one line, with its heading, to say which one a reference
+    belongs to."""
+    flat = " ".join(paragraph.text.split())
+    if paragraph.heading:
+        flat = f"{paragraph.heading} · {flat}"
+    return flat if len(flat) <= limit else flat[: limit - 1].rstrip() + "…"
+
+
+def origin_of(references: Sequence[Any]) -> str:
+    """`notes` for a paragraph generated from the notes, `hand` for one without a reference."""
+    return ORIGIN_NOTES if references else ORIGIN_HAND
 
 
 # ---- editing, acceptance, outdated and stale ----
@@ -177,16 +212,20 @@ def is_empty(section: Section) -> bool:
 def edit_section(draft: Draft | None, kind: str, index: int, text: str) -> Draft | None:
     """The draft after the physician rewrote one section as free text.
 
-    The rewritten section keeps no input reference and counts as manually edited. Text
-    identical to what the pane showed returns the draft as it was (still none when there
-    was none), so opening a section and leaving it again never marks it.
+    The section counts as manually edited. The text splits into paragraphs at blank lines; a
+    paragraph she left exactly as it was keeps its input references, every other one has none
+    ("von Hand"). Text identical to what the pane showed returns the draft as it was (still
+    none when there was none), so opening a section and leaving it again never marks it.
     """
     current = draft or empty_draft(kind)
     section = current.sections[index]
     if text == section_text(section):
         return draft
-    paragraphs = (Paragraph(text),) if text else ()
-    edited = replace(section, paragraphs=paragraphs, manual=True, copied=False)
+    # Each paragraph is stored as the block the pane showed, so the section text reads back
+    # exactly as she typed it, subsection headings included.
+    shown = {block: paragraph.references for block, paragraph in reversed(_blocks(section))}
+    paragraphs = tuple(Paragraph(block, "", shown.get(block, ())) for block in text.split("\n\n"))
+    edited = replace(section, paragraphs=paragraphs if text else (), manual=True, copied=False)
     return replace(current, sections=_with(current.sections, index, edited))
 
 

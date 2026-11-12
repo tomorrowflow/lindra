@@ -142,6 +142,22 @@ def build_router(
         context = {"rev": current, "index": index, "case": case, "encounter": current.encounter}
         return templates.TemplateResponse(request, "section_head.html", context)
 
+    @router.get("/faelle/{case_id}/kontakte/{encounter_id}/abschnitte/{number}/herkunft")
+    def section_origins(request: Request, case_id: int, encounter_id: int, number: int) -> Response:
+        """Where each paragraph of the current draft comes from, which the page refreshes after
+        a hand edit so a rewritten paragraph loses its reference without a reload."""
+        opened = open_step(request, case_id, encounter_id)
+        if isinstance(opened, Response):
+            return opened
+        _, current = opened
+        try:
+            index = review.section_index(current, number)
+        except cases.NotFound as error:
+            return Response(str(error), status_code=404)
+        return templates.TemplateResponse(
+            request, "section_origins.html", {"rev": current, "index": index}
+        )
+
     @router.get("/faelle/{case_id}/kontakte/{encounter_id}/" + FINAL_STEP)
     def final_step(request: Request, case_id: int, encounter_id: int) -> Response:
         opened = open_step(request, case_id, encounter_id)

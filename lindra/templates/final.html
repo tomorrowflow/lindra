@@ -81,6 +81,16 @@
   {% endfor %}
 </ul>
 {% endif %}
+
+{# The encounter's whole clarification list, whichever way the step is read. #}
+{% if not accepting and rev.clarifications %}
+<section class="clarifications" aria-labelledby="open-clarifications">
+  <h2 class="clarifications-title" id="open-clarifications">{{ icon("circle-help") }}<span>Zu klären</span></h2>
+  <ul>
+    {% for item in rev.clarifications %}<li><strong>{{ item.section }}.</strong> {{ item.text }}</li>{% endfor %}
+  </ul>
+</section>
+{% endif %}
 {% endblock %}
 
 {# The reason acceptance is not possible, spelled out next to the button and not only on tap. #}

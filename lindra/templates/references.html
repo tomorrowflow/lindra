@@ -1,0 +1,21 @@
+{#
+  The input reference of a paragraph (ADR 0008). A generated paragraph shows "aus Notizen";
+  tapping it opens the passages of the notes the paragraph was written from, word for word.
+  A paragraph the physician wrote or rewrote shows "von Hand, keine Herkunft". It tells where
+  the text came from and says nothing about whether it is right.
+#}
+{% from "icons.html" import icon %}
+{% macro origin(paragraph) %}
+{% if paragraph.references %}
+<details class="origin">
+  <summary class="origin-toggle">{{ icon("file-text") }}<span>aus Notizen</span></summary>
+  <div class="origin-quotes">
+    {% for reference in paragraph.references %}
+    <blockquote class="origin-quote" lang="de">{{ reference.quote }}</blockquote>
+    {% endfor %}
+  </div>
+</details>
+{% else %}
+<p class="origin origin-hand">{{ icon("pencil") }}<span>von Hand, keine Herkunft</span></p>
+{% endif %}
+{% endmacro %}

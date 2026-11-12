@@ -1,0 +1,59 @@
+# The result check
+
+Every generation result passes two checks before it becomes a proposal. Both run whichever text model answered (ADR 0003), and both enforce the intended purpose of ADR 0001: Lindra words what the physician supplied and adds nothing.
+
+## Structure check
+
+`lindra/drafts.py` (`parse_generated`) decides whether the result is a draft at all. It needs the exact sections of the encounter kind in the form's order, paragraphs with text, well-formed input references and clarification items that name a real section. Prose, a missing section or a malformed reference is a failed generation. The notes, the draft and the earlier proposal stay as they were, and the status area shows the reason with a retry button.
+
+Inside the Schmerzanamnese a paragraph may carry any heading of up to 80 characters, the name the physician gave a pain problem. Every other section allows only the form's subsection headings, and only Therapeutische Anamnese and Untersuchungsbefunde have any.
+
+## Support check
+
+`lindra/fidelity.py` (`check_result`) decides which paragraphs of a structured result may stay. A paragraph stays only when all of these hold.
+
+1. Every input reference points into a source the encounter has and quotes it word for word, in at most 300 characters. Runs of whitespace count as one space. A longer quote would carry every wording and number of the notes and switch the other checks off. At the moment the only source is the encounter's notes. Ticket 09 adds the background encounters of a visit.
+2. Every number and date in the paragraph is in the passages it quotes, and every quantity keeps its unit ("400 g" does not match "400 mg"; "Monate" matches "Monaten"). Spelled-out numbers count as the digits they stand for, so "zweimal" matches "2". This catches a converted dose, an invented duration and a summed score.
+3. It uses none of the wordings that only the physician supplies (listed below) unless a quoted passage uses the same wording.
+4. It words no provenance (the patient's report, a prior finding, the physician's own finding) that a quoted passage does not name. A statement without a named source stays without one.
+5. It does not settle a contradiction. A sentence of the notes that names two or more measures and says it is uncertain or disagrees ("Tramadol retard 50 mg zweimal täglich, an anderer Stelle steht 100 mg zweimal täglich") sets those measures against each other, and so does a model item like "50 mg oder 100 mg". A paragraph of any section that names only some of them is dropped, whether or not the model flagged the contradiction. Two drugs in one sentence ("Ibuprofen 400 mg, Metamizol 500 mg") are not a contradiction.
+6. It does not cut a quote out of a sentence whose rest says the notes are uncertain. If the sentence holds "an anderer Stelle", "vielleicht", "unklar" or a similar wording that the paragraph's quotes leave out, the paragraph is dropped. If a quote holds such a wording, the paragraph must carry the uncertainty too ("unklar", "offen", "oder" or the wording itself).
+7. Every word of four letters or more that is not a function word comes from the passages the paragraph quotes, and so does every abbreviation of capitals ("MRT", "HWS", "PNP"). A word counts as coming from a passage when it is the same word inflected ("lebt" and "leben", "Kinder" and "Kindern") or when most of the paragraph's word sits in a word of the passage ("Schmerz" in "Rückenschmerz"). The paragraph may name a part of the passage's compound, never a longer compound: "Schulterarthrose" is dropped when the passage says only "Schulter". "Fibromyalgie" or "Radikulopathie" is dropped when its quote holds no such word. Words that only say something is unclear ("Dosis unklar") and the wording of a provenance the quote licenses do not need a source. A pain problem's heading may come from anywhere in the notes, because it is the physician's name for the pain. The form's own headings come from the form.
+8. Its words, numbers and denials stay together as the quote has them. The paragraph and its quotes are split into clauses at commas, full stops (not inside "0,5" or "12.03.2024"), semicolons, brackets, line breaks, "und" and "sowie". Each clause of the paragraph that says something has to be held by one clause of one quote: all its content words, all its numbers and abbreviations, and the same denial or none. "Ibuprofen 400 mg, Metamizol 500 mg" cannot become "Ibuprofen 500 mg", "kein Nikotin, Alkohol gelegentlich" cannot become "Nikotin gelegentlich, kein Alkohol", and "Knie links Erguss gering, Füße Hypästhesie" cannot become "Füße: Erguss gering". A clause of bare alternatives ("50 mg oder 100 mg") needs each number somewhere in the quotes. A clause that holds one number and no word of its own ("Knie, NRS 7", "Seit dem 7.10.") is read together with the clause before it or the one after it, unless the quote sets the number apart in the same way, so new punctuation cannot detach a score or a date from its word. Every number, with or without a unit, must also stand next to the same words or abbreviation as in the quote, which keeps "Ibuprofen 400 mg Metamizol 500 mg" from becoming "Ibuprofen 500 mg Metamizol 400 mg", "Schmerzbeginn 2024 Operation 2020" from swapping its years, and "500 mg Ibuprofen 400 mg Metamizol" from moving the 500 to Metamizol. Short sides and body parts ("li", "re", "bds", "Arm", "Fuß", "Ohr") count as words. A paragraph that merges two clauses of its quote into one is dropped as well, which shows as a gap with an item.
+9. It agrees with its quote on whether it denies something. "Nicht", "kein", "ohne", "nie", "weder", "kaum", "negativ", "fehlt", "frei von" and "nirgends" in one and not in the other drop the paragraph, so "strahlt aus" cannot become "strahlt nicht aus", "Fieber negativ" cannot become "Fieber", and "kein Nikotin, Alkohol" cannot become "Nikotin, kein Alkohol". A quote that begins in the middle of a list ("Erbrechen, Schwindel" from "keine Übelkeit, Erbrechen, Schwindel") is dropped too: a denial in the clause the quote starts or ends in, or in the clause before it, that the quotes leave out cuts the quote off from its denial. A denial in a far item of a long list does not count.
+
+Each dropped paragraph becomes a clarification item for its section that says what was missing and that the paragraph is not in the draft. A section left with no paragraph and no item gets "Die Notizen enthalten keine Angaben für diesen Abschnitt." The model's own items come first. The check errs toward dropping, which shows the physician a gap. It never errs toward keeping a fact the notes do not hold.
+
+### Wordings that need the physician's own words
+
+| Kind | Examples |
+| --- | --- |
+| Ranking of pains | Hauptschmerz, im Vordergrund, führend, vorrangig |
+| Diagnosis or cause | Diagnose, Verdacht, Ursache, zurückzuführen, spricht für, Syndrom, Störung |
+| Justification or a cause given as a reason | weil, wegen, aufgrund, Begründung, indiziert, Indikation, notwendig, erforderlich |
+| Recommendation | empfohlen, Empfehlung, sollte, ratsam, angezeigt |
+| Normal finding | unauffällig, regelrecht, o. B., physiologisch, normal |
+| Interaction, conversion | Wechselwirkung, Interaktion, kontraindiziert, äquivalent, umgerechnet |
+| Reading of a score | klinisch relevant, auffällig, pathologisch, mittelgradig |
+| Effect or tolerance | wirksam, ohne Wirkung, gut verträglich, ohne Nebenwirkung |
+| Completeness or approval | vollständig, geprüft, freigegeben, bestätigt |
+| Time | the seasons, the months, gestern, kürzlich |
+
+## What the check does not prove
+
+- The lists are a lexicon. They name the wordings the intended purpose forbids, and the word check (rule 7) covers the facts they do not name. Neither can know every wording.
+- A valid reference shows that the passage exists in the notes. It does not show that the passage supports the paragraph. A paragraph can rearrange real words of its quote into a statement the notes do not make ("Schmerz" and "links" from two places of one quote). ADR 0008 says an input reference shows origin, not correctness, and the interface says nothing more.
+- Binding works clause by clause, and numbers also by their neighbours. Inside one clause without any punctuation, a swap of two words that are not numbers ("Schmerz links Schwellung rechts" for "Schmerz rechts Schwellung links") passes, because every word and denial is in that clause. Notes typed without commas make long clauses; a dictation transcript has punctuation.
+- A number is bound to the nearest run of words before it, or after it when nothing comes before. A legitimate reordering that moves a number to the other side of its word ("Ibuprofen 0,5 g bei Bedarf, am 12.03.2024" for "Am 12.03.2024 Ibuprofen 0,5 g bei Bedarf") is dropped. The loss shows as a gap with an item.
+- Denials outside the check's word list ("selten", "höchstens", a "-frei" compound) are not seen.
+- The word match is by spelling, not by meaning. A word that shares most of its letters with a different word of the passage passes, and a correct synonym ("Beschwerden" for "Schmerzen") is dropped. A real model will lose paragraphs to this. The loss shows as a gap with a clarification item, and the real-backend evaluation (ticket 11 and after) measures how often.
+- A short term has to start a word ("wegen" does not match "bewegen"). A term of seven letters or more may sit inside a compound ("Störung" finds "Schlafstörung").
+- A date written another way ("2.10.2026" for "02.10.2026") counts as a different number and drops the paragraph.
+- A contradiction is held back when the notes show it in one sentence with a cue ("an anderer Stelle", "oder", "widerspricht", "ggf.", "alternativ") or the model flagged it, and only for quantities with a unit. A contradiction in two separate sentences without a cue, one about a frequency, a pain score or a side, or one the model did not flag is not caught. A paragraph that carries any marker of uncertainty ("unklar", "oder", "offen") satisfies the rule that it must not drop an uncertainty its quote carries, even if it picked one value; the contradiction rule (5) is what catches that for measures.
+- A sentence ends at a full stop, a question mark or an exclamation mark that follows whitespace, except after the usual abbreviations. Notes in a list without punctuation count as one sentence, so one "oder" or "unklar" in it holds back every paragraph that names a quantity of it. This drops too much, never too little.
+- Function words are not checked, so a short connective that changes a statement without a negation ("kaum", "selten") can pass.
+- The fixture model returns the cast's expected drafts, so the tests prove the check and the workflow, not the fidelity of a real model. Ticket 11 and the evaluation measure that.
+
+## Instructions to the model
+
+`lindra/prompt.py` holds the instructions every adapter sends with the notes. They state the same rules to the model. The support check does not rely on them; a model that ignores them loses the paragraphs that break them.
