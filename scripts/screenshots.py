@@ -1129,6 +1129,11 @@ def dictation_screens(page: Page, base_url: str, out: Path, name: str) -> list[s
     layouts["transcribing"] = overlay_layout(page)
     while not held:
         page.wait_for_timeout(50)
+    # A recorder error that arrives after the stop has nothing left to interrupt.
+    page.evaluate("window.__recorder.dispatchEvent(new Event('error'))")
+    page.wait_for_timeout(150)
+    if dictation_states(page) != ["transcribing"]:
+        findings.append(f"{name}: a recorder error after the stop replaced the waiting panel")
     findings += check_overlay_blocks(page, name, "transcribing")
     page.screenshot(path=out / f"dictation-transcribing-{name}.png")
     for route in held:

@@ -99,9 +99,12 @@ if (dialog && control) {
       );
       return;
     }
+    let granted;
     try {
-      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      granted = await navigator.mediaDevices.getUserMedia({ audio: true });
     } catch (error) {
+      // The overlay was closed or started again while the browser asked: nothing to report.
+      if (mine !== session) return;
       if (error.name === "NotFoundError" || error.name === "OverconstrainedError") {
         fail("Kein Mikrofon gefunden", "An diesem Gerät ist kein Mikrofon verfügbar.", start);
       } else if (error.name === "NotAllowedError" || error.name === "SecurityError") {
@@ -115,6 +118,11 @@ if (dialog && control) {
       }
       return;
     }
+    if (mine !== session) {
+      for (const track of granted.getTracks()) track.stop();
+      return;
+    }
+    stream = granted;
     // The microphone is open from here on. Whatever goes wrong before the recording runs must
     // release it and leave the overlay with a way out, never stuck on "starting".
     try {
@@ -139,7 +147,8 @@ if (dialog && control) {
         transcribe(blob);
       });
       made.addEventListener("error", () => {
-        if (mine !== session) return;
+        // An error after the physician pressed stop has nothing left to interrupt.
+        if (mine !== session || current !== "recording") return;
         broken = true;
         release();
         fail("Aufnahme abgebrochen", "Die Aufnahme wurde unterbrochen. Versuchen Sie es erneut.", start);
