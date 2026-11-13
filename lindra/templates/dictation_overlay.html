@@ -1,0 +1,81 @@
+{#
+  The dictation overlay (ADR 0004, ADR 0008). A modal dialog, so the page behind it cannot be
+  used while it is open. It has one panel per state; dictation.js shows one at a time: the
+  recording with its stop, the wait while the service transcribes, the transcript to correct
+  and accept or discard, and a failure with the way out. It stays closed until the physician
+  taps the microphone control, and nothing records before that tap.
+#}
+{% from "icons.html" import icon %}
+<dialog class="dictation dialog dialog-medium" aria-labelledby="dictation-title" data-transcript-url="/api/cases/{{ case.id }}/encounters/{{ encounter.id }}/dictation/transcript" data-accept-url="/api/cases/{{ case.id }}/encounters/{{ encounter.id }}/dictation/accept" data-notes-url="/faelle/{{ case.id }}/kontakte/{{ encounter.id }}/notizen">
+  <header class="dialog-head">
+    <h2 id="dictation-title">Diktat</h2>
+    <p class="text-secondary">{{ case.case_number }}, {{ encounter_labels[encounter.kind] }} {{ encounter.occurred_at | german_datetime }}</p>
+  </header>
+
+  <div class="dictation-state dialog-form" data-state="starting" hidden>
+    <div class="dialog-body dictation-body" role="status">
+      <p class="dictation-status">{{ icon("mic") }}<span>Mikrofon wird freigegeben</span></p>
+      <p class="text-secondary">Erlauben Sie den Zugriff auf das Mikrofon, wenn der Browser danach fragt.</p>
+    </div>
+    <footer class="dialog-actions"></footer>
+  </div>
+
+  <div class="dictation-state dialog-form" data-state="recording" hidden>
+    <div class="dialog-body dictation-body">
+      <p class="dictation-status">{{ icon("mic") }}<span>Aufnahme läuft</span><output class="dictation-elapsed" data-elapsed>0:00</output></p>
+    </div>
+    <footer class="dialog-actions">
+      <button class="btn btn-primary" type="button" data-stop>
+        {{ icon("square") }}
+        <span>Aufnahme beenden</span>
+      </button>
+    </footer>
+  </div>
+
+  <div class="dictation-state dialog-form" data-state="transcribing" hidden>
+    <div class="dialog-body dictation-body" role="status">
+      <p class="dictation-status">{{ icon("loader-circle") }}<span>Text wird erstellt</span></p>
+      <p class="text-secondary">Die Aufnahme wird nicht gespeichert.</p>
+    </div>
+    <footer class="dialog-actions"></footer>
+  </div>
+
+  <div class="dictation-state dialog-form" data-state="reviewing" hidden>
+    <div class="dialog-body dictation-body">
+      <p class="dictation-status">{{ icon("pencil") }}<span>Text prüfen</span></p>
+      <label class="visually-hidden" for="dictation-transcript">Text des Diktats</label>
+      <textarea class="textarea dictation-text" id="dictation-transcript" lang="de" data-transcript></textarea>
+      <p class="text-secondary">Der Text wird unter Ihre Notizen gesetzt. Was Sie geschrieben haben, bleibt unverändert.</p>
+      <p class="dictation-warning" data-outdates hidden>{{ icon("clock") }}<span>Der Vorschlag zu diesem Kontakt wird dadurch veraltet. Sie können ihn danach verwerfen und neu erzeugen.</span></p>
+      <p class="dictation-warning dictation-problem" data-accept-error role="alert" hidden>{{ icon("circle-alert") }}<span></span></p>
+    </div>
+    <footer class="dialog-actions">
+      <button class="btn" type="button" data-discard>
+        {{ icon("x") }}
+        <span>Verwerfen</span>
+      </button>
+      <button class="btn btn-primary" type="button" data-accept>
+        {{ icon("check") }}
+        <span>In Notizen übernehmen</span>
+      </button>
+    </footer>
+  </div>
+
+  <div class="dictation-state dialog-form" data-state="failed" hidden>
+    <div class="dialog-body dictation-body" role="alert">
+      <p class="dictation-status dictation-problem">{{ icon("circle-alert") }}<span data-failed-title></span></p>
+      <p data-failed-message></p>
+      <p class="text-secondary">Ihre Notizen sind unverändert.</p>
+    </div>
+    <footer class="dialog-actions">
+      <button class="btn" type="button" data-close>
+        {{ icon("x") }}
+        <span>Schließen</span>
+      </button>
+      <button class="btn btn-primary" type="button" data-retry-dictation>
+        {{ icon("rotate-cw") }}
+        <span>Erneut versuchen</span>
+      </button>
+    </footer>
+  </div>
+</dialog>

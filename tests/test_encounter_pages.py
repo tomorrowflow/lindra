@@ -317,7 +317,8 @@ def test_the_notes_step_has_a_free_text_area_with_the_saved_notes_and_no_save_bu
 
     page = browser.get(first_encounter(browser, case_path(browser, "FIK-2026-001"))).text
 
-    assert page.count("<textarea") == 1
+    # The dictation overlay holds the only other text area, for a transcript.
+    assert page.split('<dialog class="dictation ')[0].count("<textarea") == 1
     assert textarea_of(page).strip() != ""
     assert Buttons(page).find("Speichern") == []
 

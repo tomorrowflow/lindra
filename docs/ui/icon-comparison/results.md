@@ -1,0 +1,117 @@
+# Icon comparison results (LFR-13)
+
+A frozen record of the LFR-13 evaluation. A script rendered these tables from the MIT folders of the upstream Kubai Icons repository (`kubai-icons-static` 0.5.1 sources, commit `8d2a2fd`) and from `lindra/templates/icons.html` as it was then. Script and sources are no longer in the repository; they are in git history at `6c56bc6` and `8d2a2fd`. Open `index.html` next to this file for the side-by-side renders, and `docs/screenshots/LFR-13/` for pictures of it.
+
+## Mapping: 27 current icons to Kubai names
+
+| # | Lucide (now) | Kubai | Name match |
+| --- | --- | --- | --- |
+| 1 | `menu` | `menu` | same name |
+| 2 | `chevron-left` | `chevron-left` | same name |
+| 3 | `chevron-right` | `chevron-right` | same name |
+| 4 | `mic` | `mic` | same name |
+| 5 | `circle-check` | `circle-check` | same name |
+| 6 | `circle-alert` | `circle-alert` | same name |
+| 7 | `plus` | `circle-plus` | other name |
+| 8 | `pencil` | `pencil` | same name |
+| 9 | `trash` | `trash` | same name |
+| 10 | `file` | `file` | same name |
+| 11 | `file-text` | `file-text` | same name |
+| 12 | `loader-circle` | `loader` | other name |
+| 13 | `cloud-off` | `cloud-off` | same name |
+| 14 | `rotate-cw` | `rotate-cw` | same name |
+| 15 | `log-out` | `log-out` | same name |
+| 16 | `copy` | `copy` | same name |
+| 17 | `clipboard-check` | `clipboard-check` | same name |
+| 18 | `circle-help` | `circle-help` | same name |
+| 19 | `circle-minus` | `circle-minus` | same name |
+| 20 | `clock` | `clock` | same name |
+| 21 | `triangle-alert` | `triangle-alert` | same name |
+| 22 | `file-check` | `file-check` | same name |
+| 23 | `file-diff` | `file-diff` | same name |
+| 24 | `x` | `circle-x` | other name |
+| 25 | `check` | `circle-check` | other name |
+| 26 | `refresh-cw` | `sync` | other name |
+| 27 | `file-pen` | `notebook-pen` | other name |
+
+A same-name Kubai icon is not always the same drawing. Read the renders in `index.html` before treating a row as a match.
+
+## Contrast of the recoloured icons
+
+WCAG 2 relative luminance, same formula as `scripts/contrast_check.py`. Kubai icons are not one stroke colour. Each icon has an outline in a deep shade of the accent, gradient fills that run from the accent toward white, and white marks inside. The table gives three colours per icon: the **outline** (darkest paint), the **body** (the colour most shapes use) and the **lightest** fill, each against Paper `#F7F5F0` and White. WCAG asks 3 to 1 for a graphic that carries meaning (1.4.11); the shell's icons are decorative next to text, so this is the bar the outline has to clear to stay visible, and the body is what fills the shape. On a badged icon (`file-check`, `clipboard-check`) the darkest paint can be the badge disc `#33363D`, which does not follow the accent. The deepest outlines are not the token itself: Kubai derives them from the accent by lightness, which turns Teal into `#1C3D45`, a bluer step than any brand kit colour.
+
+### Recoloured to Teal `#245B57`
+
+| Kubai icon | Outline | on Paper | on White | Body | on Paper | on White | Lightest | on Paper | on White |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `menu` | `#245B57` | 7.11 | 7.75 | `#759896` | 2.88 | 3.14 | `#BECECD` | 1.49 | 1.63 |
+| `chevron-left` | `#1C3D45` | 10.69 | 11.65 | `#759896` | 2.88 | 3.14 | `#BECECD` | 1.49 | 1.63 |
+| `chevron-right` | `#1C3D45` | 10.69 | 11.65 | `#759896` | 2.88 | 3.14 | `#BECECD` | 1.49 | 1.63 |
+| `mic` | `#1C3D45` | 10.69 | 11.65 | `#1C3D45` | 10.69 | 11.65 | `#BECECD` | 1.49 | 1.63 |
+| `circle-check` | `#245B57` | 7.11 | 7.75 | `#759896` | 2.88 | 3.14 | `#BECECD` | 1.49 | 1.63 |
+| `circle-alert` | `#245B57` | 7.11 | 7.75 | `#759896` | 2.88 | 3.14 | `#BECECD` | 1.49 | 1.63 |
+| `circle-plus` | `#245B57` | 7.11 | 7.75 | `#759896` | 2.88 | 3.14 | `#BECECD` | 1.49 | 1.63 |
+| `pencil` | `#1C3D45` | 10.69 | 11.65 | `#245B57` | 7.11 | 7.75 | `#BECECD` | 1.49 | 1.63 |
+| `trash` | `#21534F` | 7.98 | 8.70 | `#245B57` | 7.11 | 7.75 | `#BECECD` | 1.49 | 1.63 |
+| `file` | `#245B57` | 7.11 | 7.75 | `#759896` | 2.88 | 3.14 | `#BECECD` | 1.49 | 1.63 |
+| `file-text` | `#245B57` | 7.11 | 7.75 | `#245B57` | 7.11 | 7.75 | `#BECECD` | 1.49 | 1.63 |
+| `loader` | `#245B57` | 7.11 | 7.75 | `#759896` | 2.88 | 3.14 | `#BECECD` | 1.49 | 1.63 |
+| `cloud-off` | `#245B57` | 7.11 | 7.75 | `#245B57` | 7.11 | 7.75 | `#BECECD` | 1.49 | 1.63 |
+| `rotate-cw` | `#1C3D45` | 10.69 | 11.65 | `#1C3D45` | 10.69 | 11.65 | `#BECECD` | 1.49 | 1.63 |
+| `log-out` | `#1C3D45` | 10.69 | 11.65 | `#1C3D45` | 10.69 | 11.65 | `#BECECD` | 1.49 | 1.63 |
+| `copy` | `#1C3D45` | 10.69 | 11.65 | `#BECECD` | 1.49 | 1.63 | `#BECECD` | 1.49 | 1.63 |
+| `clipboard-check` | `#1C3D45` | 10.69 | 11.65 | `#245B57` | 7.11 | 7.75 | `#C7D3D4` | 1.41 | 1.53 |
+| `circle-help` | `#245B57` | 7.11 | 7.75 | `#759896` | 2.88 | 3.14 | `#BECECD` | 1.49 | 1.63 |
+| `circle-minus` | `#245B57` | 7.11 | 7.75 | `#759896` | 2.88 | 3.14 | `#BECECD` | 1.49 | 1.63 |
+| `clock` | `#1C3D45` | 10.69 | 11.65 | `#1C3D45` | 10.69 | 11.65 | `#BECECD` | 1.49 | 1.63 |
+| `triangle-alert` | `#245B57` | 7.11 | 7.75 | `#759896` | 2.88 | 3.14 | `#BECECD` | 1.49 | 1.63 |
+| `file-check` | `#33363D` | 11.10 | 12.10 | `#759896` | 2.88 | 3.14 | `#BECECD` | 1.49 | 1.63 |
+| `file-diff` | `#245B57` | 7.11 | 7.75 | `#759896` | 2.88 | 3.14 | `#BECECD` | 1.49 | 1.63 |
+| `circle-x` | `#245B57` | 7.11 | 7.75 | `#759896` | 2.88 | 3.14 | `#BECECD` | 1.49 | 1.63 |
+| `circle-check` | `#245B57` | 7.11 | 7.75 | `#759896` | 2.88 | 3.14 | `#BECECD` | 1.49 | 1.63 |
+| `sync` | `#1C3D45` | 10.69 | 11.65 | `#1C3D45` | 10.69 | 11.65 | `#BECECD` | 1.49 | 1.63 |
+| `notebook-pen` | `#1C3D45` | 10.69 | 11.65 | `#1C3D45` | 10.69 | 11.65 | `#BECECD` | 1.49 | 1.63 |
+
+Range over the 27 icons: outline 7.11 to 1 on Paper, body 1.49 to 1 on Paper, lightest fill 1.41 to 1 on Paper.
+
+### Recoloured to Ink `#243331`
+
+| Kubai icon | Outline | on Paper | on White | Body | on Paper | on White | Lightest | on Paper | on White |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `menu` | `#243331` | 12.10 | 13.18 | `#757F7E` | 3.78 | 4.12 | `#BEC3C2` | 1.64 | 1.78 |
+| `chevron-left` | `#1C2227` | 14.74 | 16.06 | `#757F7E` | 3.78 | 4.12 | `#BEC3C2` | 1.64 | 1.78 |
+| `chevron-right` | `#1C2227` | 14.74 | 16.06 | `#757F7E` | 3.78 | 4.12 | `#BEC3C2` | 1.64 | 1.78 |
+| `mic` | `#1C2227` | 14.74 | 16.06 | `#1C2227` | 14.74 | 16.06 | `#BEC3C2` | 1.64 | 1.78 |
+| `circle-check` | `#243331` | 12.10 | 13.18 | `#757F7E` | 3.78 | 4.12 | `#BEC3C2` | 1.64 | 1.78 |
+| `circle-alert` | `#243331` | 12.10 | 13.18 | `#757F7E` | 3.78 | 4.12 | `#BEC3C2` | 1.64 | 1.78 |
+| `circle-plus` | `#243331` | 12.10 | 13.18 | `#757F7E` | 3.78 | 4.12 | `#BEC3C2` | 1.64 | 1.78 |
+| `pencil` | `#1C2227` | 14.74 | 16.06 | `#243331` | 12.10 | 13.18 | `#BEC3C2` | 1.64 | 1.78 |
+| `trash` | `#212E2C` | 12.92 | 14.08 | `#243331` | 12.10 | 13.18 | `#BEC3C2` | 1.64 | 1.78 |
+| `file` | `#243331` | 12.10 | 13.18 | `#757F7E` | 3.78 | 4.12 | `#BEC3C2` | 1.64 | 1.78 |
+| `file-text` | `#243331` | 12.10 | 13.18 | `#243331` | 12.10 | 13.18 | `#BEC3C2` | 1.64 | 1.78 |
+| `loader` | `#243331` | 12.10 | 13.18 | `#757F7E` | 3.78 | 4.12 | `#BEC3C2` | 1.64 | 1.78 |
+| `cloud-off` | `#243331` | 12.10 | 13.18 | `#243331` | 12.10 | 13.18 | `#BEC3C2` | 1.64 | 1.78 |
+| `rotate-cw` | `#1C2227` | 14.74 | 16.06 | `#1C2227` | 14.74 | 16.06 | `#BEC3C2` | 1.64 | 1.78 |
+| `log-out` | `#1C2227` | 14.74 | 16.06 | `#1C2227` | 14.74 | 16.06 | `#BEC3C2` | 1.64 | 1.78 |
+| `copy` | `#1C2227` | 14.74 | 16.06 | `#BEC3C2` | 1.64 | 1.78 | `#BEC3C2` | 1.64 | 1.78 |
+| `clipboard-check` | `#1C2227` | 14.74 | 16.06 | `#243331` | 12.10 | 13.18 | `#C7C8CA` | 1.54 | 1.67 |
+| `circle-help` | `#243331` | 12.10 | 13.18 | `#757F7E` | 3.78 | 4.12 | `#BEC3C2` | 1.64 | 1.78 |
+| `circle-minus` | `#243331` | 12.10 | 13.18 | `#757F7E` | 3.78 | 4.12 | `#BEC3C2` | 1.64 | 1.78 |
+| `clock` | `#1C2227` | 14.74 | 16.06 | `#1C2227` | 14.74 | 16.06 | `#BEC3C2` | 1.64 | 1.78 |
+| `triangle-alert` | `#243331` | 12.10 | 13.18 | `#757F7E` | 3.78 | 4.12 | `#BEC3C2` | 1.64 | 1.78 |
+| `file-check` | `#243331` | 12.10 | 13.18 | `#757F7E` | 3.78 | 4.12 | `#BEC3C2` | 1.64 | 1.78 |
+| `file-diff` | `#243331` | 12.10 | 13.18 | `#757F7E` | 3.78 | 4.12 | `#BEC3C2` | 1.64 | 1.78 |
+| `circle-x` | `#243331` | 12.10 | 13.18 | `#757F7E` | 3.78 | 4.12 | `#BEC3C2` | 1.64 | 1.78 |
+| `circle-check` | `#243331` | 12.10 | 13.18 | `#757F7E` | 3.78 | 4.12 | `#BEC3C2` | 1.64 | 1.78 |
+| `sync` | `#1C2227` | 14.74 | 16.06 | `#1C2227` | 14.74 | 16.06 | `#BEC3C2` | 1.64 | 1.78 |
+| `notebook-pen` | `#1C2227` | 14.74 | 16.06 | `#1C2227` | 14.74 | 16.06 | `#BEC3C2` | 1.64 | 1.78 |
+
+Range over the 27 icons: outline 12.10 to 1 on Paper, body 1.64 to 1 on Paper, lightest fill 1.54 to 1 on Paper.
+
+### For reference, the current Lucide strokes
+
+| Stroke colour | on Paper | on White |
+| --- | --- | --- |
+| Ink `#243331` | 12.10 | 13.18 |
+| Ink secondary `#4F5F5D` | 6.16 | 6.71 |
+| Teal `#245B57` | 7.11 | 7.75 |
