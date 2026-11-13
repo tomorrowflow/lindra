@@ -13,11 +13,8 @@ import hashlib
 from typing import Any
 
 from lindra.cast import Cast, Encounter, Paragraph, fixture_audio
+from lindra.speech import TranscriptionFailed
 from lindra.textmodel import NOTES_SOURCE, GenerationFailed, GenerationRequest
-
-
-class NotInTheCast(LookupError):
-    """The stand-in only knows the fictional cast."""
 
 
 class FixtureTextModel:
@@ -98,5 +95,8 @@ class FixtureSpeech:
     def transcribe(self, audio: bytes) -> str:
         transcript = self._transcripts.get(hashlib.sha256(audio).hexdigest())
         if transcript is None:
-            raise NotInTheCast("this audio is not fixture audio of the fictional cast")
+            raise TranscriptionFailed(
+                "Die Spracherkennung kennt diese Aufnahme nicht: Sie versteht nur die "
+                "Aufnahmen der erfundenen Fälle."
+            )
         return transcript

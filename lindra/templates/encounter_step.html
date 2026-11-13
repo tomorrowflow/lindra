@@ -3,7 +3,7 @@
   the header and the action bar. A step fills `header`, `content` and, when it has one,
   `note` (a line above the action bar) and `scripts`. The action bar has the same buttons in
   the same places on every step (ADR 0008): back and next at the left, discard and copy
-  before the dictation control at the right.
+  before the dictation control at the right. The dictation overlay is part of every step.
 #}
 {% extends "shell.html" %}
 {% from "icons.html" import icon %}
@@ -109,14 +109,19 @@
   </button>
   {% endblock %}
 
-  <button class="btn action-button" type="button" disabled>
+  {# The persistent dictation control: on every step, and never recording before this tap. #}
+  <button class="btn action-button" type="button" data-dictate aria-haspopup="dialog">
     {{ icon("mic") }}
     <span>Diktat</span>
   </button>
 </footer>
 {% endblock %}
 
+{# The overlay sits outside the main area and the action bar, so neither changes for it. #}
+{% block dialog %}{% include "dictation_overlay.html" %}{% endblock %}
+
 {% block scripts %}
 <script type="module" src="/static/js/generate.js"></script>
+<script type="module" src="/static/js/dictation.js"></script>
 {% block step_scripts %}{% endblock %}
 {% endblock %}

@@ -7,15 +7,20 @@ the save status changes, the status area keeps its width when its text changes, 
 control is at least 44 by 44 CSS pixels, a form error or a period conflict never moves
 the dialog's buttons, a case and an encounter can be opened from the portrait drawer, a
 visit outside the period is refused, a backdated visit sorts by its date, and the notes
-autosave through saving, saved, not saved (network lost) and failed save with retry.
+autosave through saving, saved, not saved (network lost) and failed save with retry. It also
+runs the review of an assessment and the dictation flow (ticket 10): the overlay blocks the
+step while it records, transcribes and shows the transcript, a corrected transcript is
+appended to the notes and outdates a pending proposal, discarding changes nothing, and a
+denied microphone and a recording that cannot be transcribed are told in the overlay.
 
 The application runs on a fixed clock (10.11.2026 14:30), so both default states of the
-new-visit form are reproducible. The case screens (ticket 05) are checked on every run
-but their pictures are not kept; the encounter screens are written to the output directory.
+new-visit form are reproducible. The case screens (ticket 05) and the encounter screens
+(ticket 06) are checked on every run but their pictures are not kept.
 
-The review steps (ticket 07) and the fidelity steps (ticket 08: input references, pain
-problems, the clarification list) write their pictures to `LFR-07` and `LFR-08` under the
-output directory, which defaults to `docs/screenshots`.
+The review steps (ticket 07), the fidelity steps (ticket 08: input references, pain
+problems, the clarification list) and the dictation overlay (ticket 10) write their pictures
+to `LFR-07`, `LFR-08` and `LFR-10` under the output directory, which defaults to
+`docs/screenshots`.
 
 Usage: .venv/bin/python scripts/screenshots.py [output-dir]
 Needs `playwright install chromium` once.
@@ -23,6 +28,8 @@ Needs `playwright install chromium` once.
 
 from __future__ import annotations
 
+import base64
+import re
 import socket
 import sys
 import tempfile
@@ -34,7 +41,9 @@ from pathlib import Path
 import httpx
 import uvicorn
 from playwright.sync_api import Page, sync_playwright
+from playwright.sync_api import TimeoutError as PlaywrightTimeout
 
+from lindra import cast
 from lindra.app import create_app
 from lindra.cast import load_cast
 from lindra.config import Settings
@@ -51,6 +60,70 @@ INSIDE_CASE = {
     "period_start": "2026-11-09",
     "period_end": "2026-11-20",
 }
+# Runs in every page before its own scripts. It counts the requests for the microphone, can
+# answer one with the denial a physician gives in Safari, and lets a test hand the overlay a
+# fixture clip as "the recording": a recorder set to `window.__fixtureAudio` (base64) returns
+# that clip, otherwise the browser's own recorder records from the fake microphone.
+INIT_SCRIPT = """
+(() => {
+  window.__micRequests = 0;
+  const media = navigator.mediaDevices;
+  if (media && media.getUserMedia) {
+    const real = media.getUserMedia.bind(media);
+    media.getUserMedia = async (constraints) => {
+      window.__micRequests += 1;
+      if (window.__denyMicrophone) throw new DOMException("Permission denied", "NotAllowedError");
+      const stream = await real(constraints);
+      window.__streams.push(stream);
+      return stream;
+    };
+  }
+  // The microphone tracks still open, which is what the browser shows as "recording".
+  window.__streams = [];
+  window.__liveTracks = () =>
+    window.__streams.flatMap((s) => s.getTracks()).filter((t) => t.readyState === "live").length;
+  const Real = window.MediaRecorder;
+  class FixtureRecorder extends EventTarget {
+    constructor() {
+      super();
+      this.state = "inactive";
+      this.mimeType = "audio/wav";
+      window.__recorder = this;
+    }
+    // A recorder that breaks while recording: the error comes first, and the browser still
+    // delivers the data and the stop event afterwards, `late` milliseconds later.
+    breakDown(late) {
+      this.state = "inactive";
+      this.dispatchEvent(new Event("error"));
+      setTimeout(() => this.stop(), late);
+    }
+    start() {
+      if (window.__recorderFault === "start") {
+        throw new DOMException("The recorder cannot start", "InvalidStateError");
+      }
+      this.state = "recording";
+    }
+    stop() {
+      this.state = "inactive";
+      const bytes = Uint8Array.from(atob(window.__fixtureAudio), (c) => c.charCodeAt(0));
+      const chunk = new Event("dataavailable");
+      chunk.data = new Blob([bytes], { type: this.mimeType });
+      this.dispatchEvent(chunk);
+      this.dispatchEvent(new Event("stop"));
+    }
+  }
+  if (Real) {
+    window.MediaRecorder = new Proxy(Real, {
+      construct: (target, args) => {
+        if (window.__recorderFault === "construct") {
+          throw new DOMException("No recorder for this stream", "NotSupportedError");
+        }
+        return window.__fixtureAudio ? new FixtureRecorder() : new target(...args);
+      },
+    });
+  }
+})();
+"""
 VIEWPORTS = {
     "ipad-portrait": {"viewport": {"width": 820, "height": 1180}, "device_scale_factor": 2},
     "desktop": {"viewport": {"width": 1440, "height": 900}, "device_scale_factor": 1},
@@ -819,6 +892,487 @@ def review_screens(page: Page, base_url: str, out: Path, name: str) -> list[str]
     return findings
 
 
+def api_encounter(base_url: str, page: Page) -> dict:
+    """The encounter the page shows, as the JSON API has it: notes, revision and badge."""
+    case_id, encounter_id = re.search(r"/faelle/(\d+)/kontakte/(\d+)/", page.url).groups()
+    response = httpx.get(
+        f"{base_url}/api/cases/{case_id}/encounters/{encounter_id}",
+        headers={"Authorization": f"Bearer {TOKEN}"},
+    )
+    response.raise_for_status()
+    return response.json()
+
+
+def use_fixture_audio(page: Page, clip: cast.FixtureClip | None) -> None:
+    """The next recording is this fixture clip; None records from the browser's fake device."""
+    encoded = base64.b64encode(cast.fixture_audio(clip.key)).decode() if clip else None
+    page.evaluate("encoded => { window.__fixtureAudio = encoded; }", encoded)
+
+
+def dictation_states(page: Page) -> list[str]:
+    """The overlay panels that are showing; exactly one while the overlay is open."""
+    return page.eval_on_selector_all(
+        "dialog.dictation[open] .dictation-state:not([hidden])",
+        "els => els.map(e => e.dataset.state)",
+    )
+
+
+def wait_for_panel(page: Page, state: str) -> None:
+    page.wait_for_selector(f"dialog.dictation[open] [data-state={state}]:not([hidden])")
+
+
+def check_overlay_blocks(page: Page, name: str, state: str) -> list[str]:
+    """While the overlay is open nothing behind it can be tapped, tabbed to or escaped to."""
+    findings: list[str] = []
+    where = f"{name} overlay {state}"
+    state_key = "failed" if state == "denied" else state
+    url = page.url
+    viewport = page.viewport_size
+    for selector in (".action-bar .action-button", ".topbar .btn", ".case-link", ".step-link"):
+        for box in boxes(page, selector):
+            x, y = box["x"] + box["w"] / 2, box["y"] + box["h"] / 2
+            if not (0 <= x <= viewport["width"] and 0 <= y <= viewport["height"]):
+                continue
+            hit = page.evaluate(
+                "([x, y]) => !!document.elementFromPoint(x, y)?.closest('dialog.dictation')",
+                [x, y],
+            )
+            if not hit:
+                findings.append(f"{where}: {selector} can be tapped at {x:.0f},{y:.0f}")
+    try:
+        page.click(".action-bar a:has-text('Weiter')", timeout=600)
+        findings.append(f"{where}: Weiter could be clicked")
+    except PlaywrightTimeout:
+        pass
+    # Twice: a second Escape without a tap in between closes a dialog whatever `cancel` did.
+    page.keyboard.press("Escape")
+    page.keyboard.press("Escape")
+    page.wait_for_timeout(150)
+    if not page.locator("dialog.dictation[open]").count() or dictation_states(page) != [state_key]:
+        findings.append(f"{where}: Escape closed the overlay")
+    for _ in range(12):
+        page.keyboard.press("Tab")
+        # A panel with nothing to tap (the wait) leaves focus on the page itself, whose
+        # content is inert.
+        inside = (
+            "document.activeElement === document.body"
+            " || document.activeElement.closest('dialog.dictation')"
+        )
+        if not page.evaluate(f"!!({inside})"):
+            findings.append(f"{where}: Tab moved focus out of the overlay")
+            break
+    if page.url != url:
+        findings.append(f"{where}: the page behind navigated")
+    return findings
+
+
+def overlay_layout(page: Page) -> dict:
+    return {
+        "dialog": boxes(page, "dialog.dictation")[0],
+        "actions": boxes(page, ".dictation-state:not([hidden]) .dialog-actions")[0],
+    }
+
+
+def dictation_screens(page: Page, base_url: str, out: Path, name: str) -> list[str]:
+    """The dictation flow: the microphone control on a review step, the overlay blocking the
+    step, recording, transcribing, reviewing and correcting the canned transcript, accepting it
+    into the notes (with a refused accept first), discarding, and the failures: microphone
+    denied and a recording the speech stand-in cannot transcribe. Typed notes survive each."""
+    findings: list[str] = []
+    portrait = name == "ipad-portrait"
+    transcript_route = "**/api/cases/*/encounters/*/dictation/transcript"
+    accept_route = "**/api/cases/*/encounters/*/dictation/accept"
+    clip = next(
+        clip
+        for case in cast.load_cast().cases
+        if case.case_number == "FIK-2026-001"
+        for encounter in case.encounters
+        if encounter.kind == "assessment"
+        for clip in encounter.audio
+    )
+    corrected = clip.transcript.replace("zweimal", "dreimal")
+
+    open_case(page, base_url, "FIK-2026-001", portrait)
+    open_drawer(page, portrait)
+    page.click(".encounter-link:has-text('Aufnahmeassessment')")
+    page.wait_for_url("**/notizen")
+    notes_url = page.url
+    generate_and_wait(page)
+    go_to_step(page, portrait, 5)
+    section_url = page.url
+    bar = bar_layout(page)
+    if page.is_disabled("[data-dictate]"):
+        findings.append(f"{name}: the microphone control is disabled on a review step")
+    if page.locator("dialog.dictation[open]").count() or page.evaluate("window.__micRequests"):
+        findings.append(f"{name}: the page opened the overlay or the microphone before the tap")
+    before = api_encounter(base_url, page)
+
+    # Microphone permission denied: told in the overlay, with a way out; nothing is lost.
+    page.evaluate("window.__denyMicrophone = true")
+    page.click("[data-dictate]")
+    wait_for_panel(page, "failed")
+    shown = page.inner_text("dialog.dictation [data-state=failed]")
+    if "Mikrofon nicht erlaubt" not in shown or "Lindra darf das Mikrofon nicht" not in shown:
+        findings.append(f"{name}: the denied-permission message reads {shown!r}")
+    for label in ("Schließen", "Erneut versuchen"):
+        button = page.locator(f"dialog.dictation [data-state=failed] .btn:has-text('{label}')")
+        if not button.is_visible():
+            findings.append(f"{name}: the denied-permission overlay has no {label}")
+    findings += check_overlay_blocks(page, name, "denied")
+    findings += check_targets(page, f"{name} overlay denied")
+    page.screenshot(path=out / f"dictation-denied-{name}.png")
+    page.click("[data-retry-dictation]")
+    wait_for_panel(page, "failed")
+    if page.evaluate("window.__micRequests") != 2:
+        findings.append(f"{name}: retry after a denial did not ask for the microphone again")
+    page.click("[data-close]")
+    if page.locator("dialog.dictation[open]").count() or page.url != section_url:
+        findings.append(f"{name}: closing the denied-permission overlay did not end on the step")
+    if api_encounter(base_url, page) != before:
+        findings.append(f"{name}: a denied microphone changed the encounter")
+    page.evaluate("window.__denyMicrophone = false")
+
+    # The recorder cannot be made or started although the microphone was granted: the overlay
+    # says so with a way out, and the microphone is released, so the browser stops showing it.
+    for fault in ("construct", "start"):
+        use_fixture_audio(page, clip)
+        page.evaluate("fault => { window.__recorderFault = fault; }", fault)
+        page.click("[data-dictate]")
+        wait_for_panel(page, "failed")
+        shown = page.inner_text("dialog.dictation [data-state=failed]")
+        if (
+            "Aufnahme nicht möglich" not in shown
+            or "Die Aufnahme lässt sich nicht starten" not in shown
+        ):
+            findings.append(f"{name}: a recorder fault ({fault}) reads {shown!r}")
+        for label in ("Schließen", "Erneut versuchen"):
+            button = page.locator(f"dialog.dictation [data-state=failed] .btn:has-text('{label}')")
+            if not button.is_visible():
+                findings.append(f"{name}: a recorder fault ({fault}) leaves no {label}")
+        if page.evaluate("window.__liveTracks()") != 0:
+            findings.append(f"{name}: a recorder fault ({fault}) leaves the microphone open")
+        if fault == "construct":
+            page.click("[data-close]")
+        else:
+            # The retry works once the fault is gone, and the recording ends released too.
+            page.evaluate("window.__recorderFault = null")
+            page.click("[data-retry-dictation]")
+            wait_for_panel(page, "recording")
+            page.click("[data-stop]")
+            wait_for_panel(page, "reviewing")
+            page.click("[data-discard]")
+        if page.locator("dialog.dictation[open]").count():
+            findings.append(f"{name}: the overlay stays open after a recorder fault ({fault})")
+    page.evaluate("window.__recorderFault = null")
+    if page.evaluate("window.__liveTracks()") != 0:
+        findings.append(f"{name}: the microphone stays open after the recorder faults")
+    if api_encounter(base_url, page) != before:
+        findings.append(f"{name}: a recorder fault changed the encounter")
+
+    # A recorder that breaks while recording still delivers its data and a stop event a moment
+    # later. The broken recording is not transcribed, and those late events change neither the
+    # failure panel, nor a closed overlay, nor the dictation started again meanwhile.
+    uploads: list = []
+    page.on(
+        "request",
+        lambda request: uploads.append(request) if "dictation/transcript" in request.url else None,
+    )
+    for then in ("waits", "closes", "restarts"):
+        use_fixture_audio(page, clip)
+        page.click("[data-dictate]")
+        wait_for_panel(page, "recording")
+        page.evaluate("window.__recorder.breakDown(600)")
+        wait_for_panel(page, "failed")
+        if "Aufnahme abgebrochen" not in page.inner_text("dialog.dictation [data-state=failed]"):
+            findings.append(f"{name}: a broken recorder ({then}) is not reported as interrupted")
+        if page.evaluate("window.__liveTracks()") != 0:
+            findings.append(f"{name}: a broken recorder ({then}) leaves the microphone open")
+        if then == "waits":
+            page.wait_for_timeout(900)
+            if dictation_states(page) != ["failed"]:
+                findings.append(f"{name}: late recorder events changed the failure panel")
+            page.click("[data-close]")
+        elif then == "closes":
+            page.click("[data-close]")
+            page.wait_for_timeout(900)
+            if page.locator("dialog.dictation[open]").count():
+                findings.append(f"{name}: late recorder events reopened a closed overlay")
+        else:
+            page.click("[data-retry-dictation]")
+            wait_for_panel(page, "recording")
+            page.wait_for_timeout(900)
+            if dictation_states(page) != ["recording"]:
+                findings.append(f"{name}: late recorder events broke the new recording")
+            if page.evaluate("window.__liveTracks()") != 1:
+                findings.append(f"{name}: late recorder events closed the new microphone stream")
+            page.click("[data-stop]")
+            wait_for_panel(page, "reviewing")
+            page.click("[data-discard]")
+    if len(uploads) != 1:
+        findings.append(f"{name}: {len(uploads)} recordings were sent, only the good one belongs")
+    if api_encounter(base_url, page) != before:
+        findings.append(f"{name}: a broken recorder changed the encounter")
+
+    # The canned transcript for fixture audio, through every state of the overlay.
+    use_fixture_audio(page, clip)
+    held: list = []
+    page.route(transcript_route, lambda route: held.append(route))
+    layouts = {}
+    page.click("[data-dictate]")
+    wait_for_panel(page, "recording")
+    layouts["recording"] = overlay_layout(page)
+    page.wait_for_timeout(1200)
+    if page.inner_text("[data-elapsed]") == "0:00":
+        findings.append(f"{name}: the recording time does not run")
+    findings += check_overlay_blocks(page, name, "recording")
+    findings += check_targets(page, f"{name} overlay recording")
+    page.screenshot(path=out / f"dictation-recording-{name}.png")
+    page.click("[data-stop]")
+    wait_for_panel(page, "transcribing")
+    layouts["transcribing"] = overlay_layout(page)
+    while not held:
+        page.wait_for_timeout(50)
+    # A recorder error that arrives after the stop has nothing left to interrupt.
+    page.evaluate("window.__recorder.dispatchEvent(new Event('error'))")
+    page.wait_for_timeout(150)
+    if dictation_states(page) != ["transcribing"]:
+        findings.append(f"{name}: a recorder error after the stop replaced the waiting panel")
+    findings += check_overlay_blocks(page, name, "transcribing")
+    page.screenshot(path=out / f"dictation-transcribing-{name}.png")
+    for route in held:
+        route.continue_()
+    page.unroute(transcript_route)
+    wait_for_panel(page, "reviewing")
+    layouts["reviewing"] = overlay_layout(page)
+    if page.input_value("[data-transcript]") != clip.transcript:
+        findings.append(f"{name}: the transcript is {page.input_value('[data-transcript]')!r}")
+    if not page.is_visible("[data-outdates]"):
+        findings.append(f"{name}: the overlay does not say the pending proposal becomes outdated")
+    findings += check_overlay_blocks(page, name, "reviewing")
+    findings += check_targets(page, f"{name} overlay reviewing")
+    page.screenshot(path=out / f"dictation-reviewing-{name}.png")
+    if any(layout != layouts["recording"] for layout in layouts.values()):
+        findings.append(f"{name}: the overlay or its buttons moved between states: {layouts}")
+    box = layouts["recording"]["dialog"]
+    if not (0 <= box["x"] and box["x"] + box["w"] <= page.viewport_size["width"]):
+        findings.append(f"{name}: the overlay does not fit the viewport: {box}")
+    if api_encounter(base_url, page) != before:
+        findings.append(f"{name}: recording and transcribing changed the encounter")
+
+    # Correct the transcript. A refusal (422) says the notes are unchanged and keeps the text
+    # editable; a server error (500) says it is unclear and locks the text; neither loses it.
+    page.fill("[data-transcript]", corrected)
+    page.route(
+        accept_route,
+        lambda route: route.fulfill(
+            status=422,
+            content_type="application/json",
+            body='{"errors": {"transcript": "Kein Text zum Übernehmen"}}',
+        ),
+    )
+    page.click("[data-accept]")
+    page.wait_for_selector("[data-accept-error]:not([hidden])")
+    refused = page.inner_text("[data-accept-error]")
+    if "Kein Text zum Übernehmen" not in refused or "Die Notizen sind unverändert" not in refused:
+        findings.append(f"{name}: a refused accept reads {refused!r}")
+    if page.is_editable("[data-transcript]") is False:
+        findings.append(f"{name}: a refused accept locked the text")
+    page.unroute(accept_route)
+    page.route(accept_route, lambda route: route.fulfill(status=500, body="{}"))
+    page.click("[data-accept]")
+    page.wait_for_selector("[data-accept-error]:not([hidden])")
+    if not page.evaluate("document.querySelector('[data-transcript]').readOnly"):
+        findings.append(f"{name}: the text is not locked while the outcome is unclear")
+    if page.input_value("[data-transcript]") != corrected or page.is_disabled("[data-accept]"):
+        findings.append(f"{name}: a server error lost the corrected text or its button")
+    if api_encounter(base_url, page) != before:
+        findings.append(f"{name}: a refused accept changed the notes")
+    unsure = page.inner_text("[data-accept-error]")
+    if "unklar" not in unsure or "Die Notizen sind unverändert" in unsure:
+        findings.append(f"{name}: a server error reads {unsure!r}")
+    page.unroute(accept_route)
+
+    # The answer is lost after the service appended: the overlay does not claim the notes are
+    # unchanged, and the retry adds nothing a second time.
+    def lose_answer(route):
+        route.fetch()
+        route.abort()
+
+    page.route(accept_route, lose_answer)
+    page.click("[data-accept]")
+    page.wait_for_selector("[data-accept-error]:not([hidden])")
+    if "unklar" not in page.inner_text("[data-accept-error]"):
+        findings.append(f"{name}: a lost answer is not reported as unclear")
+    if "nicht doppelt" not in page.inner_text("[data-accept-error]"):
+        findings.append(f"{name}: the lost-answer message does not say a retry is safe")
+    if page.input_value("[data-transcript]") != corrected or page.is_disabled("[data-accept]"):
+        findings.append(f"{name}: a lost answer lost the corrected text or its button")
+    message = boxes(page, "[data-accept-error]")[0]
+    body = boxes(page, "[data-state=reviewing] .dialog-body")[0]
+    if message["y"] < body["y"] or message["y"] + message["h"] > body["y"] + body["h"] + 1:
+        findings.append(f"{name}: the lost-answer message is cut off: {message} in {body}")
+    appended = api_encounter(base_url, page)
+    if appended["notes"].count(corrected) != 1:
+        findings.append(f"{name}: the lost-answer accept did not append once")
+    page.screenshot(path=out / f"dictation-unsure-{name}.png")
+    page.unroute(accept_route)
+    with page.expect_navigation():
+        page.click("[data-accept]")
+    page.wait_for_load_state()
+    if api_encounter(base_url, page) != appended:
+        findings.append(f"{name}: the retry after a lost answer changed the notes again")
+    if page.url != notes_url:
+        findings.append(f"{name}: accepting did not show the notes step: {page.url}")
+    after = api_encounter(base_url, page)
+    notes = page.input_value("#notes")
+    expected_tail = f"\n\n[Diktat, 10.11.2026 14:30]\n{corrected}\n"
+    if notes != after["notes"] or not notes.startswith(before["notes"]):
+        findings.append(f"{name}: the notes do not start with the typed text")
+    if not notes.endswith(expected_tail) or "zweimal aufzuwachen" in notes:
+        findings.append(f"{name}: the notes end with {notes[-120:]!r}")
+    if after["notes_revision"] != before["notes_revision"] + 1:
+        findings.append(f"{name}: the notes revision is {after['notes_revision']}")
+    badge = page.get_attribute(".encounter-link.current ~ .badge-button", "aria-label")
+    if badge != "Zustand: Vorschlag veraltet":
+        findings.append(f"{name}: the sidebar badge after dictating reads {badge!r}")
+    page.eval_on_selector("#notes", "e => e.scrollTop = e.scrollHeight")
+    page.screenshot(path=out / f"notes-dictated-{name}.png")
+    go_to_step(page, portrait, 9)
+    if not page.is_disabled(".action-bar button:has-text('Übernehmen')"):
+        findings.append(f"{name}: the proposal can be accepted after the notes changed")
+    if bar_layout(page) != bar:
+        findings.append(f"{name}: the action bar differs on the final step after dictating")
+    page.goto(notes_url)
+
+    # Discarding changes nothing.
+    before = api_encounter(base_url, page)
+    use_fixture_audio(page, clip)
+    page.click("[data-dictate]")
+    wait_for_panel(page, "recording")
+    page.click("[data-stop]")
+    wait_for_panel(page, "reviewing")
+    page.click("[data-discard]")
+    if page.locator("dialog.dictation[open]").count():
+        findings.append(f"{name}: discarding left the overlay open")
+    if api_encounter(base_url, page) != before or page.input_value("#notes") != before["notes"]:
+        findings.append(f"{name}: discarding a transcript changed the notes")
+
+    # Typed text that is not saved yet is saved first and stays above the dictated passage.
+    page.click("#notes")
+    page.keyboard.press("Control+End")
+    page.keyboard.type(" Gerade getippt.", delay=5)
+    page.click("[data-dictate]")
+    wait_for_panel(page, "recording")
+    page.click("[data-stop]")
+    wait_for_panel(page, "reviewing")
+    with page.expect_navigation():
+        page.click("[data-accept]")
+    page.wait_for_load_state()
+    notes = page.input_value("#notes")
+    if " Gerade getippt.\n\n[Diktat, 10.11.2026 14:30]\n" not in notes:
+        findings.append(f"{name}: text typed just before dictating is not above the passage")
+    if notes.count("[Diktat, ") != 2 or not notes.startswith(before["notes"]):
+        findings.append(f"{name}: a second dictation did not follow the first: {notes[-200:]!r}")
+
+    # A recording the speech stand-in cannot transcribe: told in the overlay, retry, close.
+    before = api_encounter(base_url, page)
+    use_fixture_audio(page, None)
+    sent: list = []
+    page.on(
+        "request",
+        lambda request: sent.append(request) if "dictation/transcript" in request.url else None,
+    )
+    page.click("[data-dictate]")
+    wait_for_panel(page, "recording")
+    page.wait_for_timeout(1200)
+    page.click("[data-stop]")
+    wait_for_panel(page, "failed")
+    shown = page.inner_text("dialog.dictation [data-state=failed]")
+    if "Text nicht erstellt" not in shown or "erfundenen Fälle" not in shown:
+        findings.append(f"{name}: the failed-transcription message reads {shown!r}")
+    findings += check_overlay_blocks(page, name, "failed")
+    findings += check_targets(page, f"{name} overlay failed")
+    page.screenshot(path=out / f"dictation-failed-{name}.png")
+    page.click("[data-retry-dictation]")
+    wait_for_panel(page, "failed")
+    if len(sent) != 2 or sent[0].post_data_buffer != sent[1].post_data_buffer:
+        findings.append(f"{name}: retry did not send the same recording again ({len(sent)})")
+    page.click("[data-close]")
+    if page.locator("dialog.dictation[open]").count():
+        findings.append(f"{name}: closing the failure left the overlay open")
+    if api_encounter(base_url, page) != before:
+        findings.append(f"{name}: a failed transcription changed the notes")
+
+    # The answer is lost after the service appended and the physician then discards the
+    # dictation: the page must show the notes as saved, or her next edit would save the stale
+    # text over the passage.
+    use_fixture_audio(page, clip)
+    page.click("[data-dictate]")
+    wait_for_panel(page, "recording")
+    page.click("[data-stop]")
+    wait_for_panel(page, "reviewing")
+    page.route(accept_route, lose_answer)
+    page.click("[data-accept]")
+    page.wait_for_selector("[data-accept-error]:not([hidden])")
+    page.unroute(accept_route)
+    with page.expect_navigation():
+        page.click("[data-discard]")
+    page.wait_for_load_state()
+    held_back = api_encounter(base_url, page)
+    if (
+        held_back["notes"].count("[Diktat, ") != 3
+        or page.input_value("#notes") != held_back["notes"]
+    ):
+        findings.append(f"{name}: after a lost answer and a discard the page shows stale notes")
+    page.click("#notes")
+    page.keyboard.press("Control+End")
+    page.keyboard.type(" Danach getippt.", delay=5)
+    page.wait_for_function(
+        "document.querySelector('[data-save-indicator]').textContent.includes('Gespeichert')"
+    )
+    saved = api_encounter(base_url, page)["notes"]
+    if saved != held_back["notes"] + " Danach getippt.":
+        findings.append(f"{name}: typing after a lost answer and a discard changed the passage")
+
+    # While the accept is on its way the dictation cannot be discarded: the service may save the
+    # passage after the overlay was closed over the old notes. The page then shows the saved notes.
+    use_fixture_audio(page, clip)
+    page.click("[data-dictate]")
+    wait_for_panel(page, "recording")
+    page.click("[data-stop]")
+    wait_for_panel(page, "reviewing")
+    waiting: list = []
+    page.route(accept_route, lambda route: waiting.append(route))
+    page.click("[data-accept]")
+    while not waiting:
+        page.wait_for_timeout(50)
+    if page.is_enabled("[data-discard]") or page.is_enabled("[data-accept]"):
+        findings.append(f"{name}: discard or accept stays enabled while the accept is on its way")
+    page.evaluate("document.querySelector('[data-discard]').click()")
+    page.keyboard.press("Escape")
+    page.keyboard.press("Escape")
+    page.wait_for_timeout(150)
+    if not page.locator("dialog.dictation[open]").count():
+        findings.append(f"{name}: the overlay closed while the accept was on its way")
+    if not page.evaluate("document.querySelector('[data-transcript]').readOnly"):
+        findings.append(f"{name}: the transcript stays editable while the accept is on its way")
+    page.evaluate("document.querySelector('[data-transcript]').dispatchEvent(new Event('input'))")
+    if page.is_enabled("[data-accept]") or page.is_enabled("[data-discard]"):
+        findings.append(f"{name}: an input event re-enabled accept or discard in flight")
+    with page.expect_navigation():
+        for route in waiting:
+            route.continue_()
+    page.unroute(accept_route)
+    page.wait_for_load_state()
+    after_flight = api_encounter(base_url, page)
+    if (
+        after_flight["notes"].count("[Diktat, ") != 4
+        or page.input_value("#notes") != after_flight["notes"]
+    ):
+        findings.append(f"{name}: the notes after an accept in flight are not the saved notes")
+    return findings
+
+
 def small_targets(page: Page, selector: str) -> list[dict]:
     return [b for b in boxes(page, selector) if b["w"] > 0 and (b["w"] < 44 or b["h"] < 44)]
 
@@ -1144,9 +1698,10 @@ def background_screens(page: Page, base_url: str, out: Path, name: str) -> list[
 
 def main(argv: list[str]) -> int:
     root = Path(argv[0]) if argv else Path("docs/screenshots")
-    out, fidelity_out = root / "LFR-07", root / "LFR-08"
+    out, fidelity_out, dictation_out = root / "LFR-07", root / "LFR-08", root / "LFR-10"
     background_out = root / "LFR-09"
     out.mkdir(parents=True, exist_ok=True)
+    dictation_out.mkdir(parents=True, exist_ok=True)
     fidelity_out.mkdir(parents=True, exist_ok=True)
     background_out.mkdir(parents=True, exist_ok=True)
     findings: list[str] = []
@@ -1155,13 +1710,18 @@ def main(argv: list[str]) -> int:
         sync_playwright() as playwright,
         tempfile.TemporaryDirectory() as scratch,
     ):
-        browser = playwright.chromium.launch()
+        # A fake microphone that records a tone, and no permission prompt (headless Chromium
+        # has no prompt to show; a denial is simulated in `INIT_SCRIPT`).
+        browser = playwright.chromium.launch(
+            args=["--use-fake-device-for-media-stream", "--use-fake-ui-for-media-stream"]
+        )
         for name, viewport in VIEWPORTS.items():
             reseed(base_url)
             context = browser.new_context(**viewport, locale="de-DE")
+            context.add_init_script(INIT_SCRIPT)
             page = context.new_page()
             log_in(page, base_url)
-            # Tickets 05 and 06 are checked on every run; only this ticket's pictures are kept.
+            # Tickets 05 and 06 are checked on every run; their pictures are not kept.
             findings.extend(case_screens(page, base_url, Path(scratch), name))
             reseed(base_url)
             findings.extend(visit_screens(page, base_url, Path(scratch), name))
@@ -1172,11 +1732,13 @@ def main(argv: list[str]) -> int:
             findings.extend(fidelity_screens(page, base_url, fidelity_out, name))
             reseed(base_url)
             findings.extend(background_screens(page, base_url, background_out, name))
+            reseed(base_url)
+            findings.extend(dictation_screens(page, base_url, dictation_out, name))
             context.close()
         browser.close()
     for finding in findings:
         print(finding)
-    print(f"screenshots written to {out}, {fidelity_out} and {background_out}")
+    print(f"screenshots written to {out}, {fidelity_out}, {background_out} and {dictation_out}")
     return 1 if findings else 0
 
 

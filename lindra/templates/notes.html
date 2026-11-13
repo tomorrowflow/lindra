@@ -22,7 +22,7 @@
 
 {% block content %}
 <label class="visually-hidden" for="notes">Notizen zu diesem Kontakt</label>
-<textarea class="textarea notes-area" id="notes" name="notes" lang="de" data-notes data-save-url="/api/cases/{{ case.id }}/encounters/{{ encounter.id }}/notes" data-revision="{{ encounter.notes_revision }}" placeholder="Eigene Notizen zu diesem Kontakt, in beliebiger Reihenfolge">{# An HTML parser drops one line break right after the tag, so a note that starts with one gets an extra. #}{% if notes[:1] in ("\n", "\r") %}{{ "\n" }}{% endif %}{{ notes }}</textarea>
+<textarea class="textarea notes-area" id="notes" name="notes" lang="de" autocomplete="off" data-notes data-save-url="/api/cases/{{ case.id }}/encounters/{{ encounter.id }}/notes" data-revision="{{ encounter.notes_revision }}" placeholder="Eigene Notizen zu diesem Kontakt, in beliebiger Reihenfolge">{# An HTML parser drops one line break right after the tag, so a note that starts with one gets an extra. #}{% if notes[:1] in ("\n", "\r") %}{{ "\n" }}{% endif %}{{ notes }}</textarea>
 {# The icons an encounter badge can show; notes.js swaps one in after a save. #}
 <template id="badge-icons">
   {% for state in badge_states.values() %}
