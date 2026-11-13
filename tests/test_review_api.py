@@ -195,8 +195,11 @@ def test_the_proposal_has_structured_paragraphs_with_input_references_and_subhea
             "source": "notes",
             "quote": "Patientin lebt mit Ehemann in einer Etagenwohnung, zwei erwachsene "
             "Kinder, arbeitet halbtags im Büro, aktuell krankgeschrieben.",
+            "origin": "notes",
+            "encounter": None,
         }
     ]
+    assert first["origin"] == "notes"
     assert proposal["sections"][5]["paragraphs"][0]["heading"] == (
         "Körperliche und internistische Untersuchung"
     )
@@ -234,14 +237,6 @@ def test_generating_needs_notes(client):
 
     assert response.status_code == 409
     assert response.json() == {"detail": "Zuerst Notizen eintragen"}
-
-
-def test_a_visit_has_no_draft_in_this_release_step(client):
-    visit = Encounter(client, kind="visit")
-
-    assert visit.get("/draft").status_code == 404
-    assert visit.generate().status_code == 404
-    assert visit.edit(1, "Text").status_code == 404
 
 
 def test_a_case_or_encounter_that_does_not_exist_is_not_found(client, assessment):
@@ -416,14 +411,14 @@ def test_accepting_increments_the_acceptance_counter_each_time(assessment):
 
 
 def test_accepting_adopts_the_clarification_list_of_the_proposal(client):
-    encounter = Encounter(client, "FIK-2026-002")
+    encounter = Encounter(client, "FIK-2026-003")
     proposal = encounter.generate().json()["proposal"]
     assert encounter.draft()["clarifications"] == []
 
     shown = encounter.accept().json()
 
     assert shown["clarifications"] == proposal["clarifications"]
-    assert shown["clarifications"][0]["section"] == SCHMERZ
+    assert shown["clarifications"][0]["section"] == SOZIAL
 
 
 def test_a_manual_edit_never_resolves_a_clarification_item(client):

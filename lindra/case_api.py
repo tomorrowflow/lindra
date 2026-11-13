@@ -25,6 +25,8 @@ def encounter_json(encounter: Encounter) -> dict[str, Any]:
         "has_draft": encounter.has_draft,
         "proposal": proposal,
         "possibly_outdated": encounter.draft_possibly_outdated,
+        "background_changed": encounter.background_changed,
+        "background_revision": encounter.background_revision,
         "acceptances": encounter.acceptances,
     }
 

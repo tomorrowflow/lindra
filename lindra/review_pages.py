@@ -36,8 +36,6 @@ def build_steps(case: Case, current: review.EncounterReview) -> list[Step]:
     """The steps of an encounter in order: notes, one per section, then the final step."""
     base = encounter_base(case, current.encounter.id)
     steps = [Step(1, "Notizen", f"{base}/notizen")]
-    if current.encounter.kind not in review.DRAFTABLE:
-        return steps
     for index, title in enumerate(current.titles):
         found = tuple(badges.section_badges(current, index))
         steps.append(Step(index + 2, title, f"{base}/abschnitte/{index + 1}", found))
@@ -64,7 +62,6 @@ def step_context(
         "previous_step": steps[active - 2] if active > 1 else None,
         "next_step": steps[active] if active < len(steps) else None,
         "generation": generations.state(current.encounter.id),
-        "draftable": current.encounter.kind in review.DRAFTABLE,
     }
 
 

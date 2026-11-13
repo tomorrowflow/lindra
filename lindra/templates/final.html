@@ -98,7 +98,7 @@
 {% if accepting and rev.outdated %}
 <p class="step-note" id="outdated-reason" role="note" data-outdated-reason>
   {{ icon("clock") }}
-  <span>{{ outdated_reason }}</span>
+  <span>{{ rev.outdated_reason }}</span>
   <span class="step-note-more">Verwerfen Sie den Vorschlag oder erzeugen Sie einen neuen.</span>
 </p>
 {% endif %}

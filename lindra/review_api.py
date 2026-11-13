@@ -15,12 +15,24 @@ from lindra.textmodel import GenerationFailed, TextModel
 RawBody = Annotated[dict[str, Any] | None, Body()]
 
 
-def section_json(number: int, section: drafts.Section) -> dict[str, Any]:
+def section_json(
+    number: int, section: drafts.Section, current: review.EncounterReview
+) -> dict[str, Any]:
     """A section as the API shows it. Each paragraph says where it comes from: `notes` when it
-    has input references, `hand` when the physician wrote it."""
+    has input references into today's notes, `background` when they quote an earlier encounter,
+    `notes_and_background` for both, `hand` when the physician wrote it. A reference into an
+    earlier encounter names it and its date."""
     stored = drafts.section_to_json(section)
     for paragraph in stored["paragraphs"]:
-        paragraph["origin"] = drafts.origin_of(paragraph["references"])
+        paragraph["origin"] = drafts.origin_of([r["source"] for r in paragraph["references"]])
+        for reference in paragraph["references"]:
+            earlier = drafts.InputReference(reference["source"], reference["quote"])
+            reference["origin"] = "notes" if earlier.encounter_id is None else "background"
+            reference["encounter"] = (
+                None
+                if earlier.encounter_id is None
+                else {"id": earlier.encounter_id, "label": current.source_label(earlier.source)}
+            )
     return {
         "number": number,
         "text": drafts.section_text(section),
@@ -35,11 +47,15 @@ def proposal_json(current: review.EncounterReview) -> dict[str, Any] | None:
         return None
     plan = current.plan
     assert plan is not None
+    encounter = current.encounter
     return {
         "notes_revision": proposal.notes_revision,
+        "background_revision": proposal.background_revision,
         "outdated": current.outdated,
-        "outdated_reason": drafts.OUTDATED_REASON if current.outdated else None,
-        "sections": [section_json(i + 1, s) for i, s in enumerate(proposal.sections)],
+        "outdated_reason": current.outdated_reason if current.outdated else None,
+        "notes_outdated": encounter.proposal_notes_outdated,
+        "background_outdated": encounter.proposal_background_outdated,
+        "sections": [section_json(i + 1, s, current) for i, s in enumerate(proposal.sections)],
         "clarifications": drafts.clarifications_to_json(proposal.clarifications),
         "replaces": list(plan.replaced),
         "retains": list(plan.retained),
@@ -55,8 +71,14 @@ def review_json(
         "draft_revision": encounter.draft_revision,
         "notes_revision": encounter.notes_revision,
         "possibly_outdated": current.possibly_outdated,
+        "background_revision": encounter.background_revision,
+        "draft_background": encounter.draft_background,
+        "background_changed": current.background_changed,
+        "background_changed_label": drafts.BACKGROUND_CHANGED
+        if current.background_changed
+        else None,
         "acceptances": encounter.acceptances,
-        "sections": [section_json(i + 1, s) for i, s in enumerate(current.sections)],
+        "sections": [section_json(i + 1, s, current) for i, s in enumerate(current.sections)],
         "clarifications": drafts.clarifications_to_json(current.clarifications),
         "proposal": proposal_json(current),
         "generation": {"state": generation.state, "reason": generation.reason},

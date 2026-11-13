@@ -19,7 +19,7 @@ import pytest
 
 from lindra import cast, drafts, fidelity
 from lindra.standins import FixtureTextModel
-from lindra.textmodel import GenerationRequest
+from lindra.textmodel import BackgroundEncounter, GenerationRequest
 
 SCHMERZ = cast.PAIN_SECTION
 
@@ -36,12 +36,40 @@ def encounters(fictional_cast, kind=None):
                 yield case, encounter
 
 
+def source_of(case, key):
+    """The reference source the tests give a cast encounter as background."""
+    return f"encounter:{[e.key for e in case.encounters].index(key) + 1}"
+
+
+def background_for(case, encounter):
+    """The accepted drafts the visit draws on: the cast's own expected drafts of the earlier
+    encounters it lists as its background."""
+    found = []
+    for key in encounter.background:
+        earlier = next(e for e in case.encounters if e.key == key)
+        sections = tuple(
+            (s.title, drafts.section_text(s))
+            for s in generated(case, earlier).sections
+            if not drafts.is_empty(s)
+        )
+        when = datetime.combine(earlier.date, time(9, 0))
+        found.append(BackgroundEncounter(source_of(case, key), earlier.kind, when, sections))
+    return tuple(found)
+
+
+def sources_for(case, encounter):
+    sources = {"notes": encounter.notes}
+    sources.update({b.source: b.text for b in background_for(case, encounter)})
+    return sources
+
+
 def generated(case, encounter):
     request = GenerationRequest(
         case.case_number,
         encounter.kind,
         datetime.combine(encounter.date, time(9, 0)),
         encounter.notes,
+        background_for(case, encounter),
     )
     raw = FixtureTextModel(cast.load_cast()).generate(request)
     return drafts.parse_generated(raw, encounter.kind)
@@ -68,7 +96,11 @@ def test_the_service_drops_nothing_from_any_fixture_draft(fictional_cast):
     for case, encounter in encounters(fictional_cast):
         result = generated(case, encounter)
 
-        checked = fidelity.check_result(result, {"notes": encounter.notes})
+        checked = fidelity.check_result(
+            result,
+            sources_for(case, encounter),
+            today_only=frozenset(cast.TODAY_ONLY_SECTIONS[encounter.kind]),
+        )
 
         assert checked == result, f"{case.case_number} {encounter.key}"
 
@@ -116,11 +148,13 @@ def test_no_draft_words_a_diagnosis_cause_recommendation_normal_finding_or_appro
             assert word not in text or word in notes, f"{case.case_number} {encounter.key}: {word}"
 
 
-def test_every_number_in_a_draft_is_in_the_notes_it_came_from(fictional_cast):
+def test_every_number_in_a_draft_is_in_the_notes_or_the_background_it_came_from(fictional_cast):
     for case, encounter in encounters(fictional_cast):
-        in_notes = set(re.findall(r"\d+(?:[.,]\d+)*", encounter.notes))
+        by_key = {e.key: e for e in case.encounters}
+        held = encounter.notes + " ".join(by_key[key].notes for key in encounter.background)
+        in_held = set(re.findall(r"\d+(?:[.,]\d+)*", held))
         in_draft = set(re.findall(r"\d+(?:[.,]\d+)*", draft_text(encounter)))
-        assert in_draft <= in_notes, f"{case.case_number} {encounter.key}: {in_draft - in_notes}"
+        assert in_draft <= in_held, f"{case.case_number} {encounter.key}: {in_draft - in_held}"
 
 
 def test_the_first_case_has_one_pain_and_the_draft_does_not_call_it_the_main_pain(fictional_cast):
