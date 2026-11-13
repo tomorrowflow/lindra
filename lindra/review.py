@@ -18,6 +18,7 @@ from lindra import background, cases, drafts, fidelity, formatting
 from lindra.cast import SECTIONS, TODAY_ONLY_SECTIONS, Clarification
 from lindra.store import AcceptedDraft, Encounter, OpenedEncounter, Store, Tx
 from lindra.textmodel import (
+    MODEL_NOT_ANSWERING,
     NOTES_SOURCE,
     BackgroundEncounter,
     GenerationFailed,
@@ -32,7 +33,7 @@ NO_NOTES = "Zuerst Notizen eintragen"
 ALREADY_RUNNING = "Für diesen Kontakt wird gerade ein Entwurf erzeugt"
 NO_PROPOSAL = "Es liegt kein Vorschlag vor"
 NOTHING_TO_COPY = "Es gibt noch nichts zu kopieren"
-MODEL_ERROR = "Das Textmodell hat nicht geantwortet."
+MODEL_ERROR = MODEL_NOT_ANSWERING
 SECTION_NOT_TEXT = "Den Text des Abschnitts als Text übermitteln"
 MAX_SECTION_LENGTH = 50_000
 
