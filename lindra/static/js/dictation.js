@@ -109,32 +109,44 @@ if (dialog && control) {
       }
       return;
     }
-    const type = TYPES.find((candidate) => MediaRecorder.isTypeSupported?.(candidate));
-    const chunks = [];
-    recorder = new MediaRecorder(stream, type ? { mimeType: type } : undefined);
-    recorder.addEventListener("dataavailable", (event) => {
-      if (event.data?.size) chunks.push(event.data);
-    });
-    recorder.addEventListener("stop", () => {
-      const mime = recorder?.mimeType || chunks[0]?.type || "application/octet-stream";
+    // The microphone is open from here on. Whatever goes wrong before the recording runs must
+    // release it and leave the overlay with a way out, never stuck on "starting".
+    try {
+      const type = TYPES.find((candidate) => MediaRecorder.isTypeSupported?.(candidate));
+      const chunks = [];
+      recorder = new MediaRecorder(stream, type ? { mimeType: type } : undefined);
+      recorder.addEventListener("dataavailable", (event) => {
+        if (event.data?.size) chunks.push(event.data);
+      });
+      recorder.addEventListener("stop", () => {
+        const mime = recorder?.mimeType || chunks[0]?.type || "application/octet-stream";
+        release();
+        const blob = new Blob(chunks, { type: mime });
+        if (!blob.size) {
+          fail("Nichts aufgenommen", "Es kam kein Ton an. Prüfen Sie das Mikrofon und versuchen Sie es erneut.", start);
+          return;
+        }
+        transcribe(blob);
+      });
+      recorder.addEventListener("error", () => {
+        release();
+        fail("Aufnahme abgebrochen", "Die Aufnahme wurde unterbrochen. Versuchen Sie es erneut.", start);
+      });
+      const began = Date.now();
+      elapsed.textContent = clock(0);
+      ticker = setInterval(() => {
+        elapsed.textContent = clock(Math.floor((Date.now() - began) / 1000));
+      }, 500);
+      recorder.start();
+    } catch {
       release();
-      const blob = new Blob(chunks, { type: mime });
-      if (!blob.size) {
-        fail("Nichts aufgenommen", "Es kam kein Ton an. Prüfen Sie das Mikrofon und versuchen Sie es erneut.", start);
-        return;
-      }
-      transcribe(blob);
-    });
-    recorder.addEventListener("error", () => {
-      release();
-      fail("Aufnahme abgebrochen", "Die Aufnahme wurde unterbrochen. Versuchen Sie es erneut.", start);
-    });
-    const began = Date.now();
-    elapsed.textContent = clock(0);
-    ticker = setInterval(() => {
-      elapsed.textContent = clock(Math.floor((Date.now() - began) / 1000));
-    }, 500);
-    recorder.start();
+      fail(
+        "Aufnahme nicht möglich",
+        "Die Aufnahme lässt sich nicht starten. Versuchen Sie es erneut, oder schließen Sie das Diktat.",
+        start,
+      );
+      return;
+    }
     show("recording");
   }
 

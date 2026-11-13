@@ -72,9 +72,15 @@ INIT_SCRIPT = """
     media.getUserMedia = async (constraints) => {
       window.__micRequests += 1;
       if (window.__denyMicrophone) throw new DOMException("Permission denied", "NotAllowedError");
-      return real(constraints);
+      const stream = await real(constraints);
+      window.__streams.push(stream);
+      return stream;
     };
   }
+  // The microphone tracks still open, which is what the browser shows as "recording".
+  window.__streams = [];
+  window.__liveTracks = () =>
+    window.__streams.flatMap((s) => s.getTracks()).filter((t) => t.readyState === "live").length;
   const Real = window.MediaRecorder;
   class FixtureRecorder extends EventTarget {
     constructor() {
@@ -83,6 +89,9 @@ INIT_SCRIPT = """
       this.mimeType = "audio/wav";
     }
     start() {
+      if (window.__recorderFault === "start") {
+        throw new DOMException("The recorder cannot start", "InvalidStateError");
+      }
       this.state = "recording";
     }
     stop() {
@@ -96,8 +105,12 @@ INIT_SCRIPT = """
   }
   if (Real) {
     window.MediaRecorder = new Proxy(Real, {
-      construct: (target, args) =>
-        window.__fixtureAudio ? new FixtureRecorder() : new target(...args),
+      construct: (target, args) => {
+        if (window.__recorderFault === "construct") {
+          throw new DOMException("No recorder for this stream", "NotSupportedError");
+        }
+        return window.__fixtureAudio ? new FixtureRecorder() : new target(...args);
+      },
     });
   }
 })();
@@ -1007,6 +1020,43 @@ def dictation_screens(page: Page, base_url: str, out: Path, name: str) -> list[s
     if api_encounter(base_url, page) != before:
         findings.append(f"{name}: a denied microphone changed the encounter")
     page.evaluate("window.__denyMicrophone = false")
+
+    # The recorder cannot be made or started although the microphone was granted: the overlay
+    # says so with a way out, and the microphone is released, so the browser stops showing it.
+    for fault in ("construct", "start"):
+        use_fixture_audio(page, clip)
+        page.evaluate("fault => { window.__recorderFault = fault; }", fault)
+        page.click("[data-dictate]")
+        wait_for_panel(page, "failed")
+        shown = page.inner_text("dialog.dictation [data-state=failed]")
+        if (
+            "Aufnahme nicht möglich" not in shown
+            or "Die Aufnahme lässt sich nicht starten" not in shown
+        ):
+            findings.append(f"{name}: a recorder fault ({fault}) reads {shown!r}")
+        for label in ("Schließen", "Erneut versuchen"):
+            button = page.locator(f"dialog.dictation [data-state=failed] .btn:has-text('{label}')")
+            if not button.is_visible():
+                findings.append(f"{name}: a recorder fault ({fault}) leaves no {label}")
+        if page.evaluate("window.__liveTracks()") != 0:
+            findings.append(f"{name}: a recorder fault ({fault}) leaves the microphone open")
+        if fault == "construct":
+            page.click("[data-close]")
+        else:
+            # The retry works once the fault is gone, and the recording ends released too.
+            page.evaluate("window.__recorderFault = null")
+            page.click("[data-retry-dictation]")
+            wait_for_panel(page, "recording")
+            page.click("[data-stop]")
+            wait_for_panel(page, "reviewing")
+            page.click("[data-discard]")
+        if page.locator("dialog.dictation[open]").count():
+            findings.append(f"{name}: the overlay stays open after a recorder fault ({fault})")
+    page.evaluate("window.__recorderFault = null")
+    if page.evaluate("window.__liveTracks()") != 0:
+        findings.append(f"{name}: the microphone stays open after the recorder faults")
+    if api_encounter(base_url, page) != before:
+        findings.append(f"{name}: a recorder fault changed the encounter")
 
     # The canned transcript for fixture audio, through every state of the overlay.
     use_fixture_audio(page, clip)
