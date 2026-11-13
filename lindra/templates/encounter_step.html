@@ -16,7 +16,6 @@
   {% block header %}{% endblock %}
 
   {# Generation: only this button creates a draft. The retry button's place is reserved. #}
-  {% if draftable %}
   <div class="strip" data-generation="{{ generation.state }}" data-generate-url="/api/cases/{{ case.id }}/encounters/{{ encounter.id }}/generate" data-state-url="/api/cases/{{ case.id }}/encounters/{{ encounter.id }}/generation">
     <button class="btn btn-primary strip-button" type="button" data-generate{% if generation.state == "running" %} disabled{% endif %}>
       {{ icon("file-pen") }}
@@ -30,6 +29,17 @@
     </div>
     <p class="strip-note" data-generation-reason>{% if generation.state == "failed" %}{{ generation.reason }}{% endif %}</p>
   </div>
+  {# A visit's draft made on a background that was accepted again since (ADR 0010). The text stays. #}
+  {% if rev.background_changed %}
+  <div class="marker" data-background-changed>
+    <button class="marker-button" type="button" aria-expanded="false" aria-controls="background-explanation">
+      {{ icon("layers") }}
+      <span>{{ background_changed_text }}</span>
+      <span class="more">Mehr</span>
+    </button>
+    <p class="badge-explanation" id="background-explanation" hidden>{{ badge_states["background_changed"].explanation }}</p>
+  </div>
+  {% endif %}
   {% if rev.possibly_outdated %}
   <div class="marker">
     <button class="marker-button" type="button" aria-expanded="false" aria-controls="stale-explanation">
@@ -39,7 +49,6 @@
     </button>
     <p class="badge-explanation" id="stale-explanation" hidden>Die Notizen haben sich geändert, seit der Entwurf übernommen wurde. Lindra vermutet nicht, welche Abschnitte betroffen sind. Erzeugen Sie einen neuen Vorschlag, um das zu sehen.</p>
   </div>
-  {% endif %}
   {% endif %}
 
   {% block content %}{% endblock %}

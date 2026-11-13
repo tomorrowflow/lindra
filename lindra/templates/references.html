@@ -1,21 +1,41 @@
 {#
-  The input reference of a paragraph (ADR 0008). A generated paragraph shows "aus Notizen";
-  tapping it opens the passages of the notes the paragraph was written from, word for word.
-  A paragraph the physician wrote or rewrote shows "von Hand, keine Herkunft". It tells where
-  the text came from and says nothing about whether it is right.
+  The input reference of a paragraph (ADR 0008, ADR 0010). A generated paragraph shows
+  "aus Notizen" when it was written from today's notes; tapping it opens the passages of the
+  notes, word for word. In a visit a paragraph that draws on an earlier encounter shows
+  "aus früherem Kontakt" beside it; tapping that opens the quoted passage and names the
+  encounter and its date. The two differ in colour, icon and the caption over the quote, so
+  today's observations and history stay apart. A paragraph the physician wrote or rewrote
+  shows "von Hand, keine Herkunft". Origin only, never a statement that the text is right.
+  `rev` is the encounter's review, which names the earlier encounters.
 #}
 {% from "icons.html" import icon %}
-{% macro origin(paragraph) %}
-{% if paragraph.references %}
+{% macro origin(paragraph, rev) %}
+{% set today = paragraph.references | rejectattr("encounter_id") | list %}
+{% set earlier = paragraph.references | selectattr("encounter_id") | list %}
+{% if today %}
 <details class="origin">
   <summary class="origin-toggle">{{ icon("file-text") }}<span>aus Notizen</span></summary>
   <div class="origin-quotes">
-    {% for reference in paragraph.references %}
+    {% for reference in today %}
     <blockquote class="origin-quote" lang="de">{{ reference.quote }}</blockquote>
     {% endfor %}
   </div>
 </details>
-{% else %}
+{% endif %}
+{% if earlier %}
+<details class="origin origin-earlier">
+  <summary class="origin-toggle">{{ icon("history") }}<span>aus früherem Kontakt</span></summary>
+  <div class="origin-quotes">
+    {% for reference in earlier %}
+    <figure class="origin-figure">
+      <figcaption class="origin-caption">{{ rev.source_label(reference.source) }}</figcaption>
+      <blockquote class="origin-quote" lang="de">{{ reference.quote }}</blockquote>
+    </figure>
+    {% endfor %}
+  </div>
+</details>
+{% endif %}
+{% if not today and not earlier %}
 <p class="origin origin-hand">{{ icon("pencil") }}<span>von Hand, keine Herkunft</span></p>
 {% endif %}
 {% endmacro %}

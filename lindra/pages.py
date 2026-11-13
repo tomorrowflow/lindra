@@ -159,7 +159,7 @@ def build_router(
             opened = cases.get_encounter(store, case_id, encounter_id)
         except cases.NotFound as error:
             return page(request, "case.html", status_code=404, case=case, notice=str(error))
-        current = review.describe(opened)
+        current = review.describe(opened, case.encounters)
         context = step_context(case, current, generations, 1)
         return page(request, "notes.html", case=case, notes=opened.notes, **context)
 

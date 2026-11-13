@@ -3,7 +3,8 @@
 They state the intended purpose as rules for the model: it words what the physician supplied
 and adds nothing. The rules are also enforced after the answer, by `lindra/fidelity.py`; a
 model that ignores them loses the paragraphs that break them, so the instructions are not
-the only guard. The fixture model ignores them.
+the only guard. The fixture model ignores them. A visit gets the same rules plus those for
+its background (ADR 0010).
 """
 
 INSTRUCTIONS = """\
@@ -39,3 +40,41 @@ Antworte nur mit einem JSON-Objekt: {"sections": [{"title", "paragraphs": [{"tex
 "references": [{"source": "notes", "quote"}]}]}], "clarifications": [{"section", "text"}]}. \
 Die Abschnitte stehen in der vorgegebenen Reihenfolge.
 """
+
+_ASSESSMENT_TASK = (
+    "Du ordnest die Notizen einer Schmerzmedizinerin den Abschnitten ihres Aufnahmebriefs zu "
+    "und formulierst sie aus."
+)
+_VISIT_TASK = (
+    "Du ordnest die Notizen einer Schmerzmedizinerin zu einer Visite den vier Abschnitten "
+    "ihres kurzen Verlaufsentwurfs zu und formulierst sie aus."
+)
+
+VISIT_INSTRUCTIONS = (
+    INSTRUCTIONS.replace(_ASSESSMENT_TASK, _VISIT_TASK)
+    + """
+Für eine Visite gilt zusätzlich:
+- Neben den Notizen der Visite bekommst du den Hintergrund: den übernommenen Entwurf des \
+Aufnahmeassessments und die übernommenen Entwürfe früherer Visiten, je mit einer Kennung. Mehr \
+kennst du nicht. Von späteren Visiten und von Vorschlägen, die die Ärztin noch nicht \
+übernommen hat, weißt du nichts.
+- Was heute beobachtet wurde, stammt aus den Notizen der Visite und trägt Verweise mit der \
+Quelle "notes". Was du aus dem Hintergrund übernimmst, trägt Verweise mit der Kennung des \
+Kontakts als Quelle und einem wörtlichen Zitat aus dessen Entwurf. Mische beides nicht ohne \
+beide Verweise.
+- Aktuelle Befunde, die ärztliche Einschätzung und das vereinbarte Vorgehen mit den Zielen \
+stehen nur im Entwurf, wenn die Notizen der Visite sie nennen. Aus dem Hintergrund übernimmst du \
+keine Entscheidung und kein Ziel in die Visite. Nennen die Notizen keine Entscheidung, bleibt \
+der Abschnitt leer und bekommt einen Eintrag auf der Klärungsliste.
+- Widerspricht eine Angabe der Notizen einer Angabe des Hintergrunds, übernimmst du keine der \
+beiden. Der Eintrag auf der Klärungsliste nennt beide Angaben mit dem Kontakt, aus dem die \
+frühere stammt.
+- Die Abschnitte der Visite sind: Verlauf seit letzter Visite, Aktuelle Befunde, Ärztliche \
+Einschätzung, Vereinbartes Vorgehen und Ziele. Du füllst nichts auf.
+"""
+)
+
+
+def instructions_for(kind: str) -> str:
+    """The instructions for an encounter kind."""
+    return VISIT_INSTRUCTIONS if kind == "visit" else INSTRUCTIONS
