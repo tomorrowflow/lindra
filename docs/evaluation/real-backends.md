@@ -69,12 +69,12 @@ Not recorded. The operator names the chosen inference host here before the run: 
 
 | Role | Model and version or quantisation | Server | Run |
 | --- | --- | --- | --- |
-| Self-hosted text model | pending | pending | not run |
+| Self-hosted text model | `qwen3.8:27b-q8_0`, chosen by the operator (server address not recorded here) | Ollama-style server, version pending | not run |
 | Self-hosted recogniser, whisper.cpp | pending | `whisper-server` | not run |
 | Self-hosted recogniser, faster-whisper | pending | pending | not run |
 | Hosted text model, comparison | pending | provider's hosted service | not run, see terms |
 
-The research named whisper.cpp and faster-whisper as recogniser candidates. No text model is chosen. Which models the hardware carries, and whether their German is good enough for medical text, is an open question (ADR 0003), and this table is where the answer goes.
+The research named whisper.cpp and faster-whisper as recogniser candidates. The operator selected the text model and its server for the self-hosted run through `LINDRA_TEXT_MODEL` and `LINDRA_TEXT_URL`, which the commands above read from the environment. The measuring run itself is not done: the build session needed an approval to contact that host and did not get one. No recogniser is chosen. Which models the hardware carries, and whether their German is good enough for medical text, is an open question (ADR 0003), and this table is where the answer goes.
 
 Two checks belong in the run. Browsers record webm or mp4, while `whisper-server` reads WAV unless it was started with its conversion option, which needs ffmpeg; check `whisper-server --help` of the installed version. Lindra never writes the recording, but a recogniser server that converts audio may write temporary files on its own host. Record what the installed server does with them.
 
