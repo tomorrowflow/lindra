@@ -21,6 +21,10 @@ The operator supplied a brand kit, "Editorial Brackets" (`docs/research/2026-11-
 
 Every UI implementation ticket reads the unslop skill (`~/.claude/library/unslop/unslop/SKILL.md` and its `references/signs.md`) before work and checks its final diff against the signs; its proof names the signs checked and any remaining finding with the reason. The same applies to changed app copy, documentation and reports. The scaffold ticket writes this into the repository's `AGENTS.md`. The skill is CC BY 4.0 by Damir Sokolovsky; copies keep the credit. No unrelated redesign, no story videos, no image generation.
 
+## Icon set (evaluated 2026-11-13, LFR-13)
+
+The shell keeps its 27 Lucide icons (ISC licence, `lindra/templates/icons.html`). Kubai Icons 0.5.1 were compared with them and not adopted: at 18 px the Teal and Ink recolours read as grey discs, four icons change meaning (`menu`, `rotate-cw`, `sync`, `clipboard-check`), and the coloured, shaded set conflicts with "a few restrained local SVG icons". The evidence is in `docs/ui/icon-comparison/`.
+
 ## Consequences
 
 - The scaffold ticket pins and self-hosts the chosen CSS, derives the tokens from the brand kit, records the browser check and the contrast results, and obtains readable repo-local copies of the brand assets from the operator; the physical-iPad compatibility check is operator-run before the CSS distribution is committed to.

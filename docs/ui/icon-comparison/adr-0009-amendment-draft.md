@@ -1,6 +1,8 @@
 # ADR 0009 amendment, icon language: draft for the operator's decision (LFR-13)
 
-Status: draft, not applied. `docs/adr/0009-ui-foundation-quiet-clarity-daisyui.md` is unchanged until the operator picks an option. The comparison page and the contrast table come from `scripts/kubai_icons.mjs` and are written to this folder (`index.html`, `results.md`).
+Status: decided on 13 November 2026, option (c), keep Lucide. The amendment text for option (a) below was not applied. `docs/adr/0009-ui-foundation-quiet-clarity-daisyui.md` got a short "Icon set" paragraph instead. This file stays as the evidence for the decision, next to the comparison page (`index.html`) and the tables (`results.md`).
+
+File paths below that start with `docs/kubai-icons/` or name `scripts/kubai_icons.mjs` point at files that are no longer in the repository. They are in git history, the sources at commit `8d2a2fd` and the script at `6c56bc6`.
 
 ## What the Kubai sources are (read in `docs/kubai-icons/`, 12 November 2026)
 
@@ -72,4 +74,4 @@ Add this section after "Brand kit":
 
 ## Licence scope of `docs/kubai-icons/`
 
-Commit `8d2a2fd` added the whole upstream repository. The operator decided on 13 November 2026 to cut it to `icons/`, `badges/`, `packages/`, `LICENSE-ICONS` and `LICENSING.md` on `main`. `scripts/kubai_icons.mjs` reads only those folders (`icons/`, `badges/`, `packages/core/src/`), so it keeps working after the cut. It does not use the upstream `tools/` folder, which is all rights reserved. Phase 2 vendors MIT files only.
+Commit `8d2a2fd` added the whole upstream repository. The operator decided on 13 November 2026 to remove `docs/kubai-icons/` from `main` entirely and to drop the generator script, since the script read that folder. The comparison page and `results.md` stay as the record. The script read only the MIT folders (`icons/`, `badges/`, `packages/core/src/`) and not the all-rights-reserved `tools/`.
