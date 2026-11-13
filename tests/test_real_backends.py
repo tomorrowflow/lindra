@@ -333,6 +333,42 @@ def test_the_self_hosted_recogniser_transcribes_a_dictation(tmp_path, stub):
     assert response.json()["transcript"] == "Seit zwei Jahren Rückenschmerz."
 
 
+def test_a_cast_case_number_under_another_name_never_reaches_a_real_backend(tmp_path, stub):
+    """The start check compares number and name; so does every request after it."""
+    stub.answer_chat(json.dumps(standins.expected_result(ASSESSMENT, {})))
+    client = evaluation_client(
+        tmp_path,
+        text_backend="selfhosted",
+        text_url=stub.url,
+        text_model="m",
+        speech_backend="selfhosted",
+        speech_url=stub.url,
+    )
+    created = client.post(
+        "/api/cases",
+        json={
+            "case_number": FIRST.case_number,
+            "patient_name": "Erika Beispiel",
+            "label": "",
+            "period_start": FIRST.period_start.isoformat(),
+            "period_end": FIRST.period_end.isoformat(),
+            "assessment_date": FIRST.period_start.isoformat(),
+            "assessment_time": "09:00",
+        },
+    ).json()
+    base = f"/api/cases/{created['id']}/encounters/{created['encounters'][0]['id']}"
+    client.put(f"{base}/notes", json={"notes": "Rückenschmerz."})
+
+    generated = client.post(f"{base}/generate")
+    dictated = client.post(f"{base}/dictation/transcript", content=cast.fixture_audio("x"))
+
+    assert generated.status_code == 502
+    assert "erfundenen Fälle" in generated.json()["detail"]
+    assert dictated.status_code == 502
+    assert "erfundenen Fälle" in dictated.json()["detail"]
+    assert stub.requests == []
+
+
 def test_a_recording_for_a_case_outside_the_cast_never_reaches_the_recogniser(tmp_path, stub):
     stub.answer_text("never")
     client = evaluation_client(tmp_path, speech_backend="selfhosted", speech_url=stub.url)

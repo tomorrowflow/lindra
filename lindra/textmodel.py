@@ -64,6 +64,8 @@ class GenerationRequest:
     notes: str
     background: tuple[BackgroundEncounter, ...] = ()
     instructions: str = ""
+    # Not sent to any model: the evaluation configuration compares it with the cast's.
+    patient_name: str = ""
 
     def __post_init__(self) -> None:
         if not self.instructions:

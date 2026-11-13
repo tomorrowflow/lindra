@@ -2,11 +2,14 @@
 
 A real or hosted backend sees only the invented cases. Two guards keep it so. The first runs at
 start: the database may hold the cast's cases and nothing else, by case number and patient
-name. The second runs on every call: the text model is asked only for a case that is in the
-cast, so a case created after the start never reaches a real model.
+name. The second runs on every call: the text model and the recogniser are used only for a case
+whose number and patient name are the cast's, so a case created after the start never reaches
+a real backend. Neither guard can tell invented notes from real ones typed into a cast case.
 """
 
 from __future__ import annotations
+
+from typing import Any
 
 from lindra.cast import Cast
 from lindra.store import Store
@@ -56,9 +59,9 @@ class CastOnlyTextModel:
 
     def __init__(self, model: TextModel, cast: Cast) -> None:
         self._model = model
-        self._case_numbers = frozenset(case.case_number for case in cast.cases)
+        self._cases = fictional_cases(cast)
 
-    def generate(self, request: GenerationRequest):
-        if request.case_number not in self._case_numbers:
+    def generate(self, request: GenerationRequest) -> Any:
+        if (request.case_number, request.patient_name) not in self._cases:
             raise GenerationFailed(NOT_THE_CAST)
         return self._model.generate(request)

@@ -80,12 +80,8 @@ def create_app(
     app.include_router(review_api.build_router(store, model, generations))
     now = clock or wall_clock(settings.timezone)
     recogniser = speech or backends.build_speech(settings, fictional_cast)
-    only_cast = frozenset(c.case_number for c in fictional_cast.cases)
-    app.include_router(
-        dictation_api.build_router(
-            store, recogniser, now, fictional_only=only_cast if settings.evaluation else None
-        )
-    )
+    only_cast = evaluation.fictional_cases(fictional_cast) if settings.evaluation else None
+    app.include_router(dictation_api.build_router(store, recogniser, now, fictional_only=only_cast))
     app.include_router(pages.build_router(store, TEMPLATES, now, generations))
     app.include_router(review_pages.build_router(store, TEMPLATES, generations))
 

@@ -230,6 +230,7 @@ def generate(
             encounter.occurred_at,
             notes,
             background=tuple(background_encounters(earlier)),
+            patient_name=case.patient_name,
         )
         generated = ask(model, request)
         proposal = drafts.Proposal(

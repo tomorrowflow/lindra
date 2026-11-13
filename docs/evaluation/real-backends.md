@@ -50,7 +50,7 @@ The table columns are mechanical:
 | Gaps flagged | how many of the cast's expected clarification items have an item in the same section |
 | WER | word error rate of a recognised clip against its canned transcript |
 
-The evaluation configuration limits requests to the three cast case numbers and refuses a database with any other case. It cannot tell invented notes from real ones typed into a cast case, so only invented text goes into the notes during the run.
+The evaluation configuration limits requests to cases whose number and patient name are the cast's and refuses a database with any other case. It cannot tell invented notes from real ones typed into a cast case, so only invented text goes into the notes during the run.
 
 The tool does not judge German wording, clinical fidelity or fabricated statements. The physician reads each output against the fixture draft in `lindra/cast.py` and records the judgement in the results table. A model that fails on an encounter, or returns none of the passages an encounter rests on, is reported as unable to carry the workflow.
 

@@ -85,7 +85,7 @@ The rules the service enforces:
 - Outside `LINDRA_TIER=evaluation` any backend but `fixture` stops the service at start. This includes a settings object built in code, not only the environment.
 - `LINDRA_TIER=evaluation` in an env file is refused. It must come from the process environment, which `scripts/evaluation.py` sets.
 - In the evaluation configuration the service refuses to start when the database holds a case whose number and patient name are not those of the cast. The message names the case number and never the patient name.
-- A text or speech request for a case outside the cast, for example one created after the start, is refused before it reaches a real backend.
+- A text or speech request for a case whose number and patient name are not both the cast's, for example one created after the start or a cast number under another name, is refused before it reaches a real backend.
 - The hosted address must be https unless it is a loopback address, must carry no user name or password, and a redirect from it is an error, so the key never goes to another host.
 - The hosted comparison needs the three hosted variables. `scripts/evaluation.py` also needs `--approved`, the operator's statement that the run and its spend are approved.
 - There is no fallback. A failing real backend gives a failed generation or transcription, never the fixture's answer.

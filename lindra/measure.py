@@ -145,6 +145,7 @@ def run_text(
         datetime.combine(encounter.date, ENCOUNTER_TIME),
         notes,
         background=tuple(earlier_encounters(case, encounter)),
+        patient_name=case.patient_name,
     )
     recorder = Recording(model)
     started = clock()
