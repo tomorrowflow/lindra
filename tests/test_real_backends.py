@@ -33,6 +33,8 @@ class Stub:
         self.requests = []
         self.status = 200
         self.body = b"{}"
+        self.location = ""
+        self.claimed_length = 0
         stub = self
 
         class Handler(BaseHTTPRequestHandler):
@@ -41,6 +43,10 @@ class Stub:
                 stub.requests.append((self.path, dict(self.headers), self.rfile.read(length)))
                 self.send_response(stub.status)
                 self.send_header("Content-Type", "application/json")
+                if stub.location:
+                    self.send_header("Location", stub.location)
+                if stub.claimed_length:
+                    self.send_header("Content-Length", str(stub.claimed_length))
                 self.end_headers()
                 self.wfile.write(stub.body)
 
@@ -161,6 +167,28 @@ def test_a_server_error_is_a_failed_generation(stub):
 
     with pytest.raises(GenerationFailed, match="nicht geantwortet"):
         ChatCompletionsModel(stub.url, "m").generate(request_for())
+
+
+def test_a_redirect_is_not_followed_so_the_key_stays_with_its_host(stub):
+    elsewhere = Stub()
+    try:
+        stub.status = 302
+        stub.location = elsewhere.url + "/v1/chat/completions"
+
+        with pytest.raises(GenerationFailed):
+            ChatCompletionsModel(stub.url, "m", "key-for-the-test-only").generate(request_for())
+
+        assert elsewhere.requests == []
+    finally:
+        elsewhere.close()
+
+
+def test_an_answer_that_breaks_off_is_a_failed_generation(stub):
+    stub.body = b'{"choices": '
+    stub.claimed_length = 500
+
+    with pytest.raises(GenerationFailed):
+        ChatCompletionsModel(stub.url, "m", timeout=5).generate(request_for())
 
 
 def test_a_server_that_is_not_there_is_a_failed_generation():

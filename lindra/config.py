@@ -9,6 +9,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
+from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 ENV_FILE = Path(".env")
@@ -45,6 +46,7 @@ SPEECH_BACKENDS = frozenset({STAND_IN, SELF_HOSTED})
 # The explicitly launched evaluation configuration (ADR 0003, ADR 0007). It is the only tier
 # in which a backend other than the stand-in starts, and it is never the default of any tier.
 EVALUATION_TIER = "evaluation"
+LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
 DEFAULT_TEXT_URL = "http://127.0.0.1:11434"
 DEFAULT_SPEECH_URL = "http://127.0.0.1:8080"
 DEFAULT_SPEECH_PATH = "/inference"
@@ -103,6 +105,13 @@ class Settings:
     @classmethod
     def from_env(cls, env_file: Path = ENV_FILE) -> Settings:
         values = read_env_file(env_file)
+        if values.get(TIER_VARIABLE, "").strip() == EVALUATION_TIER:
+            # A file that stays on disk must not switch the real backends on by itself.
+            raise OutsideEvaluation(
+                f"{TIER_VARIABLE}={EVALUATION_TIER} in {env_file} is refused. The evaluation "
+                "configuration is launched explicitly, through the process environment, "
+                "with scripts/evaluation.py."
+            )
         values.update(os.environ)
         token = values.get(TOKEN_VARIABLE, "").strip()
         if not token:
@@ -169,6 +178,16 @@ def check_backends(settings: Settings) -> None:
         ):
             if not value:
                 raise IncompleteBackend(f"{TEXT_BACKEND_VARIABLE}={HOSTED} needs {variable}.")
+        address = urlsplit(settings.hosted_url)
+        if address.username or address.password:
+            raise IncompleteBackend(
+                f"{HOSTED_URL_VARIABLE} must not carry a user name or password."
+            )
+        if address.scheme != "https" and address.hostname not in LOOPBACK_HOSTS:
+            raise IncompleteBackend(
+                f"{HOSTED_URL_VARIABLE} must be an https address: the account key travels with "
+                "every request."
+            )
         if not settings.hosted_key:
             raise HostedKeyMissing(
                 f"{TEXT_BACKEND_VARIABLE}={HOSTED} needs the operator's own account key in "

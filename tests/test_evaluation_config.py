@@ -119,8 +119,7 @@ def test_the_hosted_comparison_needs_the_operators_key(monkeypatch, tmp_path):
 def test_the_key_never_comes_from_the_env_file(monkeypatch, tmp_path):
     env_file = tmp_path / ".env"
     env_file.write_text("LINDRA_HOSTED_KEY=key-from-a-file\n", encoding="utf-8")
-    for name in ("LINDRA_HOSTED_KEY",):
-        monkeypatch.delenv(name, raising=False)
+    monkeypatch.delenv("LINDRA_HOSTED_KEY", raising=False)
     monkeypatch.setenv("LINDRA_TOKEN", TOKEN)
     monkeypatch.setenv("LINDRA_TIER", "evaluation")
     monkeypatch.setenv("LINDRA_TEXT_BACKEND", "hosted")
@@ -191,7 +190,11 @@ def test_the_evaluation_configuration_starts_on_the_fictional_cast(tmp_path):
     first = cast.load_cast().cases[0]
     store_case(tmp_path, first.case_number, first.patient_name)
 
-    create_app(evaluation_settings(tmp_path))
+    client = TestClient(
+        create_app(evaluation_settings(tmp_path)), headers={"Authorization": f"Bearer {TOKEN}"}
+    )
+
+    assert client.get("/api/environment").json()["evaluation"] is True
 
 
 def test_the_evaluation_configuration_refuses_a_database_with_another_case(tmp_path):
@@ -218,7 +221,38 @@ def test_a_cast_case_number_with_another_name_is_not_the_cast(tmp_path):
 def test_the_other_tiers_do_not_look_at_the_database(tmp_path):
     store_case(tmp_path, "K-4711", "Erika Beispiel")
 
-    create_app(Settings(token=TOKEN, data_dir=tmp_path, tier="test"))
+    client = TestClient(
+        create_app(Settings(token=TOKEN, data_dir=tmp_path, tier="test")),
+        headers={"Authorization": f"Bearer {TOKEN}"},
+    )
+
+    assert client.get("/api/environment").json()["evaluation"] is False
+
+
+def test_an_env_file_cannot_switch_the_evaluation_configuration_on(monkeypatch, tmp_path):
+    env_file = tmp_path / ".env"
+    env_file.write_text("LINDRA_TIER=evaluation\nLINDRA_TEXT_BACKEND=selfhosted\n", "utf-8")
+    monkeypatch.setenv("LINDRA_TOKEN", TOKEN)
+    monkeypatch.delenv("LINDRA_TIER", raising=False)
+
+    with pytest.raises(OutsideEvaluation, match="scripts/evaluation.py"):
+        Settings.from_env(env_file)
+
+
+@pytest.mark.parametrize(
+    ("address", "problem"),
+    [
+        ("http://inference.example.invalid", "https"),
+        ("https://user:secret@inference.example.invalid", "user name"),
+    ],
+)
+def test_the_hosted_address_must_keep_the_key_safe(monkeypatch, tmp_path, address, problem):
+    env = {**HOSTED_TEXT, "LINDRA_HOSTED_URL": address}
+
+    with pytest.raises(IncompleteBackend, match=problem) as refused:
+        settings(monkeypatch, tmp_path, LINDRA_TIER="evaluation", **env)
+
+    assert "secret" not in str(refused.value)
 
 
 def test_the_evaluation_configuration_generates_only_for_the_cast(tmp_path):

@@ -22,6 +22,7 @@ is sent from memory and kept nowhere by Lindra.
 
 from __future__ import annotations
 
+import http.client
 import json
 import logging
 import re
@@ -100,7 +101,10 @@ class ChatCompletionsModel:
         headers = {"Content-Type": "application/json"}
         if self._api_key:
             headers["Authorization"] = f"Bearer {self._api_key}"
-        answer = post(self._url, json.dumps(body).encode("utf-8"), headers, self._timeout)
+        try:
+            answer = send(self._url, json.dumps(body).encode("utf-8"), headers, self._timeout)
+        except ServerFailed as error:
+            raise GenerationFailed(MODEL_NOT_ANSWERING) from error
         try:
             content = json.loads(answer)["choices"][0]["message"]["content"]
         except (ValueError, KeyError, IndexError, TypeError) as error:
@@ -110,19 +114,34 @@ class ChatCompletionsModel:
         return decode_json(content)
 
 
-def post(url: str, body: bytes, headers: dict[str, str], timeout: float) -> bytes:
-    """One POST. Any transport or status failure is a failed generation, logged without the
-    request (it holds the notes) and without the headers (they hold the key)."""
+class ServerFailed(Exception):
+    """The server gave no answer: it was not reachable, timed out or answered with an error."""
+
+
+class NoRedirects(urllib.request.HTTPRedirectHandler):
+    """A redirect is an error, so the account key never follows one to another host."""
+
+    def redirect_request(self, *args: Any, **kwargs: Any) -> None:
+        return None
+
+
+OPENER = urllib.request.build_opener(NoRedirects)
+
+
+def send(url: str, body: bytes, headers: dict[str, str], timeout: float) -> bytes:
+    """One POST. Any transport or status failure is `ServerFailed`, logged with the host only:
+    the request holds the notes or the audio, the headers hold the key."""
     request = urllib.request.Request(url, data=body, headers=headers, method="POST")
+    host = urlsplit(url).hostname
     try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
+        with OPENER.open(request, timeout=timeout) as response:
             return response.read()
     except urllib.error.HTTPError as error:
-        log.error("the text model answered %s from %s", error.code, urlsplit(url).netloc)
-        raise GenerationFailed(MODEL_NOT_ANSWERING) from error
-    except (urllib.error.URLError, TimeoutError, OSError) as error:
-        log.error("the text model at %s is not reachable: %s", urlsplit(url).netloc, error)
-        raise GenerationFailed(MODEL_NOT_ANSWERING) from error
+        log.error("the server at %s answered %s", host, error.code)
+        raise ServerFailed from error
+    except (urllib.error.URLError, http.client.HTTPException, OSError) as error:
+        log.error("the server at %s gave no answer: %s", host, type(error).__name__)
+        raise ServerFailed from error
 
 
 class SelfHostedSpeech:
@@ -144,14 +163,9 @@ class SelfHostedSpeech:
         if self._model:
             fields["model"] = self._model
         body, content_type = multipart(fields, audio)
-        request = urllib.request.Request(
-            self._url, data=body, headers={"Content-Type": content_type}, method="POST"
-        )
         try:
-            with urllib.request.urlopen(request, timeout=self._timeout) as response:
-                answer = response.read()
-        except (urllib.error.URLError, TimeoutError, OSError) as error:
-            log.error("the recogniser at %s failed: %s", urlsplit(self._url).netloc, error)
+            answer = send(self._url, body, {"Content-Type": content_type}, self._timeout)
+        except ServerFailed as error:
             raise TranscriptionFailed(SPEECH_ERROR) from error
         try:
             text = json.loads(answer)["text"]

@@ -131,9 +131,7 @@ def test_measure_prints_the_tables_for_the_record(launcher, tmp_path, capsys):
                 (recordings / f"{clip.key}.wav").write_bytes(cast.fixture_audio(clip.key))
     out = tmp_path / "run.md"
 
-    code = launcher.main(
-        ["measure", "--audio-dir", str(recordings), "--out", str(out), "--data-dir", str(tmp_path)]
-    )
+    code = launcher.main(["measure", "--audio-dir", str(recordings), "--out", str(out)])
 
     printed = capsys.readouterr().out
     assert code == 0

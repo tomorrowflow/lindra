@@ -4,16 +4,9 @@ Ticket LFR-11 (ADR 0003, ADR 0006, ADR 0007). This file records which text model
 
 ## Status
 
-The adapters, the evaluation configuration and the measuring tool are built and tested against stand-ins. No real model, recogniser or hosted account has been run yet. The build session had no inference hardware it could use and no web access, so the hardware, model, result and provider sections below are empty or marked unverified. The operator fills them in during the run described under "Operator run".
+The adapters, the evaluation configuration and the measuring tool are built and tested against stand-ins and a local stub server. No real model, recogniser or hosted account has been run. The build session had no inference hardware it could use and no web access, so the hardware, model, result and provider sections below are empty or marked unverified. The operator fills them in during the run described under "Operator run".
 
-| Part | State |
-| --- | --- |
-| Self-hosted text adapter and recogniser adapter | built, tested against a local stub server |
-| Evaluation configuration with the cast-only database check | built, tested |
-| Hosted comparison adapter | built, tested against a stub, refuses to start outside the evaluation configuration |
-| Hardware, models and versions | not recorded, operator run pending |
-| Quality and latency per case | not recorded, operator run pending |
-| Provider terms and price | unverified, see below |
+The adapters assume how the servers behave: that llama.cpp's server, Ollama and vLLM serve `/v1/chat/completions`, and that `whisper-server` takes a multipart upload at `/inference`. These assumptions come from the servers' documentation as the author knew it and are not checked here. The run confirms them or finds them wrong.
 
 ## How to run
 
@@ -56,6 +49,8 @@ The table columns are mechanical:
 | Passages carried | how many of the notes passages the expected draft rests on came back as input references |
 | Gaps flagged | how many of the cast's expected clarification items have an item in the same section |
 | WER | word error rate of a recognised clip against its canned transcript |
+
+The evaluation configuration limits requests to the three cast case numbers and refuses a database with any other case. It cannot tell invented notes from real ones typed into a cast case, so only invented text goes into the notes during the run.
 
 The tool does not judge German wording, clinical fidelity or fabricated statements. The physician reads each output against the fixture draft in `lindra/cast.py` and records the judgement in the results table. A model that fails on an encounter, or returns none of the passages an encounter rests on, is reported as unable to carry the workflow.
 

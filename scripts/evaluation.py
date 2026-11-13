@@ -29,9 +29,12 @@ sys.path.insert(0, str(REPO))
 
 from lindra import backends, cast, evaluation, measure, seed  # noqa: E402
 from lindra.config import (  # noqa: E402
+    DATA_DIR_VARIABLE,
     EVALUATION_TIER,
     HOSTED,
     HOSTED_KEY_VARIABLE,
+    TEXT_BACKEND_VARIABLE,
+    TIER_VARIABLE,
     TOKEN_VARIABLE,
     Settings,
 )
@@ -56,7 +59,7 @@ NOT_APPROVED = (
 )
 
 
-class CannotRun(Exception):
+class CannotRun(RuntimeError):
     """The command cannot run as asked; the message says why."""
 
 
@@ -70,16 +73,17 @@ def add_backend_options(parser: argparse.ArgumentParser) -> None:
     )
 
 
-def settings_from(args: argparse.Namespace, data_dir: Path) -> Settings:
+def settings_from(args: argparse.Namespace, data_dir: Path | None = None) -> Settings:
     """The evaluation configuration's settings: the options, then the environment."""
     for option, variable in BACKEND_OPTIONS.items():
         value = getattr(args, option.lstrip("-").replace("-", "_"))
         if value:
             os.environ[variable] = value
-    os.environ["LINDRA_TIER"] = EVALUATION_TIER
-    os.environ["LINDRA_DATA_DIR"] = str(data_dir)
+    os.environ[TIER_VARIABLE] = EVALUATION_TIER
+    if data_dir is not None:
+        os.environ[DATA_DIR_VARIABLE] = str(data_dir)
     os.environ.setdefault(TOKEN_VARIABLE, secrets.token_urlsafe(32))
-    if os.environ.get("LINDRA_TEXT_BACKEND") == HOSTED:
+    if os.environ.get(TEXT_BACKEND_VARIABLE) == HOSTED:
         if not args.approved:
             raise CannotRun(NOT_APPROVED)
         if not os.environ.get(HOSTED_KEY_VARIABLE) and sys.stdin.isatty():
@@ -99,6 +103,7 @@ def serve(args: argparse.Namespace) -> int:
     import uvicorn
 
     data_dir = Path(args.data_dir)
+    generated_token = TOKEN_VARIABLE not in os.environ
     settings = settings_from(args, data_dir)
     store = prepare_data_dir(data_dir)
     seed.run(store, data_dir)
@@ -106,13 +111,14 @@ def serve(args: argparse.Namespace) -> int:
         f"Evaluation configuration: text {settings.text_backend}, "
         f"speech {settings.speech_backend}, data {data_dir}. Only the fictional cast is stored."
     )
-    print(f"Login token: {os.environ[TOKEN_VARIABLE]}")
+    if generated_token:
+        print(f"Login token: {os.environ[TOKEN_VARIABLE]}")
     uvicorn.run("lindra.app:app", factory=True, host=args.host, port=args.port)
     return 0
 
 
 def measure_run(args: argparse.Namespace) -> int:
-    settings = settings_from(args, Path(args.data_dir))
+    settings = settings_from(args)
     fictional = cast.load_cast()
     model = backends.build_text_model(settings, fictional)
     typed = measure.measure_text(model, fictional, measure.TYPED)
@@ -146,7 +152,6 @@ def parser() -> argparse.ArgumentParser:
     add_backend_options(serving)
     serving.set_defaults(run=serve)
     measuring = commands.add_parser("measure", help="run the cast through the backends")
-    measuring.add_argument("--data-dir", default=".", help="unused; the settings need one")
     measuring.add_argument("--audio-dir", help="recordings of the cast's clips, <clip key>.<ext>")
     measuring.add_argument("--out", help="also write the tables to this file")
     add_backend_options(measuring)
@@ -158,11 +163,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parser().parse_args(argv)
     try:
         return args.run(args)
-    except (CannotRun, evaluation.NonFictionalData) as error:
-        print(error, file=sys.stderr)
-        return 2
     except RuntimeError as error:
-        # A refused configuration (lindra.config): the message is the plain explanation.
+        # A refused configuration or data directory: the message is the plain explanation.
         print(error, file=sys.stderr)
         return 2
 
