@@ -36,6 +36,12 @@ CREATE TABLE IF NOT EXISTS encounters (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS one_assessment_per_case
     ON encounters (case_id) WHERE kind = 'assessment';
+-- The dictations already appended to an encounter's notes, so a repeated accept adds nothing.
+CREATE TABLE IF NOT EXISTS accepted_dictations (
+    encounter_id INTEGER NOT NULL REFERENCES encounters(id) ON DELETE CASCADE,
+    dictation_id TEXT NOT NULL,
+    PRIMARY KEY (encounter_id, dictation_id)
+);
 """
 
 # Columns added after the first release of the schema; a volume created before
@@ -195,6 +201,15 @@ class Tx:
             " WHERE id = ? AND case_id = ? AND notes != ?",
             (notes, encounter_id, case_id, notes),
         )
+
+    def record_dictation(self, encounter_id: int, dictation_id: str) -> bool:
+        """Remember that this dictation is appended to the encounter's notes. False when it was
+        remembered before, which means the append happened already."""
+        cursor = self.connection.execute(
+            "INSERT OR IGNORE INTO accepted_dictations (encounter_id, dictation_id) VALUES (?, ?)",
+            (encounter_id, dictation_id),
+        )
+        return cursor.rowcount == 1
 
     def set_proposal(self, encounter_id: int, proposal: str, notes_revision: int) -> None:
         """Hold a proposal next to the draft; a pending one is replaced."""

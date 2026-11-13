@@ -16,7 +16,7 @@ Run Python through the project virtualenv. Nothing needs Node or a network at ru
 | Format | `.venv/bin/python -m ruff format .` (CI runs `--check`) |
 | Contrast check | `.venv/bin/python scripts/contrast_check.py` |
 | Vendor assets | `python3 scripts/fetch_assets.py --check` verifies the pins; without `--check` it refetches |
-| Browser flow and screenshots | `.venv/bin/python -m playwright install chromium` once, then `.venv/bin/python scripts/screenshots.py [output-dir]`; it exits non-zero on any finding and writes the pictures to `LFR-07/` (review steps) and `LFR-08/` (references, pain problems, clarification list) under `docs/screenshots/` by default |
+| Browser flow and screenshots | `.venv/bin/python -m playwright install chromium` once, then `.venv/bin/python scripts/screenshots.py [output-dir]`; it exits non-zero on any finding and writes the pictures to `LFR-07/` (review steps), `LFR-08/` (references, pain problems, clarification list) and `LFR-10/` (dictation overlay) under `docs/screenshots/` by default. It runs Chromium with a fake microphone; the overlay flow hands the page fixture clips in place of a recording and simulates a denied permission, because headless Chromium has no permission prompt |
 | CI lint | `docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.12 -no-color` |
 | Throwaway stack | `python3 scripts/env.py up --project lindra-<ticket>`, then `check`, `reset` and `down` with the same `--project` |
 
@@ -30,6 +30,7 @@ CI (`.github/workflows/ci.yml`) runs install, lint, format check, vendor check, 
 
 - Tests drive the HTTP API with the fixture stand-ins and assert what the physician would observe: status codes, page text, JSON bodies, what is saved. No assertions on sessions, templates, database rows or adapter internals. `tests/test_api.py` is the pattern.
 - Every page and API route is guarded by `lindra/auth.py` by default; only `/health`, `/anmelden` and `/static/` are open. Do not add a second authentication mechanism.
+- Speech recognition goes through `lindra/speech.py`; the fixture recogniser in `lindra/standins.py` maps fixture audio to canned transcripts and refuses other audio. Audio is held in memory for one request and never written. Accepting a transcript carries the dictation's id (made by the browser when the transcript arrives) and is idempotent: the service appends once per id and encounter, so a retry after a lost answer adds nothing. No cloud, browser or operating-system dictation path exists (ADR 0003, ADR 0004).
 - Settings are read once at the boundary (`lindra/config.py`); the rest of the code receives values.
 - User-facing text is German. Follow `CONTEXT.md` for the words to use and the words to avoid.
 

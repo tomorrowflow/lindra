@@ -1,10 +1,9 @@
-"""The fictional cast and the two stand-ins that are keyed to it (ADR 0003, 0006, 0010).
+"""The fictional cast and the text model stand-in that is keyed to it (ADR 0003, 0006, 0010).
 
 The cast is seed data. These tests state what the cast must contain; the seed hook
 refuses a cast that breaks any of it. The text model stand-in is also driven through
-the HTTP API in `tests/test_review_api.py`. No route reaches the speech stand-in yet
-(ticket 10 wires it), so its unit tests here call it directly, the one remaining
-exception to the HTTP-first rule in AGENTS.md.
+the HTTP API in `tests/test_review_api.py`, the speech stand-in in
+`tests/test_dictation_api.py`.
 """
 
 import dataclasses
@@ -246,18 +245,3 @@ def test_text_model_stand_in_refuses_input_outside_the_cast(fictional_cast):
 
     with pytest.raises(GenerationFailed):
         model.generate(unknown)
-
-
-def test_speech_stand_in_returns_the_canned_transcript_for_fixture_audio(fictional_cast):
-    speech = standins.FixtureSpeech(fictional_cast)
-    case = fictional_cast.cases[0]
-    clip = next(clip for e in case.encounters for clip in e.audio)
-
-    assert speech.transcribe(cast.fixture_audio(clip.key)) == clip.transcript
-
-
-def test_speech_stand_in_refuses_audio_outside_the_cast(fictional_cast):
-    speech = standins.FixtureSpeech(fictional_cast)
-
-    with pytest.raises(standins.NotInTheCast):
-        speech.transcribe(b"RIFF....not-a-fixture")
