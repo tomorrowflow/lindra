@@ -29,6 +29,7 @@ if (dialog && control) {
   let retry = null;
   let ended = true; // false from the tap on the control until a button ends the dictation
   let current = null; // the panel showing
+  let session = 0; // the number of the current recording; events of older ones are ignored
   let dictationId = null; // names the transcript under review
   let maybeAppended = false; // an accept of this transcript may have been saved unseen
 
@@ -68,6 +69,7 @@ if (dialog && control) {
   }
 
   function close() {
+    session += 1;
     release();
     recording = null;
     retry = null;
@@ -84,6 +86,10 @@ if (dialog && control) {
   async function start() {
     release();
     recording = null;
+    // Each recording has its own number. A recorder that breaks still sends its data and a
+    // stop event afterwards. Those late events belong to a recording that is over: they must
+    // not transcribe it, nor touch an overlay that was closed or has started again.
+    const mine = ++session;
     show("starting");
     if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
       fail(
@@ -114,12 +120,16 @@ if (dialog && control) {
     try {
       const type = TYPES.find((candidate) => MediaRecorder.isTypeSupported?.(candidate));
       const chunks = [];
-      recorder = new MediaRecorder(stream, type ? { mimeType: type } : undefined);
-      recorder.addEventListener("dataavailable", (event) => {
+      let broken = false;
+      const made = new MediaRecorder(stream, type ? { mimeType: type } : undefined);
+      recorder = made;
+      made.addEventListener("dataavailable", (event) => {
         if (event.data?.size) chunks.push(event.data);
       });
-      recorder.addEventListener("stop", () => {
-        const mime = recorder?.mimeType || chunks[0]?.type || "application/octet-stream";
+      made.addEventListener("stop", () => {
+        // Late events of a broken or finished recording are ignored.
+        if (mine !== session || broken) return;
+        const mime = made.mimeType || chunks[0]?.type || "application/octet-stream";
         release();
         const blob = new Blob(chunks, { type: mime });
         if (!blob.size) {
@@ -128,7 +138,9 @@ if (dialog && control) {
         }
         transcribe(blob);
       });
-      recorder.addEventListener("error", () => {
+      made.addEventListener("error", () => {
+        if (mine !== session) return;
+        broken = true;
         release();
         fail("Aufnahme abgebrochen", "Die Aufnahme wurde unterbrochen. Versuchen Sie es erneut.", start);
       });
@@ -137,7 +149,7 @@ if (dialog && control) {
       ticker = setInterval(() => {
         elapsed.textContent = clock(Math.floor((Date.now() - began) / 1000));
       }, 500);
-      recorder.start();
+      made.start();
     } catch {
       release();
       fail(

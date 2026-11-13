@@ -87,6 +87,14 @@ INIT_SCRIPT = """
       super();
       this.state = "inactive";
       this.mimeType = "audio/wav";
+      window.__recorder = this;
+    }
+    // A recorder that breaks while recording: the error comes first, and the browser still
+    // delivers the data and the stop event afterwards, `late` milliseconds later.
+    breakDown(late) {
+      this.state = "inactive";
+      this.dispatchEvent(new Event("error"));
+      setTimeout(() => this.stop(), late);
     }
     start() {
       if (window.__recorderFault === "start") {
@@ -1057,6 +1065,50 @@ def dictation_screens(page: Page, base_url: str, out: Path, name: str) -> list[s
         findings.append(f"{name}: the microphone stays open after the recorder faults")
     if api_encounter(base_url, page) != before:
         findings.append(f"{name}: a recorder fault changed the encounter")
+
+    # A recorder that breaks while recording still delivers its data and a stop event a moment
+    # later. The broken recording is not transcribed, and those late events change neither the
+    # failure panel, nor a closed overlay, nor the dictation started again meanwhile.
+    uploads: list = []
+    page.on(
+        "request",
+        lambda request: uploads.append(request) if "dictation/transcript" in request.url else None,
+    )
+    for then in ("waits", "closes", "restarts"):
+        use_fixture_audio(page, clip)
+        page.click("[data-dictate]")
+        wait_for_panel(page, "recording")
+        page.evaluate("window.__recorder.breakDown(600)")
+        wait_for_panel(page, "failed")
+        if "Aufnahme abgebrochen" not in page.inner_text("dialog.dictation [data-state=failed]"):
+            findings.append(f"{name}: a broken recorder ({then}) is not reported as interrupted")
+        if page.evaluate("window.__liveTracks()") != 0:
+            findings.append(f"{name}: a broken recorder ({then}) leaves the microphone open")
+        if then == "waits":
+            page.wait_for_timeout(900)
+            if dictation_states(page) != ["failed"]:
+                findings.append(f"{name}: late recorder events changed the failure panel")
+            page.click("[data-close]")
+        elif then == "closes":
+            page.click("[data-close]")
+            page.wait_for_timeout(900)
+            if page.locator("dialog.dictation[open]").count():
+                findings.append(f"{name}: late recorder events reopened a closed overlay")
+        else:
+            page.click("[data-retry-dictation]")
+            wait_for_panel(page, "recording")
+            page.wait_for_timeout(900)
+            if dictation_states(page) != ["recording"]:
+                findings.append(f"{name}: late recorder events broke the new recording")
+            if page.evaluate("window.__liveTracks()") != 1:
+                findings.append(f"{name}: late recorder events closed the new microphone stream")
+            page.click("[data-stop]")
+            wait_for_panel(page, "reviewing")
+            page.click("[data-discard]")
+    if len(uploads) != 1:
+        findings.append(f"{name}: {len(uploads)} recordings were sent, only the good one belongs")
+    if api_encounter(base_url, page) != before:
+        findings.append(f"{name}: a broken recorder changed the encounter")
 
     # The canned transcript for fixture audio, through every state of the overlay.
     use_fixture_audio(page, clip)
