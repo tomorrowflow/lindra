@@ -1,10 +1,11 @@
 """The speech recognition adapter interface (ADR 0003, ADR 0004).
 
 Lindra asks for a transcript through this one interface. The fixture recogniser in
-`lindra/standins.py` implements it for the tests and the test tier; a self-hosted adapter
-follows with ticket 11. There is no cloud adapter and no use of the browser's or the operating
-system's dictation. An adapter gets the audio of one dictation as bytes and returns its text;
-Lindra never writes the audio anywhere, so the recording lives only as long as the call.
+`lindra/standins.py` implements it for the tests and the test tier; the self-hosted adapter is
+in `lindra/backends.py` and runs only in the evaluation configuration. There is no cloud
+adapter and no use of the browser's or the operating system's dictation. An adapter gets the
+audio of one dictation as bytes and returns its text; Lindra never writes the audio anywhere,
+so the recording lives only as long as the call.
 """
 
 from __future__ import annotations

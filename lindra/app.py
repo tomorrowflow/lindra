@@ -15,11 +15,13 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from lindra import (
     auth,
+    backends,
     badges,
     case_api,
     cases,
     dictation_api,
     drafts,
+    evaluation,
     formatting,
     pages,
     review,
@@ -31,7 +33,6 @@ from lindra.cast import load_cast
 from lindra.config import Settings
 from lindra.pages import Clock
 from lindra.speech import SpeechRecognizer
-from lindra.standins import FixtureSpeech, FixtureTextModel
 from lindra.store import DATABASE_FILE, Store
 from lindra.textmodel import TextModel
 
@@ -70,13 +71,17 @@ def create_app(
     app.mount("/static", StaticFiles(directory=PACKAGE_DIR / "static"), name="static")
     store = Store(settings.data_dir / DATABASE_FILE)
     fictional_cast = load_cast()
-    model = text_model or FixtureTextModel(fictional_cast)
+    if settings.evaluation:
+        # The real and hosted backends see only the cast (ADR 0003, ADR 0007).
+        evaluation.require_fictional_only(store, fictional_cast)
+    model = text_model or backends.build_text_model(settings, fictional_cast)
     generations = review.Generations()
     app.include_router(case_api.build_router(store))
     app.include_router(review_api.build_router(store, model, generations))
     now = clock or wall_clock(settings.timezone)
-    recogniser = speech or FixtureSpeech(fictional_cast)
-    app.include_router(dictation_api.build_router(store, recogniser, now))
+    recogniser = speech or backends.build_speech(settings, fictional_cast)
+    only_cast = evaluation.fictional_cases(fictional_cast) if settings.evaluation else None
+    app.include_router(dictation_api.build_router(store, recogniser, now, fictional_only=only_cast))
     app.include_router(pages.build_router(store, TEMPLATES, now, generations))
     app.include_router(review_pages.build_router(store, TEMPLATES, generations))
 
@@ -108,6 +113,7 @@ def create_app(
         return {
             "tier": settings.tier,
             "commit": settings.commit,
+            "evaluation": settings.evaluation,
             "text_backend": settings.text_backend,
             "speech_backend": settings.speech_backend,
             "seed": seed.read_report(store, settings.data_dir),

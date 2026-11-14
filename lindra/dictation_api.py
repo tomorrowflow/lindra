@@ -13,7 +13,7 @@ from fastapi import APIRouter, Request, Response
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse
 
-from lindra import case_api, cases, dictation
+from lindra import case_api, cases, dictation, evaluation
 from lindra.case_api import RawBody
 from lindra.speech import SpeechRecognizer, TranscriptionFailed
 from lindra.store import Store
@@ -22,12 +22,25 @@ TOO_LARGE = "Die Aufnahme ist zu lang"
 
 
 def build_router(
-    store: Store, speech: SpeechRecognizer, clock: Callable[[], datetime]
+    store: Store,
+    speech: SpeechRecognizer,
+    clock: Callable[[], datetime],
+    fictional_only: frozenset[tuple[str, str]] | None = None,
 ) -> APIRouter:
+    """`fictional_only` is the set of (case number, patient name) pairs a recording may be
+    dictated into; None in every tier but the evaluation configuration, where a real recogniser
+    hears only the cast."""
     router = APIRouter(prefix="/api/cases/{case_id}/encounters/{encounter_id}/dictation")
 
     @router.post("/transcript")
     async def transcript(request: Request, case_id: int, encounter_id: int) -> Response:
+        if fictional_only is not None:
+            try:
+                found = cases.get_case(store, case_id)
+            except cases.NotFound as error:
+                return case_api.not_found(error)
+            if (found.case_number, found.patient_name) not in fictional_only:
+                return JSONResponse({"detail": evaluation.SPEECH_NOT_THE_CAST}, status_code=502)
         declared = request.headers.get("content-length", "")
         if declared.isdigit() and int(declared) > dictation.MAX_AUDIO_BYTES:
             return JSONResponse({"detail": TOO_LARGE}, status_code=413)

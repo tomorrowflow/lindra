@@ -50,7 +50,7 @@ Nodes read two variables from their profile to reach the test tier:
 
 The operator puts both into the node profile when ticket 03 is done. `scripts/env.py check --remote` reads them and never prints the token.
 
-The service reads `LINDRA_TOKEN`, `LINDRA_DATA_DIR`, `LINDRA_TIER`, `LINDRA_COMMIT`, `LINDRA_TEXT_BACKEND` and `LINDRA_SPEECH_BACKEND` (see `.env.example`). `compose.yaml` sets both backends to `fixture` and takes no value for them from the env file.
+The service reads `LINDRA_TOKEN`, `LINDRA_DATA_DIR`, `LINDRA_TIER`, `LINDRA_COMMIT`, `LINDRA_TEXT_BACKEND` and `LINDRA_SPEECH_BACKEND` (see `.env.example`). `compose.yaml` sets both backends to `fixture` and takes no value for them from the env file. The evaluation configuration reads further variables, listed under "Evaluation configuration".
 
 ## Stand-ins and the fictional cast
 
@@ -61,11 +61,36 @@ The throwaway, test and production stacks run two deterministic stand-ins (ADR 0
 | Text model | fixture model that returns the expected draft and clarification items of a cast encounter | `lindra/standins.py` |
 | Speech recognition | canned transcripts, keyed to the fixture audio of the cast | `lindra/standins.py` |
 
-Input outside the cast is refused, so a test cannot pass on invented output. `LINDRA_TEXT_BACKEND` and `LINDRA_SPEECH_BACKEND` accept only `fixture`; any other value stops the service at start. A real or hosted backend is a separate, explicitly launched evaluation configuration, never the default of a tier (ticket 11).
+Input outside the cast is refused, so a test cannot pass on invented output. In every tier `LINDRA_TEXT_BACKEND` and `LINDRA_SPEECH_BACKEND` accept only `fixture`; the self-hosted and hosted backends stop the service at start with a message that names the evaluation configuration. They start only there, see "Evaluation configuration".
 
 The cast lives in `lindra/cast.py` and is the only dataset: three invented German cases with case numbers `FIK-2026-001` to `FIK-2026-003`, invented patient names, a treatment period, an admission assessment and at least one visit each. One visit is backdated. The second case has an assessment change accepted after a visit draft was generated: the seed hook stores that case as its timeline left it, so its assessment holds an accepted draft (accepted twice), its visit of 16.10.2026 holds an accepted draft that shows "Hintergrund seit Erstellung geändert", and its backdated visit of 14.10.2026 holds a pending proposal. The other two cases come as notes only, so a draft is generated from nothing. The third case leaves gaps and carries contradictory doses and an unclear time reference. Every encounter has notes, an expected draft and clarification items, and every case has fixture audio with a canned transcript. The audio is generated from a key (a short tone) and no audio file is committed. The seed hook refuses a cast that breaks these rules.
 
 Real, pseudonymised or production-copied patient data never goes into a tier or into the repository, and neither do the ward's forms or the operator's documents (ADR 0006).
+
+## Evaluation configuration
+
+The evaluation configuration is the one place a real backend runs (ADR 0003, ADR 0007, ticket 11). It is not a tier of `scripts/env.py`: nothing in the compose files or in `env.py` selects it, and no tier defaults to it. It is `LINDRA_TIER=evaluation`, which only `scripts/evaluation.py` sets, on the host that runs the inference servers.
+
+| Variable | Meaning |
+| --- | --- |
+| `LINDRA_TEXT_BACKEND` | `fixture` (default), `selfhosted` or `hosted` |
+| `LINDRA_TEXT_URL`, `LINDRA_TEXT_MODEL` | the local inference server (default `http://127.0.0.1:11434`) and the model it serves; the model is required |
+| `LINDRA_SPEECH_BACKEND` | `fixture` (default) or `selfhosted`; there is no hosted recogniser |
+| `LINDRA_SPEECH_URL`, `LINDRA_SPEECH_PATH`, `LINDRA_SPEECH_MODEL` | the recogniser server (default `http://127.0.0.1:8080`, route `/inference`, model optional) |
+| `LINDRA_HOSTED_URL`, `LINDRA_HOSTED_MODEL` | the hosted comparison's address and model, both required |
+| `LINDRA_HOSTED_KEY` | the operator's own account key. Read from the process environment only, never from an env file, never printed |
+
+The rules the service enforces:
+
+- Outside `LINDRA_TIER=evaluation` any backend but `fixture` stops the service at start. This includes a settings object built in code, not only the environment.
+- `LINDRA_TIER=evaluation` in an env file is refused. It must come from the process environment, which `scripts/evaluation.py` sets.
+- In the evaluation configuration the service refuses to start when the database holds a case whose number and patient name are not those of the cast. The message names the case number and never the patient name.
+- A text or speech request for a case whose number and patient name are not both the cast's, for example one created after the start or a cast number under another name, is refused before it reaches a real backend.
+- The hosted address must be https unless it is a loopback address, must carry no user name or password, and a redirect from it is an error, so the key never goes to another host.
+- The hosted comparison needs the three hosted variables. `scripts/evaluation.py` also needs `--approved`, the operator's statement that the run and its spend are approved.
+- There is no fallback. A failing real backend gives a failed generation or transcription, never the fixture's answer.
+
+`docs/evaluation/real-backends.md` has the commands, the measuring tool and the record. `/api/environment` reports `evaluation: true` and the backends in use. `scripts/env.py check` still fails on anything but the stand-ins.
 
 ## Throwaway procedure
 

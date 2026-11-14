@@ -1,8 +1,9 @@
 """The text model adapter interface (ADR 0003).
 
 Lindra asks the model for a draft through this one interface. The fixture model in
-`lindra/standins.py` implements it for the tests and the test tier; a self-hosted and a
-hosted-comparison adapter follow with ticket 11. An adapter returns what its model produced
+`lindra/standins.py` implements it for the tests and the test tier; the self-hosted and the
+hosted-comparison adapter are in `lindra/backends.py` and run only in the evaluation
+configuration. An adapter returns what its model produced
 as plain data (sections, paragraphs, input references, clarification items). The service
 checks that structure in `lindra/drafts.py`: prose with no structure is a failed
 generation, never a draft. It then checks in `lindra/fidelity.py` what the notes and the
@@ -20,6 +21,8 @@ from lindra.prompt import instructions_for
 # The source of a reference into the encounter's own notes. A reference into the background of
 # a visit names the background encounter instead (`lindra/background.py`).
 NOTES_SOURCE = "notes"
+# What the physician reads in the status area when the adapter fails without saying why.
+MODEL_NOT_ANSWERING = "Das Textmodell hat nicht geantwortet."
 
 
 class GenerationFailed(Exception):
@@ -61,6 +64,8 @@ class GenerationRequest:
     notes: str
     background: tuple[BackgroundEncounter, ...] = ()
     instructions: str = ""
+    # Not sent to any model: the evaluation configuration compares it with the cast's.
+    patient_name: str = ""
 
     def __post_init__(self) -> None:
         if not self.instructions:
