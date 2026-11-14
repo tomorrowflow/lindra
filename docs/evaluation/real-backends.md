@@ -140,7 +140,7 @@ Verdict per model: pending. A model that cannot carry the workflow is reported a
 Before merge, on the chosen inference hardware:
 
 1. Fill in the hardware table and the model table.
-2. Start the evaluation configuration with `serve`, then run `measure` for the self-hosted model and recogniser against the cast. Read the outputs and fill the results tables.
+2. Set `LINDRA_TEXT_URL` and `LINDRA_TEXT_MODEL` for the commands, for example by prefixing them with the assignment, so the values stay out of the repository. Start the evaluation configuration with `serve`, then run `measure` for the self-hosted model and recogniser against the cast. Read the outputs and fill the results tables.
 3. Fill the provider table from the provider's own documents. Approve the comparison run and any spend.
 4. Run the hosted comparison with your own account and the `--approved` flag, and record it the same way.
 5. Comment on the card that you did all of this, with the approved spend, and that the numbers in this file match what you saw.
